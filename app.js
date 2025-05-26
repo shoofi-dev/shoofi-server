@@ -222,15 +222,15 @@ cron.schedule("0 0 * * *", function () {
 
 });
 
-cron.schedule('*/1 * * * *', function () {
-  cronOrdersService.updateExpiredOrders(app.db)
-});
-cron.schedule('*/5 * * * *', function () {
-  cronOrdersService.checkDeliveryDelay(app.db)
-});
-cron.schedule('*/2 * * * *', function () {
-  cronOrdersService.checkOrderStatusZeroCC(app.db)
-});
+// cron.schedule('*/1 * * * *', function () {
+//   cronOrdersService.updateExpiredOrders(app.db)
+// });
+// cron.schedule('*/5 * * * *', function () {
+//   cronOrdersService.checkDeliveryDelay(app.db)
+// });
+// cron.schedule('*/2 * * * *', function () {
+//   cronOrdersService.checkOrderStatusZeroCC(app.db)
+// });
 
 
 
