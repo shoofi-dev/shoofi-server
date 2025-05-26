@@ -1,0 +1,43 @@
+{
+    "$id": "newProduct",
+    "type": "object",
+
+    "properties": {
+        "name": {
+            "type": "string",
+            "isNotEmpty": true,
+            "minLength": 2
+        },
+        "img": {
+            "type": "string",
+            "isNotEmpty": true,
+            "minLength": 5
+        },
+        "categoryId": {
+            "type": "string",
+            "format": "amount"
+        },
+        "description": {
+            "type": "string",
+            "isNotEmpty": true,
+            "minLength": 25
+        },
+        "price": {
+            "type": ["string", "null"],
+            "format": "alphanumeric",
+            "maxLength": 16
+        },
+        "count": {
+            "type": "string",
+            "maxLength": 50
+        }
+    },
+    "required": [
+        "name",
+        "img",
+        "categoryId",
+        "description",
+        "price",
+        "count"
+    ]
+}

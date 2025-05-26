@@ -1,0 +1,17 @@
+{
+    "$id": "newCustomer",
+    "type": "object",
+    "properties": {
+        "fullName": {
+            "type": "string",
+            "isNotEmpty": false
+        },
+        "phone": {
+            "type": "string",
+            "isNotEmpty": true
+        }
+    },
+    "required": [
+        "phone"
+    ]
+}

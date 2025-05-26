@@ -1,0 +1,1154 @@
+const express = require("express");
+const router = express.Router();
+const colors = require("colors");
+const auth = require("./auth");
+const smsService = require("../utils/sms");
+const APP_CONSTS = require("../consts/consts");
+const { paginateData } = require("../lib/paginate");
+const moment = require("moment");
+const utmTimeService = require("../utils/utc-time");
+const axios = require("axios");
+const { v4: uuidv4 } = require("uuid");
+const pushNotification = require("../utils/push-notification");
+const { getCustomerAppName } = require("../utils/app-name-helper");
+
+const passport = require("passport");
+const authService = require("../utils/auth-service");
+const { getId, clearCustomer, sanitize } = require("../lib/common");
+const rateLimit = require("express-rate-limit");
+const { validateJson } = require("../lib/schema");
+const { restrict } = require("../lib/auth");
+
+const apiLimiter = rateLimit({
+  windowMs: 300000, // 5 minutes
+  max: 5,
+});
+
+function compareVersions(version1, version2) {
+  const v1Components = version1.split(".").map(Number);
+  const v2Components = version2.split(".").map(Number);
+
+  for (let i = 0; i < Math.max(v1Components.length, v2Components.length); i++) {
+    const v1Part = v1Components[i] || 0;
+    const v2Part = v2Components[i] || 0;
+
+    if (v1Part > v2Part) {
+      return true;
+      // return `${version1} is greater than ${version2}`;
+    } else if (v1Part < v2Part) {
+      return false;
+
+      //return `${version1} is less than ${version2}`;
+    }
+  }
+  return true;
+  //return `${version1} is equal to ${version2}`;
+}
+
+router.post("/api/customer/validateAuthCode", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const customerObj = {
+    phone: req.body.phone,
+    authCode: req.body.authCode,
+  };
+  const customer = await customerDB.customers.findOne({ phone: customerObj.phone });
+  if (customer === undefined || customer === null) {
+    res.status(400).json({
+      message: "A customer with that phone does not exist.",
+    });
+    return;
+  }
+
+  if (
+    customer.authCode == customerObj.authCode ||
+    // (customerObj.phone === "0542454362" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "0528602121" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567891" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567892" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567893" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567894" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567895" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "1234567899" && customerObj.authCode === "1234")
+  ) {
+    const customerNewUpdate = {
+      ...customer,
+      authCode: undefined,
+    };
+
+    try {
+      authService.toAuthJSON(customerNewUpdate, req).then(async (result) => {
+        const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+          { _id: getId(customer._id) },
+          {
+            $set: result,
+          },
+          { multi: false, returnOriginal: false }
+        );
+
+        res
+          .status(200)
+          .json({ message: "Customer updated", data: updatedCustomer.value });
+      });
+    } catch (ex) {
+      console.error(colors.red(`Failed updating customer: ${ex}`));
+      res
+        .status(400)
+        .json({ message: "Failed to update customer", error_code: -1 });
+    }
+  } else {
+    res.status(200).json({
+      err_code: -3,
+    });
+    return;
+  }
+});
+
+router.post("/api/customer/create", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const random4DigitsCode = Math.floor(1000 + Math.random() * 9000);
+  const customerObj = {
+    phone: sanitize(req.body.phone),
+    authCode: random4DigitsCode,
+    created: new Date(),
+  };
+
+  // const schemaResult = validateJson("newCustomer", customerObj);
+  // if (!schemaResult.result) {
+  //   res.status(400).json(schemaResult.errors);
+  //   return;
+  // }
+
+  const customer = await customerDB.customers.findOne({ phone: req.body.phone });
+  if (customer) {
+    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      { phone: req.body.phone },
+      {
+        $set: { ...customer, authCode: random4DigitsCode, token: null },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    if (
+      // customer.phone !== "0542454362" &&
+      customer.phone !== "0528602121" &&
+      customer.phone !== "1234567891" &&
+      customer.phone !== "1234567892" &&
+      customer.phone !== "1234567893" &&
+      customer.phone !== "1234567894" &&
+      customer.phone !== "1234567895" &&
+      customer.phone !== "1234567899"
+    ) {
+      const smsContent = smsService.getVerifyCodeContent(
+        random4DigitsCode,
+        req.body?.language
+      );
+      await smsService.sendSMS(customer.phone, smsContent, req);
+    }
+    res
+      .status(200)
+      .json({ phone: req.body.phone, isBlocked: customer.isBlocked });
+    return;
+  }
+
+  try {
+    await customerDB.customers.insertOne(customerObj);
+    if (
+      // customerObj.phone !== "0542454362" &&
+      customerObj.phone !== "0528602121" &&
+      customerObj.phone !== "1234567891" &&
+      customerObj.phone !== "1234567892" &&
+      customerObj.phone !== "1234567893" &&
+      customerObj.phone !== "1234567894" &&
+      customerObj.phone !== "1234567895" &&
+      customerObj.phone !== "1234567899"
+    ) {
+      const smsContent = smsService.getVerifyCodeContent(
+        random4DigitsCode,
+        req.body?.language
+      );
+      await smsService.sendSMS(customerObj.phone, smsContent, req);
+    }
+    res.status(200).json(customerObj);
+  } catch (ex) {
+    console.error(colors.red("Failed to insert customer: ", ex));
+    res.status(400).json({
+      message: "Customer creation failed.",
+    });
+  }
+});
+
+router.post("/api/customer/create/lead", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const customerObj = {
+    fullName: req.body.fullName,
+    phone: sanitize(req.body.phone),
+    branchId: req.body.branchId,
+    created: new Date(),
+    status: APP_CONSTS.USER_STATUS.LEAD,
+    coursesList: [],
+    preferredDays: req.body.preferredDays || [],
+    email: req.body.email || '',
+    acceptEmails: req.body.acceptEmails || false,
+    preferSummer: req.body.preferSummer || false
+  };
+
+  // const customer = await db.customers.findOne({ phone: req.body.phone });
+  // if (customer) {
+  //   const updatedCustomer = await db.customers.findOneAndUpdate(
+  //     { phone: req.body.phone },
+  //     {
+  //       $set: { ...customer, authCode: random4DigitsCode, token: null },
+  //     },
+  //     { multi: false, returnOriginal: false }
+  //   );
+  //   if (
+  //     // customer.phone !== "0542454362" &&
+  //     customer.phone !== "0528602121" &&
+  //     customer.phone !== "1234567891" &&
+  //     customer.phone !== "1234567892" &&
+  //     customer.phone !== "1234567893" &&
+  //     customer.phone !== "1234567894" &&
+  //     customer.phone !== "1234567895" &&
+  //     customer.phone !== "1234567899"
+  //   ) {
+  //     const smsContent = smsService.getVerifyCodeContent(random4DigitsCode, req.body?.language);
+  //     await smsService.sendSMS(customer.phone, smsContent, req);
+  //   }
+  //   res.status(200).json({ phone: req.body.phone, isBlocked: customer.isBlocked  });
+  //   return;
+  // }
+
+  try {
+    await customerDB.customers.insertOne(customerObj);
+    pushNotification.pushToClient(
+      "66a66acf5ae71b2df134b989",
+      "تسجيل جديد",
+      { type: APP_CONSTS.NOTEFICATION_TYPES_WOF.NEW_LEAD },
+      req
+    );
+    const smsContent = smsService.wofLeadRegisterContent(customerObj.fullName, customerObj.phone, customerObj.branchId, customerObj.preferredDays);
+    await smsService.sendSMS("0509088100", smsContent, req);
+    await smsService.sendSMS("0542454362", smsContent, req);
+    res.status(200).json(customerObj);
+  } catch (ex) {
+    console.error(colors.red("Failed to insert customer lead: ", ex));
+    res.status(400).json({
+      message: "Customer lead creation failed.",
+    });
+  }
+});
+
+router.post("/api/customer/admin-create", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  const customerObj = {
+    phone: sanitize(req.body.phone),
+    created: new Date(),
+  };
+
+  const schemaResult = validateJson("newCustomer", customerObj);
+  if (!schemaResult.result) {
+    res.status(400).json(schemaResult.errors);
+    return;
+  }
+
+  const customer = await customerDB.customers.findOne({ phone: req.body.phone });
+  if (customer) {
+    res.status(200).json({
+      phone: customer.phone,
+      fullName: customer.fullName,
+      isAdmin: customer.isAdmin,
+      customerId: customer._id,
+      isBlocked: customer.isBlocked,
+      isExist: true,
+    });
+    return;
+  }
+  // email is ok to be used.
+  try {
+    const newCustomer = await customerDB.customers.insertOne(customerObj);
+    const customerInsertedId = newCustomer.insertedId;
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerInsertedId),
+    });
+    res.status(200).json({
+      phone: customer.phone,
+      fullName: customer.fullName,
+      isAdmin: customer.isAdmin,
+      customerId: customer._id,
+    });
+  } catch (ex) {
+    console.error(colors.red("Failed to insert customer: ", ex));
+    res.status(400).json({
+      message: "Customer creation failed.",
+    });
+  }
+});
+
+router.post("/api/customer/orders-old", auth.required, async (req, res) => {
+  const customerId = req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  try {
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+    if (customer.orders) {
+      var ids = customer.orders;
+
+      var oids = [];
+      ids.forEach(function (item) {
+        oids.push(getId(item));
+      });
+
+      const orders = await paginateData(
+        true,
+        req,
+        1,
+        "orders",
+        {
+          _id: { $in: oids },
+        },
+        { created: -1 }
+      );
+      res.status(200).json(orders);
+    } else {
+      res.status(200).json([]);
+    }
+  } catch (ex) {
+    console.error(colors.red(`Failed get customer: ${ex}`));
+    res.status(400).json({ message: "Failed to get customer" });
+  }
+});
+
+router.post("/api/customer/orders", auth.required, async (req, res) => {
+  const customerId = req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  try {
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+
+    if (!customer.orders || !customer.orders.length) {
+      res.status(200).json([]);
+      return;
+    }
+
+    // Group orders by their database
+    const ordersByAppName = {};
+    customer.orders.forEach(order => {
+      const appNameTmp = order.appName || appName; // Use the order's db if specified, otherwise use current app
+      if (!ordersByAppName[appNameTmp]) {
+        ordersByAppName[appNameTmp] = [];
+      }
+      ordersByAppName[appNameTmp].push(order.appName ? order.orderId : order);
+    });
+
+    // Fetch orders from each database
+    const allOrders = [];
+    for (const [dbName, orderIds] of Object.entries(ordersByAppName)) {
+      const currentDb = req.app.db[dbName];
+      const oids = orderIds.map(id => getId(id));
+      
+      const orders = await paginateData(
+        true,
+        req,
+        1,
+        "orders",
+        {
+          _id: { $in: oids },
+        },
+        { created: -1 },
+        currentDb // Pass the current database to paginateData
+      );
+      
+      allOrders.push(...orders.data);
+    }
+
+    // Sort all orders by creation date
+    allOrders.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+    res.status(200).json({
+      data: allOrders,
+      totalItems: allOrders.length,
+      totalPages: 1,
+      currentPage: 1
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed get customer orders: ${ex}`));
+    res.status(400).json({ message: "Failed to get customer orders" });
+  }
+});
+
+router.get("/api/customer/details", auth.required, async (req, res) => {
+  const customerId = req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  try {
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+
+    let activeCoursePackage = null;
+    if (customer?.coursesList) {
+       activeCoursePackage = customer?.coursesList.find(
+        (course) => course.isActive
+      );
+
+      if (activeCoursePackage) {
+        console.log("Found active course:", activeCoursePackage);
+      } else {
+        console.log("No active course found.");
+      }
+    }
+    
+    let courseData = null;
+    if (activeCoursePackage?.courseId) {
+      courseData = await db.courses.findOne({
+        _id: getId(activeCoursePackage.courseId),
+      });
+    }
+
+
+    res.status(200).json({
+      message: "Customer details get success",
+      data: {
+        phone: customer.phone,
+        fullName: customer.fullName,
+        isAdmin: customer.isAdmin,
+        customerId,
+        roles: customer.roles,
+        planId: customer?.planId,
+        branchId: customer?.branchId,
+        courseData,
+        coursePackage: activeCoursePackage,
+        coursesList: customer?.coursesList,
+        paymentHistory: customer?.paymentHistory,
+        status: customer?.status,
+        appName: customer?.appName
+      },
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed get customer: ${ex}`));
+    res.status(400).json({ message: "Failed to get customer" });
+  }
+});
+
+router.post("/api/customer/update-name", auth.required, async (req, res) => {
+  const customerId = req.body.customerId || req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const customerObj = {
+    fullName: req.body.fullName,
+  };
+
+  const customer = await customerDB.customers.findOne({
+    _id: getId(customerId),
+  });
+  if (!customer) {
+    res.status(400).json({
+      message: "Customer not found",
+    });
+    return;
+  }
+  try {
+    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      { _id: getId(customerId) },
+      {
+        $set: { ...customer, fullName: req.body.fullName },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    res.status(200).json({
+      message: "Customer updated",
+      customer: { fullName: updatedCustomer.value.fullName },
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed updating customer: ${ex}`));
+    res.status(400).json({ message: "Failed to update customer" });
+  }
+});
+
+router.post("/api/customer/update", auth.required, async (req, res) => {
+  const customerId = req.body.customerId || req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  const updateData = req.body;
+  delete updateData._id;
+
+  const customer = await customerDB.customers.findOne({
+    _id: getId(customerId),
+  });
+  if (!customer) {
+    res.status(400).json({
+      message: "Customer not found",
+    });
+    return;
+  }
+  try {
+    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      { _id: getId(customerId) },
+      {
+        $set: { ...customer, ...updateData },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    res.status(200).json({
+      message: "Customer updated",
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed updating customer: ${ex}`));
+    res.status(400).json({ message: "Failed to update customer" });
+  }
+});
+
+router.post("/api/customer/lead/update", auth.required, async (req, res) => {
+  const customerId = req.body.customerId || req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  const updateData = req.body;
+  delete updateData._id;
+
+  const customer = await customerDB.customers.findOne({
+    _id: getId(customerId),
+  });
+  if (!customer) {
+    res.status(400).json({
+      message: "Customer not found",
+    });
+    return;
+  }
+  try {
+    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      { _id: getId(customerId) },
+      {
+        $set: {
+          fullName: updateData.fullName,
+          status: updateData.status,
+        },
+        $push: { coursesList: updateData?.coursePackage },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    const stores = await db.store.find().toArray();
+    const branch = stores[0];
+    const appleAppLink = `itms-apps://itunes.apple.com/app/${branch.appleAppId}`;
+    const androidAppLink = `https://play.google.com/store/apps/details?id=${branch.androidAppId}`;
+    const smsContent = smsService.wofLeadAssignedToCourseContent(
+      customer.fullName,
+      appleAppLink,
+      androidAppLink,
+      updateData?.payLink
+    );
+    await smsService.sendSMS(updatedCustomer.phone, smsContent, req);
+    res.status(200).json({
+      message: "Customer updated",
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed updating customer: ${ex}`));
+    res.status(400).json({ message: "Failed to update customer" });
+  }
+});
+
+
+// world of swimming START
+
+router.post("/api/customer/lead/update/status", auth.required, async (req, res) => {
+  const customerId = req.body.customerId || req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  const updateData = req.body;
+  delete updateData._id;
+
+  const customer = await customerDB.customers.findOne({
+    _id: getId(customerId),
+  });
+  if (!customer) {
+    res.status(400).json({
+      message: "Customer not found",
+    });
+    return;
+  }
+  try {
+    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      { _id: getId(customerId) },
+      {
+        $set: {
+          ...updateData
+        },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    res.status(200).json({
+      message: "Customer updated",
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed updating customer: ${ex}`));
+    res.status(400).json({ message: "Failed to update customer" });
+  }
+});
+
+router.post("/api/customer/update-plan", auth.required, async (req, res) => {
+  const customerId = req.body.customerId || req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const customer = await customerDB.customers.findOne({
+    _id: getId(customerId),
+  });
+  if (!customer) {
+    res.status(400).json({
+      message: "Customer not found",
+    });
+    return;
+  }
+  21;
+  try {
+    await customerDB.customers.findOneAndUpdate(
+      { _id: getId(customerId) },
+      {
+        $set: { ...customer, planId: req.body.planId },
+      },
+      { multi: false, returnOriginal: false }
+    );
+    res.status(200).json({
+      message: "Customer updated",
+    });
+  } catch (ex) {
+    console.error(colors.red(`Failed updating customer plan id: ${ex}`));
+    res.status(400).json({ message: "Failed to update customer plan id" });
+  }
+});
+
+router.post(
+  "/api/customer/update-plan-branch",
+  auth.required,
+  async (req, res) => {
+    const customerId = req.body.customerId || req.auth.id;
+    const appName = req.headers["app-name"];
+    const db = req.app.db[appName];
+    const customerDB = getCustomerAppName(req, appName);
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+    21;
+    try {
+      await customerDB.customers.findOneAndUpdate(
+        { _id: getId(customerId) },
+        {
+          $set: {
+            ...customer,
+            planId: req.body.planId,
+            branchId: req.body.branchId,
+          },
+        },
+        { multi: false, returnOriginal: false }
+      );
+      res.status(200).json({
+        message: "Customer updated",
+      });
+    } catch (ex) {
+      console.error(colors.red(`Failed updating customer plan id: ${ex}`));
+      res.status(400).json({ message: "Failed to update customer plan id" });
+    }
+  }
+);
+
+// world of swimming END
+
+// logout the customer
+router.post("/api/customer/logout", auth.required, async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const {
+    auth: { id },
+  } = req;
+  const customerDB = getCustomerAppName(req, appName);
+  await customerDB.customers.findOneAndUpdate(
+    { _id: getId(id) },
+    {
+      $set: { token: null },
+    },
+    { multi: false, returnOriginal: false }
+  );
+
+  res.status(200).json({ data: "logout success" });
+});
+
+router.post("/api/customer/delete", auth.required, async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const {
+    auth: { id },
+  } = req;
+  const customerDB = getCustomerAppName(req, appName);
+  await customerDB.customers.deleteOne({ _id: getId(id) });
+  res.status(200).json({ data: "blocked success" });
+});
+
+// logout the customer
+router.get("/customer/logout", (req, res) => {
+  // Clear our session
+  clearCustomer(req);
+  res.redirect("/customer/login");
+});
+
+router.post("/api/customer/search-customer", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const searchQuery = req.body.searchQuery;
+  let userStatus = req.body?.userStatus;
+  let query = {};
+
+  if (searchQuery) {
+    query = {
+      ...query,
+      $or: [
+        { phone: { $regex: searchQuery, $options: "i" } }, // Case-insensitive regex search
+        { fullName: { $regex: searchQuery, $options: "i" } },
+      ],
+    };
+  }
+
+  if (userStatus) {
+    query = {
+      ...query,
+      status: userStatus,
+    };
+  }
+  const customer = await customerDB.customers.find(query).toArray();
+
+  try {
+    res.status(200).json(customer);
+  } catch (ex) {
+    console.error(colors.red("Failed to search customer: ", ex));
+    res.status(400).json({
+      message: "Customer search failed.",
+    });
+  }
+});
+
+function relDiff(a, b) {
+  let diff = 100 * Math.abs((a - b) / ((a + b) / 2));
+  if (a < b) {
+    diff = diff * -1;
+  }
+  return diff.toFixed(2);
+}
+
+router.post("/api/customer/new-customers/:page?", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  let pageNum = 1;
+  if (req.body.pageNumber) {
+    pageNum = req.body.pageNumber;
+  }
+  var start = moment().subtract(7, "days").utcOffset(120);
+  start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+  var end = moment().utcOffset(120);
+  end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+  const filterBy = {
+    created: { $gte: new Date(start), $lt: new Date(end) },
+  };
+  let newCustomers = await paginateData(
+    true,
+    req,
+    pageNum,
+    "customers",
+    filterBy,
+    {
+      created: 1,
+    }
+  );
+
+  var start2 = moment().subtract(14, "days").utcOffset(120);
+  start2.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+  var end2 = moment().subtract(8, "days").utcOffset(120);
+  end2.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+  const filterBy2 = {
+    created: { $gte: new Date(start2), $lt: new Date(end2) },
+  };
+  const prevWeekNewCustomers = await paginateData(
+    true,
+    req,
+    pageNum,
+    "customers",
+    filterBy2,
+    {
+      created: 1,
+    }
+  );
+  const percentDeff = relDiff(
+    newCustomers.totalItems,
+    prevWeekNewCustomers.totalItems
+  );
+  newCustomers.percentDeff = percentDeff;
+  try {
+    res.status(200).json(newCustomers);
+  } catch (ex) {
+    console.error(colors.red("Failed to search customer: ", ex));
+    res.status(400).json({
+      message: "Customer search failed.",
+    });
+  }
+});
+
+router.post("/api/customer/get-customers/:page?", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  let pageNum = 1;
+  if (req.body.pageNumber) {
+    pageNum = req.body.pageNumber;
+  }
+  let filterBy = req.body.filterBy;
+
+  if (filterBy?._id) {
+    if (Array.isArray(filterBy._id)) {
+      // Convert array of strings to ObjectIds
+      filterBy._id = { $in: filterBy._id.map((id) => getId(id)) };
+    } else {
+      // Convert single string to ObjectId
+      filterBy._id = getId(filterBy._id);
+    }
+  }
+  let customers = [];
+  if (appName === "world-of-swimming") {
+    const customersRes = await customerDB.customers.find(filterBy).toArray();
+ customers = await Promise.all(
+  customersRes.map(async (customer) => {
+    const courseInList = customer.coursesList?.find(course =>{
+      if(filterBy['coursesList.courseId']){
+        if(course.courseId?.toString() === filterBy['coursesList.courseId'].toString()){
+          return course;
+        }
+      }else{
+        if(course.isActive){
+          return course;
+        }
+      }
+    }
+      
+    );
+
+    if (courseInList) {
+      const courseData = await db.courses.findOne({ _id: getId(courseInList.courseId) });
+      customer.courseData = courseData;
+      customer.coursePackage = courseInList;
+    }
+
+    return customer;
+  })
+);
+
+  } else {
+    customers = await paginateData(true, req, pageNum, "customers", filterBy, {
+      created: 1,
+    });
+  }
+
+  try {
+    res.status(200).json(customers);
+  } catch (ex) {
+    console.error(colors.red("Failed to get customers: ", ex));
+    res.status(400).json({
+      message: "Customers get failed.",
+    });
+  }
+});
+
+router.post(
+  "/api/customer/update-notification-token",
+  auth.required,
+  async (req, res) => {
+    const customerId = req.body.customerId || req.auth.id;
+    const appName = req.headers["app-name"];
+    const db = req.app.db[appName];
+    const customerDB = getCustomerAppName(req, appName);
+
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+    try {
+      const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+        { _id: getId(customerId) },
+        {
+          $set: { notificationToken: req.body.notificationToken },
+        },
+        { multi: false }
+      );
+      res.status(200).json({
+        message: "Customer updated",
+        customer: {
+          notificationToken: updatedCustomer.value.notificationToken,
+        },
+      });
+    } catch (ex) {
+      console.error(colors.red(`Failed updating customer: ${ex}`));
+      res.status(400).json({ message: "Failed to update customer" });
+    }
+  }
+);
+
+router.post("/api/customer/pay", auth.required, async (req, res, next) => {
+  const customerId = req.body.customerId || req.auth.id;
+
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+  const parsedBodey = req.body;
+
+  try {
+    const storeData = await db.store.findOne({ id: 1 });
+    const paymentData = {};
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+
+    const zdCreditCredentials = storeData.credentials;
+
+    const data = {
+      TerminalNumber: zdCreditCredentials.credentials_terminal_number,
+      Password: zdCreditCredentials.credentials_password,
+      ReferenceID: parsedBodey.creditcard_ReferenceNumber,
+      ZCreditChargeResponse: parsedBodey.ZCreditChargeResponse,
+    };
+    const docId = parsedBodey?.ZCreditInvoiceReceiptResponse?.DocumentID;
+    // if (docId) {
+    axios
+      .post(
+        "https://pci.zcredit.co.il/ZCreditWS/api/Transaction/GetTransactionStatusByReferenceId",
+        data,
+        { responseType: "application/json" }
+      )
+      .then(async (response) => {
+        // if (response.data.HasError) {
+        //   // await db.orders.deleteOne({ _id: parsedBodey.orderId });
+        //   await db.orders.updateOne(
+        //     {
+        //       _id: getId(parsedBodey.orderId),
+        //     },
+        //     {
+        //       $set: {
+        //         ccPaymentRefData: {
+        //           payload: parsedBodey,
+        //           data: response.data,
+        //         },
+        //         status: "0",
+        //       },
+        //     },
+        //     { multi: false }
+        //   );
+        //   res.status(200).json(response.data);
+        //   return;
+        // }
+        const offsetHours = utmTimeService.getUTCOffset();
+        let current = moment().utcOffset(offsetHours);
+
+        await customerDB.customers.updateOne(
+          {
+            _id: getId(customerId),
+          },
+          {
+            $push: {
+              paymentHistory: {
+                data: parsedBodey,
+                zCreditResponse: response.data,
+                date: current,
+                status: "2",
+              },
+            },
+          },
+          { multi: false }
+        );
+
+        // const finalpaymentData = {
+        //   ...paymentData,
+        //   customerDetails: {
+        //     name: customer.fullName,
+        //     phone: customer.phone,
+        //   },
+        // };
+        // websockets.fireWebscoketEvent("new order", finalpaymentData);
+
+        // const smsContent = smsService.getOrderRecivedContent(
+        //   customer.fullName,
+        //   paymentData.total,
+        //   paymentData.order.receipt_method,
+        //   paymentData.orderId,
+        //   paymentData.app_language
+        // );
+        // await smsService.sendSMS(customer.phone, smsContent, req);
+        // await smsService.sendSMS("0542454362", smsContent, req);
+
+        // setTimeout(async () => {
+        // await invoiceMailService.saveInvoice(docId, req);
+
+        // await turl
+        //   .shorten(
+        //     `https://creme-caramel-images.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+        //   )
+        //   .then(async (res) => {
+        //     await db.orders.updateOne(
+        //       {
+        //         _id: getId(parsedBodey.orderId),
+        //       },
+        //       {
+        //         $set: {
+        //           ccPaymentRefData: {
+        //             payload: parsedBodey,
+        //             data: response.data,
+        //             url: res,
+        //           },
+        //         },
+        //       },
+        //       { multi: false }
+        //     );
+
+        //     // const invoiceSmsContent =
+        //     //   smsService.getOrderInvoiceContent(res);
+        //     // //smsService.sendSMS(customer.phone, smsContent, req);
+        //     // smsService.sendSMS("0542454362", invoiceSmsContent, req);
+        //   })
+        //   .catch((err) => {
+        //     //res.status(400).json({ errorMessage: err?.message });
+        //   });
+
+        // res.status(200).json(response.data);
+      });
+    // }, 120000);
+    res.status(200).json({ errorMessage: "valid invoice doc" });
+    // } else {
+    //   await db.orders.updateOne(
+    //     {
+    //       _id: getId(parsedBodey.orderId),
+    //     },
+    //     {
+    //       $set: {
+    //         ccPaymentRefData: {
+    //           payload: parsedBodey,
+    //           data: 'no doc ID',
+    //         },
+    //         status: "0",
+    //       },
+    //     },
+    //     { multi: false }
+    //   );
+    //   res.status(200).json({ errorMessage: "no invoice doc" });
+    // }
+  } catch (err) {
+    res.status(400).json({ errorMessage: err?.message });
+  }
+});
+
+router.post(
+  "/api/customer/add/payment",
+  auth.required,
+  async (req, res, next) => {
+    const { customerId, courseId, data } = req.body;
+
+    const appName = req.headers["app-name"];
+    const db = req.app.db[appName];
+    const customerDB = getCustomerAppName(req, appName);
+
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+
+    if (!customer) {
+      res.status(400).json({ message: "Customer not found" });
+      return;
+    }
+
+    const offsetHours = utmTimeService.getUTCOffset();
+    const currentTime = moment().utcOffset(offsetHours).format();
+
+    const paymentRecord = {
+      courseId,
+      data,
+      created: currentTime,
+      id: uuidv4(),
+    };
+
+    const updateResult = await customerDB.customers.updateOne(
+      {
+        _id: getId(customerId),
+        "coursesList.courseId": courseId, // Find the correct course in the array
+      },
+      {
+        $push: {
+          "coursesList.$.paymentHistory": paymentRecord, // Push into the matched course's paymentHistory
+        },
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      res.status(400).json({ message: "Failed to add payment - course not found" });
+      return;
+    }
+
+    res.status(200).json({ message: "Payment added successfully" });
+  }
+);
+
+module.exports = router;
