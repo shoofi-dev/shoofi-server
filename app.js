@@ -56,6 +56,7 @@ const category = require("./routes/category");
 const product = require("./routes/product");
 const menu = require("./routes/menu");
 const customer = require("./routes/customer");
+const analytics = require("./routes/analytics");
 const calander = require("./routes/calander");
 const course = require("./routes/course");
 const teacher = require("./routes/teacher");
@@ -126,7 +127,7 @@ app.use("/", transactions);
 app.use("/", reviews);
 app.use("/", delivery);
 app.use("/", pushNotificationWeb);
-
+app.use("/", analytics);
 // Payment route(s)
 // _.forEach(config.paymentGateway, (gateway) => {
 //     app.use(`/${gateway}`, require(`./lib/payments/${gateway}`));

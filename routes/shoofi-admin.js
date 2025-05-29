@@ -99,4 +99,14 @@ router.get("/api/store/download-app", async (req, res) => {
   }
 });
 
+router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const stores = await dbAdmin.stores.find().toArray();
+    res.status(200).json(stores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch stores', error: err.message });
+  }
+});
+
 module.exports = router;

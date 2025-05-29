@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const _ = require('lodash');
+const { getId } = require("../lib/common");
 
 const {
     paginateData
@@ -35,7 +36,7 @@ router.get("/api/menu", async (req, res, next) => {
       const menu = finalCategories.map((category)=>{
           let tempCat = {
               ...category,
-              products: products.data.filter((product)=> product.categoryId == category.categoryId)
+              products: products.data.filter((product)=> product.categoryId == getId(category._id))
           }
           tempCat.products = _.orderBy(tempCat.products, ["order"], ["asc"])
           return tempCat;

@@ -246,8 +246,8 @@ router.post(
       notInStoreDescriptionHE: cleanHtml(req.body.notInStoreDescriptionHE),
       isInStore: req.body.isInStore === "false" ? false : true,
       createdAt: new Date(),
-      extras: JSON.parse(req.body.extras),
-      others: JSON.parse(req.body.others),
+      extras: req.body?.extras && JSON.parse(req.body?.extras),
+      others: req.body?.others && JSON.parse(req.body?.others),
       price: req.body.price ? Number(JSON.parse(req.body.price)) : 0,
       hasDiscount: req.body.hasDiscount === "true",
       discountQuantity: req.body.hasDiscount === "true" ? Number(req.body.discountQuantity) : 0,
@@ -353,8 +353,8 @@ router.post(
       notInStoreDescriptionAR: cleanHtml(req.body.notInStoreDescriptionAR),
       notInStoreDescriptionHE: cleanHtml(req.body.notInStoreDescriptionHE),
       isInStore: req.body.isInStore === "false" ? false : true,
-      extras: JSON.parse(req.body.extras),
-      others: JSON.parse(req.body.others),
+      extras: req.body.extras ? JSON.parse(req.body.extras) : {},
+      others: req.body.others ? JSON.parse(req.body.others) : {},
       price: Number(JSON.parse(req.body.price)),
       hasDiscount: req.body.hasDiscount === "true",
       discountQuantity: req.body.hasDiscount === "true" ? Number(req.body.discountQuantity) : 0,
@@ -548,6 +548,22 @@ router.get("/api/admin/product/extras", async (req, res) => {
   let extrasList = await paginateData(false, req, 1, "extras", {});
   res.status(200).json(extrasList);
 
+});
+
+// Get product by _id and app-name
+router.get("/api/admin/product/:id", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const productId = req.params.id;
+  try {
+    const product = await db.products.findOne({ _id: getId(productId) });
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+    res.status(200).json(product);
+  } catch (e) {
+    res.status(400).json({ message: "Error fetching product", error: e.toString() });
+  }
 });
 
 module.exports = router;

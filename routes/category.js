@@ -4,7 +4,7 @@ const {
     paginateData
 } = require('../lib/paginate');
 
-router.get("/admin/categories/:page?", async (req, res, next) => {
+router.get("/api/admin/categories/:page?", async (req, res, next) => {
     let pageNum = 1;
     
     if (req.params.page) {
