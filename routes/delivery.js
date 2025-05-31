@@ -312,9 +312,9 @@ router.get('/api/delivery/areas', async (req, res) => {
 // Add area
 router.post('/api/delivery/area/add', async (req, res) => {
   const db = req.app.db['delivery-company'];
-  const { name, geometry } = req.body;
-  if (!name || !geometry) return res.status(400).json({ message: 'Name and geometry required' });
-  const area = { name, geometry, createdAt: new Date(), updatedAt: new Date() };
+  const { name, geometry, cityId } = req.body;
+  if (!name || !geometry || !cityId) return res.status(400).json({ message: 'Name, geometry and cityId required' });
+  const area = { name, geometry, cityId, createdAt: new Date(), updatedAt: new Date() };
   const result = await db.areas.insertOne(area);
   res.status(201).json({ ...area, _id: result.insertedId });
 });
@@ -323,8 +323,8 @@ router.post('/api/delivery/area/add', async (req, res) => {
 router.post('/api/delivery/area/update/:id', async (req, res) => {
   const db = req.app.db['delivery-company'];
   const { id } = req.params;
-  const { name, geometry } = req.body;
-  await db.areas.updateOne({ _id: getId(id) }, { $set: { name, geometry, updatedAt: new Date() } });
+  const { name, geometry, cityId } = req.body;
+  await db.areas.updateOne({ _id: getId(id) }, { $set: { name, geometry, cityId, updatedAt: new Date() } });
   res.json({ message: 'Area updated' });
 });
 
@@ -432,6 +432,51 @@ router.post('/api/delivery/company/price-by-location', async (req, res) => {
     minOrder: areaInfo.minOrder,
     eta: areaInfo.eta
   });
+});
+
+// --- City Management ---
+
+// List all cities
+router.get('/api/delivery/cities', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const cities = await db.cities.find().toArray();
+  res.json(cities);
+});
+
+// Add city
+router.post('/api/delivery/city/add', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { nameAR, nameHE, geometry } = req.body;
+  if (!nameAR || !nameHE || !geometry) return res.status(400).json({ message: 'Name and geometry required' });
+  const city = { nameAR, nameHE, geometry, createdAt: new Date(), updatedAt: new Date() };
+  const result = await db.cities.insertOne(city);
+  res.status(201).json({ ...city, _id: result.insertedId });
+});
+
+// Update city
+router.post('/api/delivery/city/update/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  const { name } = req.body;
+  await db.cities.updateOne({ _id: getId(id) }, { $set: { name, updatedAt: new Date() } });
+  res.json({ message: 'City updated' });
+});
+
+// Delete city
+router.delete('/api/delivery/city/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  await db.cities.deleteOne({ _id: getId(id) });
+  res.json({ message: 'City deleted' });
+});
+
+// Get single city by ID
+router.get('/api/delivery/city/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  const city = await db.cities.findOne({ _id: getId(id) });
+  if (!city) return res.status(404).json({ message: 'City not found' });
+  res.json(city);
 });
 
 module.exports = router;
