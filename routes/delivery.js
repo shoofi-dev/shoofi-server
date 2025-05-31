@@ -299,4 +299,139 @@ router.post("/api/delivery/update", async (req, res) => {
   }
 });
 
+
+// --- Area Management ---
+
+// List all areas
+router.get('/api/delivery/areas', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const areas = await db.areas.find().toArray();
+  res.json(areas);
+});
+
+// Add area
+router.post('/api/delivery/area/add', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { name, geometry } = req.body;
+  if (!name || !geometry) return res.status(400).json({ message: 'Name and geometry required' });
+  const area = { name, geometry, createdAt: new Date(), updatedAt: new Date() };
+  const result = await db.areas.insertOne(area);
+  res.status(201).json({ ...area, _id: result.insertedId });
+});
+
+// Update area
+router.post('/api/delivery/area/update/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  const { name, geometry } = req.body;
+  await db.areas.updateOne({ _id: getId(id) }, { $set: { name, geometry, updatedAt: new Date() } });
+  res.json({ message: 'Area updated' });
+});
+
+// Delete area
+router.delete('/api/delivery/area/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  await db.areas.deleteOne({ _id: getId(id) });
+  res.json({ message: 'Area deleted' });
+});
+
+// Get single area by ID
+router.get('/api/delivery/area/:id', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { id } = req.params;
+  const area = await db.areas.findOne({ _id: getId(id) });
+  if (!area) return res.status(404).json({ message: 'Area not found' });
+  res.json(area);
+});
+
+// --- Company Supported Areas ---
+
+// List supported areas/prices for a company
+router.get('/api/delivery/company/:companyId/areas', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId } = req.params;
+  const company = await db.store.findOne({ _id: getId(companyId) });
+  res.json(company?.supportedAreas || []);
+});
+
+// Add area/price to company
+router.post('/api/delivery/company/:companyId/area/add', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId } = req.params;
+  const { areaId, price, minOrder, eta } = req.body;
+  if (!areaId || price == null) return res.status(400).json({ message: 'areaId and price required' });
+  await db.store.updateOne(
+    { _id: getId(companyId) },
+    { $push: { supportedAreas: { areaId: getId(areaId), price, minOrder, eta } } }
+  );
+  res.json({ message: 'Area added to company' });
+});
+
+// Update price/minOrder/eta for area
+router.post('/api/delivery/company/:companyId/area/update/:areaId', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId, areaId } = req.params;
+  const { price, minOrder, eta } = req.body;
+  await db.store.updateOne(
+    { _id: getId(companyId), 'supportedAreas.areaId': getId(areaId) },
+    { $set: { 'supportedAreas.$.price': price, 'supportedAreas.$.minOrder': minOrder, 'supportedAreas.$.eta': eta } }
+  );
+  res.json({ message: 'Area updated for company' });
+});
+
+// Remove area from company
+router.delete('/api/delivery/company/:companyId/area/:areaId', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId, areaId } = req.params;
+  await db.store.updateOne(
+    { _id: getId(companyId) },
+    { $pull: { supportedAreas: { areaId: getId(areaId) } } }
+  );
+  res.json({ message: 'Area removed from company' });
+});
+
+// Get a single supported area for a company
+router.get('/api/delivery/company/:companyId/area/:areaId', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId, areaId } = req.params;
+  const company = await db.store.findOne({ _id: getId(companyId) });
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const area = (company.supportedAreas || []).find(a => a.areaId.equals(getId(areaId)));
+  if (!area) return res.status(404).json({ message: 'Area not found for this company' });
+  res.json(area);
+});
+
+// --- Price by Location ---
+
+router.post('/api/delivery/company/price-by-location', async (req, res) => {
+  const db = req.app.db['delivery-company'];
+  const { companyId, lat, lng } = req.body;
+  if (!companyId || lat == null || lng == null) return res.status(400).json({ message: 'companyId, lat, lng required' });
+
+  // Find area containing the point
+  const area = await db.areas.findOne({
+    geometry: {
+      $geoIntersects: {
+        $geometry: { type: "Point", coordinates: [lng, lat] }
+      }
+    }
+  });
+  if (!area) return res.status(404).json({ message: 'No delivery area found for this location' });
+
+  // Find company and area price
+  const company = await db.store.findOne({ _id: getId(companyId) });
+  if (!company) return res.status(404).json({ message: 'Company not found' });
+  const areaInfo = (company.supportedAreas || []).find(a => a.areaId.equals(area._id));
+  if (!areaInfo) return res.status(404).json({ message: 'Company does not support this area' });
+
+  res.json({
+    areaId: area._id,
+    areaName: area.name,
+    price: areaInfo.price,
+    minOrder: areaInfo.minOrder,
+    eta: areaInfo.eta
+  });
+});
+
 module.exports = router;
