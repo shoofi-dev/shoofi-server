@@ -397,4 +397,93 @@ router.delete("/api/shoofiAdmin/delivery-company/:id", async (req, res) => {
   }
 });
 
+// Delivery Company Employees Endpoints
+router.get("/api/shoofiAdmin/delivery-company/:companyId/employees", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { companyId } = req.params;
+    const employees = await db.customers.find({ companyId }).toArray();
+    res.status(200).json(employees);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch employees', error: err.message });
+  }
+});
+
+router.post("/api/shoofiAdmin/delivery-company/:companyId/employee/add", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { companyId } = req.params;
+    const { phone, role, fullName, isActive } = req.body;
+    if (!phone || !role || !fullName) {
+      return res.status(400).json({ message: 'phone, role, and fullName are required' });
+    }
+    const newEmployee = {
+      phone,
+      role,
+      fullName,
+      isActive: isActive === 'true' || isActive === true,
+      companyId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const result = await db.customers.insertOne(newEmployee);
+    res.status(201).json({ ...newEmployee, _id: result.insertedId });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to add employee', error: err.message });
+  }
+});
+
+router.post("/api/shoofiAdmin/delivery-company/employee/update/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const { phone, role, fullName, isActive } = req.body;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    const updatedEmployee = {
+      ...employee,
+      phone,
+      role,
+      fullName,
+      isActive: isActive === 'true' || isActive === true,
+      updatedAt: new Date(),
+    };
+    await db.customers.updateOne({ _id: getId(id) }, { $set: updatedEmployee });
+    res.status(200).json(updatedEmployee);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update employee', error: err.message });
+  }
+});
+
+router.get("/api/shoofiAdmin/delivery-company/employee/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.status(200).json(employee);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch employee', error: err.message });
+  }
+});
+
+router.delete("/api/shoofiAdmin/delivery-company/employee/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    await db.customers.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Employee deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete employee', error: err.message });
+  }
+});
+
 module.exports = router;
