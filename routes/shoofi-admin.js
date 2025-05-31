@@ -492,6 +492,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
     if (!categoryId) {
       return res.status(400).json({ message: 'categoryId is required' });
     }
+    const dbAdmin = req.app.db['shoofi'];
     const storesList = await dbAdmin.stores.find().toArray();
     let result = [];
     for (let i = 0; i < storesList.length; i++) {
