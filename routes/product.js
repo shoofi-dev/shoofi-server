@@ -566,4 +566,8 @@ router.get("/api/admin/product/:id", async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = {
+  router,
+  uploadFile,
+  deleteImages
+};

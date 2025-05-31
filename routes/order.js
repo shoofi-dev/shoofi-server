@@ -977,8 +977,12 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         storeName: storeData.storeName,
         appName: storeData.appName,
         storeId: storeData._id,
-        bookId: order.orderId
+        bookId: order.orderId,
+        storeLocation: storeData.location,
+        coverageRadius: storeData.coverageRadius,
+        customerLocation: order?.order?.geo_positioning,
       };
+
       deliveryService.bookDelivery({deliveryData, appDb: req.app.db});
     }
 
@@ -1048,7 +1052,11 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
       storeName: storeData.storeName,
       appName: storeData.appName,
       storeId: storeData._id,
-      bookId: order.orderId
+      bookId: order.orderId,
+      storeLocation: storeData.location,
+      coverageRadius: storeData.coverageRadius,
+      customerLocation: order?.order?.geo_positioning,
+
     }
     deliveryService.bookDelivery({deliveryData, appDb: req.app.db});
   }
@@ -1111,6 +1119,7 @@ router.post("/api/order/book-custom-delivery", auth.required, async (req, res) =
       bookId: insertRetsult?.insertedId.toString(),
       storeLocation: storeData.location,
       coverageRadius: storeData.coverageRadius,
+      customerLocation: order?.order?.geo_positioning,
     }
     deliveryService.bookDelivery({deliveryData: deliveryDataX, appDb: req.app.db});
   }
