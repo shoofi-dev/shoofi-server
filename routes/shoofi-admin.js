@@ -486,4 +486,25 @@ router.delete("/api/shoofiAdmin/delivery-company/employee/:id", async (req, res)
   }
 });
 
+router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
+  try {
+    const { categoryId } = req.body;
+    if (!categoryId) {
+      return res.status(400).json({ message: 'categoryId is required' });
+    }
+    const storesList = await dbAdmin.stores.find().toArray();
+    let result = [];
+    for (let i = 0; i < storesList.length; i++) {
+      const dbName = storesList[i].appName;
+      const db = req.app.db[dbName];
+      // Adjust the field name if your store uses a different one
+      const storeDataArr = await db.store.find({ categoryId }).toArray();
+      result.push(...storeDataArr);
+    }
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch stores by category', error: err.message });
+  }
+});
+
 module.exports = router;
