@@ -204,4 +204,197 @@ router.post(
   }
 );
 
+// Delivery Company Endpoints
+router.get("/api/shoofiAdmin/delivery-companies", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['delivery-company'];
+    const companies = await dbAdmin.store.find().sort({ order: 1 }).toArray();
+    res.status(200).json(companies);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch delivery companies', error: err.message });
+  }
+});
+
+router.post(
+  "/api/shoofiAdmin/delivery-company/add",
+  upload.array("img"),
+  async (req, res) => {
+    try {
+      const dbAdmin = req.app.db['shoofi'];
+      const { name, nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, id, location, coverageRadius, phone, email, status, order } = req.body;
+
+      // Validation
+      if (!name || !nameAR || !nameHE) {
+        return res.status(400).json({ message: 'Company name, nameAR, and nameHE are required' });
+      }
+      if (!start || !end) {
+        return res.status(400).json({ message: 'Start and end times are required' });
+      }
+      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
+        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      }
+      if (typeof id === 'undefined') {
+        return res.status(400).json({ message: 'id is required' });
+      }
+      let parsedLocation;
+      try {
+        parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid location format' });
+      }
+      if (!parsedLocation || parsedLocation.type !== 'Point' || !Array.isArray(parsedLocation.coordinates) || parsedLocation.coordinates.length !== 2) {
+        return res.status(400).json({ message: 'location must be a GeoJSON Point with coordinates [lng, lat]' });
+      }
+      if (!coverageRadius || isNaN(Number(coverageRadius))) {
+        return res.status(400).json({ message: 'coverageRadius is required and must be a number' });
+      }
+
+      let images = [];
+      if (req.files && req.files.length > 0) {
+        images = await uploadFile(req.files, req, "delivery-companies");
+      }
+
+      const newCompany = {
+        _id: getId(),
+        name,
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
+        id: Number(id),
+        location: parsedLocation,
+        coverageRadius: Number(coverageRadius),
+        phone: phone || '',
+        email: email || '',
+        status: status === 'true' || status === true,
+        image: images.length > 0 ? images[0] : '',
+        order: order ? Number(order) : 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await dbAdmin.deliveryCompanies.insertOne(newCompany);
+      res.status(201).json(newCompany);
+    } catch (err) {
+      res.status(500).json({ message: 'Failed to add delivery company', error: err.message });
+    }
+  }
+);
+
+router.get("/api/shoofiAdmin/delivery-company/:id", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const company = await dbAdmin.store.findOne({ _id: getId(id) });
+    if (!company) {
+      return res.status(404).json({ message: 'Delivery company not found' });
+    }
+    res.status(200).json(company);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch delivery company', error: err.message });
+  }
+});
+
+router.post(
+  "/api/shoofiAdmin/delivery-company/update/:id",
+  upload.array("img"),
+  async (req, res) => {
+    try {
+      const dbAdmin = req.app.db['delivery-company'];
+      const { id } = req.params;
+      const { name, nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, id: companyId, location, coverageRadius, phone, email, status, order } = req.body;
+
+      // Validation
+      if (!name || !nameAR || !nameHE) {
+        return res.status(400).json({ message: 'Company name, nameAR, and nameHE are required' });
+      }
+      if (!start || !end) {
+        return res.status(400).json({ message: 'Start and end times are required' });
+      }
+      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
+        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      }
+      if (typeof companyId === 'undefined') {
+        return res.status(400).json({ message: 'id is required' });
+      }
+      let parsedLocation;
+      try {
+        parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid location format' });
+      }
+      if (!parsedLocation || parsedLocation.type !== 'Point' || !Array.isArray(parsedLocation.coordinates) || parsedLocation.coordinates.length !== 2) {
+        return res.status(400).json({ message: 'location must be a GeoJSON Point with coordinates [lng, lat]' });
+      }
+      if (!coverageRadius || isNaN(Number(coverageRadius))) {
+        return res.status(400).json({ message: 'coverageRadius is required and must be a number' });
+      }
+
+      const company = await dbAdmin.store.findOne({ _id: getId(id) });
+      if (!company) {
+        return res.status(404).json({ message: 'Delivery company not found' });
+      }
+
+      let image = company.image;
+      if (req.files && req.files.length > 0) {
+        image = (await uploadFile(req.files, req, "delivery-companies"))[0];
+        if (company.image) {
+          await deleteImages([company.image], req);
+        }
+      }
+
+      const updatedCompany = {
+        ...company,
+        name,
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
+        id: Number(companyId),
+        location: parsedLocation,
+        coverageRadius: Number(coverageRadius),
+        phone: phone || '',
+        email: email || '',
+        status: status === 'true' || status === true,
+        image,
+        order: order ? Number(order) : 0,
+        updatedAt: new Date()
+      };
+
+      await dbAdmin.store.updateOne(
+        { _id: getId(id) },
+        { $set: updatedCompany }
+      );
+      res.status(200).json(updatedCompany);
+    } catch (err) {
+      res.status(500).json({ message: 'Failed to update delivery company', error: err.message });
+    }
+  }
+);
+
+router.delete("/api/shoofiAdmin/delivery-company/:id", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { id } = req.params;
+    
+    const company = await dbAdmin.deliveryCompanies.findOne({ _id: getId(id) });
+    if (!company) {
+      return res.status(404).json({ message: 'Delivery company not found' });
+    }
+
+    if (company.image) {
+      await deleteImages([company.image], req);
+    }
+
+    await dbAdmin.deliveryCompanies.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Delivery company deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete delivery company', error: err.message });
+  }
+});
+
 module.exports = router;
