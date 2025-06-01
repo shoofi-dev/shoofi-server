@@ -8,6 +8,9 @@ const { Expo } = require("expo-server-sdk");
 const { uploadFile, deleteImages } = require("./product");
 var multer = require("multer");
 const RestaurantAvailabilityService = require("../services/delivery/RestaurantAvailabilityService");
+const { getDb } = require("../lib/db");
+const { MongoClient } = require("mongodb");
+const DatabaseInitializationService = require('../services/database/DatabaseInitializationService');
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -251,6 +254,17 @@ router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) 
     };
 
     await dbAdmin.stores.insertOne(newStore);
+
+    // Initialize the new store's database
+    const client = new MongoClient(process.env.DB_CONNECTION_STRING, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    
+    // Initialize the new database using the service
+    const db = await DatabaseInitializationService.initializeDatabase(appName, client);
+    
+    // Add the new database to the app's db object
+    req.app.db[appName] = db;
+
     res.status(201).json(newStore);
   } catch (err) {
     res.status(500).json({ message: 'Failed to add store', error: err.message });
