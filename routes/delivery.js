@@ -4,6 +4,9 @@ const router = express.Router();
 const momentTZ = require("moment-timezone");
 const { getId } = require("../lib/common");
 const pushNotificationWebService = require("../utils/push-notification/push-web");
+const { uploadFile, deleteImages } = require("./product");
+var multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -477,6 +480,297 @@ router.get('/api/delivery/city/:id', async (req, res) => {
   const city = await db.cities.findOne({ _id: getId(id) });
   if (!city) return res.status(404).json({ message: 'City not found' });
   res.json(city);
+});
+
+// Delivery Company Endpoints
+router.get("/api/delivery/companies", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const companies = await db.store.find().sort({ order: 1 }).toArray();
+    res.status(200).json(companies);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch delivery companies', error: err.message });
+  }
+});
+
+router.post(
+  "/api/delivery/company/add",
+  upload.array("img"),
+  async (req, res) => {
+    try {
+      const db = req.app.db['delivery-company'];
+      const { nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, phone, email, status, supportedCities } = req.body;
+
+      // Validation
+      if (!nameAR || !nameHE) {
+        return res.status(400).json({ message: 'nameAR, and nameHE are required' });
+      }
+      if (!start || !end) {
+        return res.status(400).json({ message: 'Start and end times are required' });
+      }
+      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
+        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      }
+
+
+
+
+      let parsedSupportedCities = [];
+      try {
+        parsedSupportedCities = typeof supportedCities === 'string' ? JSON.parse(supportedCities) : supportedCities;
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid supportedCities format' });
+      }
+
+      let images = [];
+      if (req.files && req.files.length > 0) {
+        images = await uploadFile(req.files, req, "delivery-companies");
+      }
+
+      const newCompany = {
+        _id: getId(),
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
+        phone: phone || '',
+        email: email || '',
+        status: status === 'true' || status === true,
+        image: images.length > 0 ? images[0] : '',
+        supportedCities: parsedSupportedCities.map(id => getId(id)),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await db.store.insertOne(newCompany);
+      res.status(201).json(newCompany);
+    } catch (err) {
+      res.status(500).json({ message: 'Failed to add delivery company', error: err.message });
+    }
+  }
+);
+
+router.get("/api/delivery/company/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const company = await db.store.findOne({ _id: getId(id) });
+    if (!company) {
+      return res.status(404).json({ message: 'Delivery company not found' });
+    }
+    res.status(200).json(company);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch delivery company', error: err.message });
+  }
+});
+
+router.post(
+  "/api/delivery/company/update/:id",
+  upload.array("img"),
+  async (req, res) => {
+    try {
+      const db = req.app.db['delivery-company'];
+      const { id } = req.params;
+      const { nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, id: companyId, phone, email, status, order, supportedCities } = req.body;
+
+      // Validation
+      if (!nameAR || !nameHE) {
+        return res.status(400).json({ message: 'Company nameAR, and nameHE are required' });
+      }
+      if (!start || !end) {
+        return res.status(400).json({ message: 'Start and end times are required' });
+      }
+      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
+        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      }
+      if (typeof companyId === 'undefined') {
+        return res.status(400).json({ message: 'id is required' });
+      }
+      let parsedSupportedCities = [];
+      try {
+        parsedSupportedCities = typeof supportedCities === 'string' ? JSON.parse(supportedCities) : supportedCities;
+      } catch (e) {
+        return res.status(400).json({ message: 'Invalid supportedCities format' });
+      }
+
+      const company = await db.store.findOne({ _id: getId(id) });
+      if (!company) {
+        return res.status(404).json({ message: 'Delivery company not found' });
+      }
+
+      let image = company.image;
+      if (req.files && req.files.length > 0) {
+        image = (await uploadFile(req.files, req, "delivery-companies"))[0];
+        if (company.image) {
+          await deleteImages([company.image], req);
+        }
+      }
+
+      const updatedCompany = {
+        ...company,
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
+        id: Number(companyId),
+        phone: phone || '',
+        email: email || '',
+        status: status === 'true' || status === true,
+        image,
+        order: order ? Number(order) : 0,
+        supportedCities: parsedSupportedCities.map(id => getId(id)),
+        updatedAt: new Date()
+      };
+
+      await db.store.updateOne(
+        { _id: getId(id) },
+        { $set: updatedCompany }
+      );
+      res.status(200).json(updatedCompany);
+    } catch (err) {
+      res.status(500).json({ message: 'Failed to update delivery company', error: err.message });
+    }
+  }
+);
+
+router.delete("/api/delivery/company/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    
+    const company = await db.store.findOne({ _id: getId(id) });
+    if (!company) {
+      return res.status(404).json({ message: 'Delivery company not found' });
+    }
+
+    if (company.image) {
+      await deleteImages([company.image], req);
+    }
+
+    await db.store.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Delivery company deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete delivery company', error: err.message });
+  }
+});
+
+// Get companies by city
+router.get("/api/delivery/companies/by-city/:cityId", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { cityId } = req.params;
+    const companies = await db.store.find({ 
+      supportedCities: { $elemMatch: { $eq: getId(cityId) } }
+    }).sort({ order: 1 }).toArray();
+    res.status(200).json(companies);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch companies by city', error: err.message });
+  }
+});
+
+// Delivery Company Employees Endpoints
+router.get("/api/delivery/company/:companyId/employees", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { companyId } = req.params;
+    const employees = await db.customers.find({ companyId }).toArray();
+    res.status(200).json(employees);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch employees', error: err.message });
+  }
+});
+
+router.post("/api/delivery/company/:companyId/employee/add", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { companyId } = req.params;
+    const { phone, role, fullName, isActive } = req.body;
+    if (!phone || !role || !fullName) {
+      return res.status(400).json({ message: 'phone, role, and fullName are required' });
+    }
+    const newEmployee = {
+      phone,
+      role,
+      fullName,
+      isActive: isActive === 'true' || isActive === true,
+      companyId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const result = await db.customers.insertOne(newEmployee);
+    res.status(201).json({ ...newEmployee, _id: result.insertedId });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to add employee', error: err.message });
+  }
+});
+
+router.post("/api/delivery/company/employee/update/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const { phone, role, fullName, isActive } = req.body;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    const updatedEmployee = {
+      ...employee,
+      phone,
+      role,
+      fullName,
+      isActive: isActive === 'true' || isActive === true,
+      updatedAt: new Date(),
+    };
+    await db.customers.updateOne({ _id: getId(id) }, { $set: updatedEmployee });
+    res.status(200).json(updatedEmployee);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update employee', error: err.message });
+  }
+});
+
+router.get("/api/delivery/company/employee/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    res.status(200).json(employee);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch employee', error: err.message });
+  }
+});
+
+router.delete("/api/delivery/company/employee/:id", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { id } = req.params;
+    const employee = await db.customers.findOne({ _id: getId(id) });
+    if (!employee) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    await db.customers.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Employee deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete employee', error: err.message });
+  }
+});
+
+// Get areas by city
+router.get('/api/delivery/areas/by-city/:cityId', async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    const { cityId } = req.params;
+    const areas = await db.areas.find({ cityId: cityId }).toArray();
+    res.status(200).json(areas);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch areas by city', error: err.message });
+  }
 });
 
 module.exports = router;
