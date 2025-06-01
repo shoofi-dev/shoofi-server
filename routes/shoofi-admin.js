@@ -223,4 +223,111 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
   }
 });
 
+// Store Management APIs
+router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { storeName, appName, categoryId, supportedCities } = req.body;
+
+    if (!storeName || !appName || !categoryId || !supportedCities) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    let logo = '';
+    if (req.files && req.files.length > 0) {
+      const images = await uploadFile(req.files, req, "stores");
+      logo = images[0];
+    }
+
+    const newStore = {
+      _id: getId(),
+      storeName,
+      storeLogo: logo,
+      appName,
+      categoryId: getId(categoryId),
+      supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    await dbAdmin.stores.insertOne(newStore);
+    res.status(201).json(newStore);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to add store', error: err.message });
+  }
+});
+
+router.get("/api/shoofiAdmin/store/:id", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { id } = req.params;
+    const store = await dbAdmin.stores.findOne({ _id: getId(id) });
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+    res.status(200).json(store);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch store', error: err.message });
+  }
+});
+
+router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { id } = req.params;
+    const { storeName, appName, categoryId, supportedCities } = req.body;
+
+    if (!storeName || !appName || !categoryId || !supportedCities) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const store = await dbAdmin.stores.findOne({ _id: getId(id) });
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+
+    let logo = store.storeLogo;
+    if (req.files && req.files.length > 0) {
+      const images = await uploadFile(req.files, req, "stores");
+      logo = images[0];
+      if (store.storeLogo) {
+        await deleteImages([store.storeLogo], req);
+      }
+    }
+
+    const updatedStore = {
+      ...store,
+      storeName,
+      storeLogo: logo,
+      appName,
+      categoryId: getId(categoryId),
+      supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      updatedAt: new Date()
+    };
+
+    await dbAdmin.stores.updateOne({ _id: getId(id) }, { $set: updatedStore });
+    res.status(200).json(updatedStore);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update store', error: err.message });
+  }
+});
+
+router.delete("/api/shoofiAdmin/store/:id", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { id } = req.params;
+    const store = await dbAdmin.stores.findOne({ _id: getId(id) });
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+    if (store.storeLogo) {
+      await deleteImages([store.storeLogo], req);
+    }
+    await dbAdmin.stores.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Store deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete store', error: err.message });
+  }
+});
+
 module.exports = router;
