@@ -7,6 +7,7 @@ const websockets = require("../utils/websockets");
 const { Expo } = require("expo-server-sdk");
 const { uploadFile, deleteImages } = require("./product");
 var multer = require("multer");
+const RestaurantAvailabilityService = require("../services/delivery/RestaurantAvailabilityService");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -41,6 +42,31 @@ router.post("/api/shoofiAdmin/store/list", async (req, res, next) => {
     }
   }
   res.status(200).json(storesLostFinal);
+});
+
+
+router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
+  try {
+    const { lat, lng } = req.body.location;
+    if (!lat || !lng) {
+      return res.status(400).json({ message: 'lat and lng are required' });
+    }
+
+    const deliveryDB = req.app.db['delivery-company'];
+    const shoofiDB = req.app.db['shoofi'];
+    
+    const availableStores = await RestaurantAvailabilityService.getAvailableStores(
+      deliveryDB,
+      shoofiDB,
+      Number(lat),
+      Number(lng)
+    );
+
+    res.json(availableStores);
+  } catch (error) {
+    console.error('Error getting available stores:', error);
+    res.status(500).json({ error: 'Failed to get available stores' });
+  }
 });
 
 router.post("/api/shoofiAdmin/category/list", async (req, res, next) => {

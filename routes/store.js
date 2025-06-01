@@ -89,10 +89,10 @@ router.post("/api/store", async (req, res, next) => {
       console.log("isStoreOpen", isStoreOpen);
   
       let isDeliveryOpen = store.delivery_support;
-      if (store.delivery_support && store.isSendNotificationToDeliveryCompany) {
-        const isCompanyOpen = await storeService.isDeliveryCompanyOpen(req);
-        isDeliveryOpen = isCompanyOpen;
-      }
+      // if (store.delivery_support && store.isSendNotificationToDeliveryCompany) {
+      //   const isCompanyOpen = await storeService.isDeliveryCompanyOpen(req);
+      //   isDeliveryOpen = isCompanyOpen;
+      // }
   
       return {
         ...store,
