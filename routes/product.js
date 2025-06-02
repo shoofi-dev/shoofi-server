@@ -22,7 +22,7 @@ const router = express.Router();
 const BUCKET_NAME = "app-main-bucket";
 const uploadFile = async (files, req, folderName) => {
   const appName = req.headers["app-name"];
-  const db = req.app.db[appName];
+  const db = req.app.db['shoofi'];
   const amazonConfig = await db.amazonconfigs.findOne({ app: "amazon" });
   let locationslist = [];
   let counter = 0;
@@ -69,7 +69,7 @@ const uploadFile = async (files, req, folderName) => {
 
 const deleteImages = async (images, req) => {
   const appName = req.headers["app-name"];
-  const db = req.app.db[appName];
+  const db = req.app.db['shoofi'];
   const amazonConfig = await db.amazonconfigs.findOne({ app: "amazon" });
   return new Promise((resolve, reject) => {
     const s3Client = new S3Client({

@@ -6,6 +6,9 @@ const { paginateData } = require("../lib/paginate");
 const websockets = require("../utils/websockets");
 const storeService = require("../utils/store-service")
 const momentTZ = require("moment-timezone");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+const { uploadFile, deleteImages } = require("./product");
 
 function getUTCOffset() {
   const guessed = momentTZ.tz.guess(); 
@@ -251,6 +254,70 @@ router.post("/api/store/add", async (req, res, next) => {
     console.error("Error adding store:", error);
     res.status(500).json({ message: "Failed to add store" });
   }
+});
+
+// Get all store categories
+router.get("/api/store-category/all", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const categories = await db.categories.find().toArray();
+  res.status(200).json(categories);
+});
+
+// Add store category
+router.post("/api/store-category/add", upload.array("img"), async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const { nameAR, nameHE } = req.body;
+  let images = [];
+  if (req.files && req.files.length > 0) {
+    images = await uploadFile(req.files, req, "categories");
+  }
+  const newCategory = {
+    _id: getId(),
+    nameAR,
+    nameHE,
+    img: images,
+  };
+  await db.categories.insertOne(newCategory);
+  res.status(201).json(newCategory);
+});
+
+// Update store category
+router.post("/api/store-category/update/:id", upload.array("img"), async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const { id } = req.params;
+  const { nameAR, nameHE } = req.body;
+  const category = await db.categories.findOne({ _id: getId(id) });
+  let images = category.img;
+  if (req.files && req.files.length > 0) {
+    images = await uploadFile(req.files, req, `${appName}/categories`);
+    if (category.img && category.img.length > 0) {
+      await deleteImages(category.img, req);
+    }
+  }
+  const updatedCategory = {
+    ...category,
+    nameAR,
+    nameHE,
+    img: images,
+  };
+  await db.categories.updateOne({ _id: getId(id) }, { $set: updatedCategory });
+  res.status(200).json(updatedCategory);
+});
+
+// Delete store category
+router.delete("/api/store-category/:id", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const { id } = req.params;
+  const category = await db.categories.findOne({ _id: getId(id) });
+  if (category.img && category.img.length > 0) {
+    await deleteImages(category.img, req);
+  }
+  await db.categories.deleteOne({ _id: getId(id) });
+  res.status(200).json({ message: "Category deleted" });
 });
 
 module.exports = router;
