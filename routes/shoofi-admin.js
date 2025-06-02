@@ -230,10 +230,10 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { storeName, appName, categoryId, supportedCities } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities } = req.body;
 
-    if (!storeName || !appName || !categoryId || !supportedCities) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
+      return res.status(400).json({ message: 'All required fields are missing' });
     }
 
     let logo = '';
@@ -244,10 +244,12 @@ router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) 
 
     const newStore = {
       _id: getId(),
-      storeName,
       storeLogo: logo,
       appName,
-      categoryId: getId(categoryId),
+      name_ar,
+      name_he,
+      business_visible: business_visible === 'true',
+      categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -289,10 +291,10 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { storeName, appName, categoryId, supportedCities } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities } = req.body;
 
-    if (!storeName || !appName || !categoryId || !supportedCities) {
-      return res.status(400).json({ message: 'All fields are required' });
+    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
+      return res.status(400).json({ message: 'All required fields are missing' });
     }
 
     const store = await dbAdmin.stores.findOne({ _id: getId(id) });
@@ -311,10 +313,12 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
 
     const updatedStore = {
       ...store,
-      storeName,
       storeLogo: logo,
       appName,
-      categoryId: getId(categoryId),
+      name_ar,
+      name_he,
+      business_visible: business_visible === 'true',
+      categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       updatedAt: new Date()
     };

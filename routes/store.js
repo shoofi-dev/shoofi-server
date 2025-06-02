@@ -69,6 +69,13 @@ router.post("/api/store/get-by-name", async (req, res, next) => {
   });
 });
 
+router.get("/api/store/get/:appName?", async (req, res) => {
+  const appName = req.params.appName;
+  const db = req.app.db[appName];
+  const store = await db.store.findOne({ });
+  res.status(200).json(store);
+});
+
 router.post("/api/store", async (req, res, next) => {
   let pageNum = 1;
   if (req.params.page) {
@@ -112,7 +119,7 @@ router.post("/api/store/update", async (req, res, next) => {
   if (req.params.page) {
     pageNum = req.params.page;
   }
-  let storeDoc = req.body.data;
+  let storeDoc = req.body.data || req.body;
   const id = storeDoc._id;
   delete storeDoc._id;
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
@@ -211,6 +218,38 @@ router.get("/api/store/is-should-update", async (req, res) => {
   } else {
     console.log("NO");
     res.status(200).json(false);
+  }
+});
+
+router.post("/api/store/add", async (req, res, next) => {
+  try {
+    const { appName, name_ar, name_he, ...storeData } = req.body;
+    
+    if (!appName) {
+      return res.status(400).json({ message: "App name is required" });
+    }
+
+    const db = req.app.db[appName];
+    
+    // Check if store already exists
+    const existingStore = await db.store.findOne({ id: 1 });
+    if (existingStore) {
+      return res.status(400).json({ message: "Store already exists" });
+    }
+
+    // Insert new store
+    await db.store.insertOne({
+      ...storeData,
+      id: 1
+    });
+    
+    // Fire websocket event
+    websockets.fireWebscoketEvent({ appName, appName });
+
+    res.status(200).json({ message: "Store added successfully" });
+  } catch (error) {
+    console.error("Error adding store:", error);
+    res.status(500).json({ message: "Failed to add store" });
   }
 });
 

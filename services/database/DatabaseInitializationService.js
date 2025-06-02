@@ -1,5 +1,3 @@
-const { MongoClient } = require('mongodb');
-
 class DatabaseInitializationService {
   static async initializeDatabase(databaseName, client) {
     const db = client.db(databaseName);

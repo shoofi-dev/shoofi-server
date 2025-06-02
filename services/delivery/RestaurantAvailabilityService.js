@@ -48,11 +48,11 @@ class RestaurantAvailabilityService {
       }
     }).toArray();
 
-    const nearbyCityIds = nearbyCities.map(city => city._id.toString());
+    const nearbyCityIds = nearbyCities.map(city => city._id);
 
     // Find areas in nearby cities that contain the customer's point
     const customerArea = await db.areas.findOne({
-      cityId: { $in: nearbyCityIds },
+      cityId: { $in: nearbyCities.map(city => city._id.toString()) },
       geometry: {
         $geoIntersects: {
           $geometry: {
