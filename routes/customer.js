@@ -18,6 +18,7 @@ const { getId, clearCustomer, sanitize } = require("../lib/common");
 const rateLimit = require("express-rate-limit");
 const { validateJson } = require("../lib/schema");
 const { restrict } = require("../lib/auth");
+const customerAddressController = require('../controllers/customerAddressController');
 
 const apiLimiter = rateLimit({
   windowMs: 300000, // 5 minutes
@@ -1150,5 +1151,12 @@ router.post(
     res.status(200).json({ message: "Payment added successfully" });
   }
 );
+
+// Address management endpoints
+router.post('/api/customer/:customerId/addresses/add', customerAddressController.addAddress);
+router.get('/api/customer/:customerId/addresses', customerAddressController.getAddresses);
+router.put('/api/customer/:customerId/addresses/:addressId', customerAddressController.updateAddress);
+router.delete('/api/customer/:customerId/addresses/:addressId', customerAddressController.deleteAddress);
+router.patch('/api/customer/:customerId/addresses/:addressId/default', customerAddressController.setDefaultAddress);
 
 module.exports = router;
