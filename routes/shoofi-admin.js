@@ -15,36 +15,36 @@ const DatabaseInitializationService = require('../services/database/DatabaseInit
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.post("/api/shoofiAdmin/store/list", async (req, res, next) => {
-  let storesLostFinal = [];
-  const dbAdmin = req.app.db['shoofi'];
-  const location = req.body.location;
-  if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
-    return res.status(400).json({ message: 'Location is required and must be numbers.' });
-  }
-  const storesList = await dbAdmin.stores.find().toArray();
-  for (let i = 0; i < storesList.length; i++) {
-    const dbName = storesList[i].appName;
-    const db = req.app.db[dbName];
-    const storeDataArr = await db.store.find().toArray();
-    const storeData = storeDataArr[0];
-    if (storeData && storeData.location && storeData.coverageRadius) {
-      // Calculate distance between user and store
-      const toRad = (value) => (value * Math.PI) / 180;
-      const R = 6371000; // Earth radius in meters
-      const dLat = toRad(location.lat - storeData.location.coordinates[1]);
-      const dLon = toRad(location.lng - storeData.location.coordinates[0]);
-      const lat1 = toRad(storeData.location.coordinates[1]);
-      const lat2 = toRad(location.lat);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = R * c;
-      if (distance <= storeData.coverageRadius) {
-        storesLostFinal.push(storeData);
+    let storesLostFinal = [];
+    const dbAdmin = req.app.db['shoofi'];
+    const location = req.body.location;
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return res.status(400).json({ message: 'Location is required and must be numbers.' });
+    }
+    const storesList = await dbAdmin.stores.find().toArray();
+    for (let i = 0; i < storesList.length; i++) {
+      const dbName = storesList[i].appName;
+      const db = req.app.db[dbName];
+      const storeDataArr = await db.store.find().toArray();
+      const storeData = storeDataArr[0];
+      if (storeData && storeData.location && storeData.coverageRadius) {
+        // Calculate distance between user and store
+        const toRad = (value) => (value * Math.PI) / 180;
+        const R = 6371000; // Earth radius in meters
+        const dLat = toRad(location.lat - storeData.location.coordinates[1]);
+        const dLon = toRad(location.lng - storeData.location.coordinates[0]);
+        const lat1 = toRad(storeData.location.coordinates[1]);
+        const lat2 = toRad(location.lat);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+        if (distance <= storeData.coverageRadius) {
+          storesLostFinal.push(storeData);
+        }
       }
     }
-  }
-  res.status(200).json(storesLostFinal);
+    res.status(200).json(storesLostFinal);
 });
 
 
@@ -345,6 +345,20 @@ router.delete("/api/shoofiAdmin/store/:id", async (req, res) => {
     res.status(200).json({ message: 'Store deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete store', error: err.message });
+  }
+});
+
+router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const cityId = req.params.cityId;
+    const { ObjectId } = require('mongodb');
+    const stores = await dbAdmin.stores.find({
+      supportedCities: { $elemMatch: { $eq: ObjectId(cityId) } }
+    }).toArray();
+    res.status(200).json(stores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch stores by city', error: err.message });
   }
 });
 
