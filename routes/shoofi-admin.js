@@ -77,6 +77,11 @@ router.get("/api/shoofiAdmin/category/list", async (req, res, next) => {
   const categoryList = await dbAdmin.categories.find().toArray();
   res.status(200).json(categoryList);
 });
+router.post("/api/shoofiAdmin/category/list", async (req, res, next) => {
+  const dbAdmin = req.app.db['shoofi'];
+  const categoryList = await dbAdmin.categories.find().toArray();
+  res.status(200).json(categoryList);
+});
 
 router.get("/api/store/download-app", async (req, res) => {
   const db = req.app.db[req.headers['db-name']];
