@@ -230,7 +230,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -251,6 +251,8 @@ router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) 
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      phone: phone || '',
+      address: address || '',
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -291,7 +293,7 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -320,6 +322,8 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      phone: phone || store.phone || '',
+      address: address || store.address || '',
       updatedAt: new Date()
     };
 
