@@ -97,7 +97,9 @@ router.get("/api/category/by-general/:generalCategoryId", async (req, res) => {
   const { generalCategoryId } = req.params;
 
   try {
-    const categories = await db.categories.find({ generalCategoryId: (generalCategoryId) }).toArray();
+    const categories = await db.categories.find({
+      supportedGeneralCategoryIds: { $in: [getId(generalCategoryId)] }
+    }).toArray();
     res.status(200).json(categories);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch store categories', error: err.message });

@@ -124,7 +124,7 @@ router.post(
   async (req, res, next) => {
     try {
       const dbAdmin = req.app.db['shoofi'];
-      const { nameAR, nameHE, extras, order,generalCategoryId } = req.body;
+      const { nameAR, nameHE, extras, order, supportedGeneralCategoryIds } = req.body;
 
       if (!nameAR || !nameHE) {
         return res.status(400).json({ message: 'Category nameAR, and nameHE are required' });
@@ -142,7 +142,7 @@ router.post(
         extras: extras ? JSON.parse(extras) : [],
         image: images.length > 0 ? images[0] : '',
         order: order ? Number(order) : 0,
-        generalCategoryId: generalCategoryId,
+        supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : [],
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -176,7 +176,7 @@ router.post(
     try {
       const dbAdmin = req.app.db['shoofi'];
       const { id } = req.params;
-      const { name, nameAR, nameHE, extras, order } = req.body;
+      const { name, nameAR, nameHE, extras, order, supportedGeneralCategoryIds } = req.body;
       if (!name || !nameAR || !nameHE) {
         return res.status(400).json({ message: 'Category name, nameAR, and nameHE are required' });
       }
@@ -199,6 +199,7 @@ router.post(
         extras: extras ? JSON.parse(extras) : [],
         image,
         order: order ? Number(order) : 0,
+        supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : category.supportedGeneralCategoryIds || [],
         updatedAt: new Date(),
       };
       await dbAdmin.categories.updateOne({ _id: getId(id) }, { $set: updatedCategory });
@@ -235,7 +236,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -256,6 +257,7 @@ router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) 
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : [],
       phone: phone || '',
       address: address || '',
       createdAt: new Date(),
@@ -298,7 +300,7 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -327,6 +329,7 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
+      supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : store.supportedGeneralCategoryIds || [],
       phone: phone || store.phone || '',
       address: address || store.address || '',
       updatedAt: new Date()
