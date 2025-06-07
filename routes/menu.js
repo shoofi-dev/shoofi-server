@@ -36,7 +36,10 @@ router.get("/api/menu", async (req, res, next) => {
       const menu = finalCategories.map((category)=>{
           let tempCat = {
               ...category,
-              products: products.data.filter((product)=> product.categoryId == getId(category._id))
+              products: products.data.filter((product) => 
+                product.supportedCategoryIds && 
+                product.supportedCategoryIds.includes(getId(category._id).toString())
+              )
           }
           tempCat.products = _.orderBy(tempCat.products, ["order"], ["asc"])
           return tempCat;

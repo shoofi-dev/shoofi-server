@@ -12,7 +12,19 @@ const { getDb } = require("../lib/db");
 const { MongoClient } = require("mongodb");
 const DatabaseInitializationService = require('../services/database/DatabaseInitializationService');
 
-const upload = multer({ storage: multer.memoryStorage() });
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
+// Create separate upload handlers for different file fields
+const uploadFields = upload.fields([
+  { name: 'logo', maxCount: 1 },
+  { name: 'coverImage', maxCount: 1 }
+]);
 
 router.post("/api/shoofiAdmin/store/list", async (req, res, next) => {
     let storesLostFinal = [];
@@ -233,7 +245,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 });
 
 // Store Management APIs
-router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) => {
+router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds } = req.body;
@@ -243,14 +255,26 @@ router.post("/api/shoofiAdmin/store/add", upload.array("img"), async (req, res) 
     }
 
     let logo = '';
-    if (req.files && req.files.length > 0) {
-      const images = await uploadFile(req.files, req, "stores");
-      logo = images[0];
+    let coverImage = '';
+    
+    if (req.files) {
+      if (req.files['logo'] && req.files['logo'][0]) {
+        const logoFile = req.files['logo'][0];
+        const logoImages = await uploadFile([logoFile], req, "stores");
+        logo = logoImages[0];
+      }
+      
+      if (req.files['coverImage'] && req.files['coverImage'][0]) {
+        const coverFile = req.files['coverImage'][0];
+        const coverImages = await uploadFile([coverFile], req, "stores");
+        coverImage = coverImages[0];
+      }
     }
 
     const newStore = {
       _id: getId(),
       storeLogo: logo,
+      coverImage: coverImage,
       appName,
       name_ar,
       name_he,
@@ -296,7 +320,7 @@ router.get("/api/shoofiAdmin/store/:id", async (req, res) => {
   }
 });
 
-router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req, res) => {
+router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
@@ -312,17 +336,32 @@ router.post("/api/shoofiAdmin/store/update/:id", upload.array("img"), async (req
     }
 
     let logo = store.storeLogo;
-    if (req.files && req.files.length > 0) {
-      const images = await uploadFile(req.files, req, "stores");
-      logo = images[0];
-      if (store.storeLogo) {
-        await deleteImages([store.storeLogo], req);
+    let coverImage = store.coverImage;
+
+    if (req.files) {
+      if (req.files['logo'] && req.files['logo'][0]) {
+        const logoFile = req.files['logo'][0];
+        const logoImages = await uploadFile([logoFile], req, "stores");
+        logo = logoImages[0];
+        if (store.storeLogo) {
+          await deleteImages([store.storeLogo], req);
+        }
+      }
+      
+      if (req.files['coverImage'] && req.files['coverImage'][0]) {
+        const coverFile = req.files['coverImage'][0];
+        const coverImages = await uploadFile([coverFile], req, "stores");
+        coverImage = coverImages[0];
+        if (store.coverImage) {
+          await deleteImages([store.coverImage], req);
+        }
       }
     }
 
     const updatedStore = {
       ...store,
       storeLogo: logo,
+      coverImage: coverImage,
       appName,
       name_ar,
       name_he,

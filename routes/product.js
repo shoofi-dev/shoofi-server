@@ -239,7 +239,7 @@ router.post(
     let doc = {
       nameAR: req.body.nameAR,
       nameHE: req.body.nameHE,
-      categoryId: req.body.categoryId,
+      supportedCategoryIds: req.body.supportedCategoryIds ? JSON.parse(req.body.supportedCategoryIds) : [],
       descriptionAR: cleanHtml(req.body.descriptionAR),
       descriptionHE: cleanHtml(req.body.descriptionHE),
       notInStoreDescriptionAR: cleanHtml(req.body.notInStoreDescriptionAR),
@@ -254,56 +254,11 @@ router.post(
       discountPrice: req.body.hasDiscount === "true" ? Number(req.body.discountPrice) : 0,
     };
 
-    if (req.body.subCategoryId) {
-      doc.subCategoryId = req.body.subCategoryId;
-      const countDocuments = await db.products.countDocuments({
-        categoryId: req.body.categoryId,
-        subCategoryId: req.body.subCategoryId,
-      });
-      doc.order = countDocuments;
-    } else {
-      const countDocuments = await db.products.countDocuments({
-        categoryId: req.body.categoryId,
-      });
-      doc.order = countDocuments;
+    if (!doc.supportedCategoryIds || doc.supportedCategoryIds.length === 0) {
+      return res.status(400).json({ message: "At least one category is required" });
     }
-    // doc.extras = {
-    //   ...doc.extras,
-    //   counter: {
-    //     type: "COUNTER",
-    //     value: 1,
-    //   },
-    // };
 
-    // doc.extras = {
-    //   ...doc.extras,
-    //   size: {
-    //     options: {
-    //       medium: {
-    //         price: Number(req.body.mediumPrice),
-    //         count: Number(req.body.mediumCount),
-    //       },
-    //       large: {
-    //         price: Number(req.body.largePrice),
-    //         count: Number(req.body.largeCount),
-    //       },
-    //     },
-    //     type: "oneChoice",
-    //     value: "medium",
-    //   },
-    // };
-    // if(req.body.isWeight){
-    //   doc.extras = {
-    //     ...doc.extras,
-    //     weight: {
-    //       type: "COUNTER",
-    //       value:  Number(req.body.mediumPrice),
-    //       minValue: 500,
-    //       maxValue: 5000,
-    //     },
-    //   };
-    // }
-
+    // Calculate order based on supportedCategoryIds
 
 
     if (req.files && req.files.length > 1) {
@@ -347,14 +302,14 @@ router.post(
       ...product,
       nameAR: req.body.nameAR,
       nameHE: req.body.nameHE,
-      categoryId: req.body.categoryId,
+      supportedCategoryIds: req.body.supportedCategoryIds ? JSON.parse(req.body.supportedCategoryIds) : product.supportedCategoryIds,
       descriptionAR: cleanHtml(req.body.descriptionAR),
       descriptionHE: cleanHtml(req.body.descriptionHE),
       notInStoreDescriptionAR: cleanHtml(req.body.notInStoreDescriptionAR),
       notInStoreDescriptionHE: cleanHtml(req.body.notInStoreDescriptionHE),
       isInStore: req.body.isInStore === "false" ? false : true,
-      extras: req.body.extras ? JSON.parse(req.body.extras) : {},
-      others: req.body.others ? JSON.parse(req.body.others) : {},
+      extras: req.body.extras ? JSON.parse(req.body.extras) : [],
+      others: req.body.others ? JSON.parse(req.body.others) : [],
       price: Number(JSON.parse(req.body.price)),
       hasDiscount: req.body.hasDiscount === "true",
       discountQuantity: req.body.hasDiscount === "true" ? Number(req.body.discountQuantity) : 0,
@@ -362,6 +317,9 @@ router.post(
       updatedAt: new Date(),
     };
 
+    if (!productDoc.supportedCategoryIds || productDoc.supportedCategoryIds.length === 0) {
+      return res.status(400).json({ message: "At least one category is required" });
+    }
 
     if (req.files) {
       if (req.files.length > 0) {
@@ -369,15 +327,6 @@ router.post(
         await deleteImages(product.img, req);
       }
     }
-
-    // productDoc.extras = {
-    //   ...productDoc.extras,
-    //   counter: {
-    //     type: "COUNTER",
-    //     value: 1,
-    //   },
-    // };
-
 
     try {
       await db.products.updateOne(
