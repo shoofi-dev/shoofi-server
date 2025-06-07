@@ -34,7 +34,7 @@ class RestaurantAvailabilityService {
   /**
    * Get available stores and their delivery companies based on customer location
    */
-  static async getAvailableStores(db, shoofiDB, customerLat, customerLng, maxCityDistanceKm = 5) {
+  static async getAvailableStores(db, shoofiDB,generalDB, customerLat, customerLng, maxCityDistanceKm = 5) {
     // Find nearby cities using MongoDB's $near with 2dsphere index
     const nearbyCities = await db.cities.find({
       geometry: {
@@ -68,8 +68,19 @@ class RestaurantAvailabilityService {
       supportedCities: { $in: nearbyCityIds }
     }).toArray();
 
-    // For each store, find delivery companies that can deliver to the customer
-    const results = await Promise.all(availableStores.map(async store => {
+    // Verify each store's database and filter out invalid ones
+    const verifiedStores = await Promise.all(
+      availableStores.map(async store => {
+        const isValid = await verifyStoreDatabase(store.appName, generalDB);
+        return isValid ? store : null;
+      })
+    );
+
+    // Filter out null values (invalid stores)
+    const validStores = verifiedStores.filter(store => store !== null);
+
+    // For each valid store, find delivery companies that can deliver to the customer
+    const results = await Promise.all(validStores.map(async store => {
       // Find delivery companies that support the store's cities
       const supportedCitiesIdObj = store.supportedCities.map(city => getId(city));
       const deliveryCompanies = await db.store.find({
@@ -106,4 +117,41 @@ class RestaurantAvailabilityService {
   }
 }
 
-module.exports = RestaurantAvailabilityService; 
+const verifyStoreDatabase = async (appName, client) => {
+  try {
+    // Check if database exists
+    const db = client[appName];
+    const collections = await db.listCollections().toArray();
+    const collectionNames = collections.map(col => col.name);
+
+    // Check required collections
+    const hasCategories = collectionNames.includes('categories');
+    const hasProducts = collectionNames.includes('products');
+    if (hasCategories && hasProducts) {
+      const categoryCount = hasCategories ? await db.collection('categories').countDocuments() : 0;
+      const productCount = hasProducts ? await db.collection('products').countDocuments() : 0;
+      if (categoryCount > 0 && productCount > 0) {
+        return true;
+      }
+      return false;
+    }
+    return false;     
+
+  } catch (error) {
+    console.error(`Error verifying store database ${appName}:`, error);
+    return {
+      exists: false,
+      hasCategories: false,
+      hasProducts: false,
+      categoryCount: 0,
+      productCount: 0,
+      collections: [],
+      error: error.message
+    };
+  }
+};
+
+module.exports = {
+  getAvailableStores: RestaurantAvailabilityService.getAvailableStores,
+  verifyStoreDatabase
+}; 

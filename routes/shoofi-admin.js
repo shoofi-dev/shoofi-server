@@ -23,7 +23,7 @@ const upload = multer({
 // Create separate upload handlers for different file fields
 const uploadFields = upload.fields([
   { name: 'logo', maxCount: 1 },
-  { name: 'coverImage', maxCount: 1 }
+  { name: 'cover_sliders', maxCount: 10 } // Allow up to 10 cover images
 ]);
 
 router.post("/api/shoofiAdmin/store/list", async (req, res, next) => {
@@ -73,6 +73,7 @@ router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
     const availableStores = await RestaurantAvailabilityService.getAvailableStores(
       deliveryDB,
       shoofiDB,
+      req.app.db,
       Number(lat),
       Number(lng)
     );
@@ -254,7 +255,7 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
     }
 
     let logo = '';
-    let coverImage = '';
+    let cover_sliders = [];
     
     if (req.files) {
       if (req.files['logo'] && req.files['logo'][0]) {
@@ -263,17 +264,17 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
         logo = logoImages[0];
       }
       
-      if (req.files['coverImage'] && req.files['coverImage'][0]) {
-        const coverFile = req.files['coverImage'][0];
-        const coverImages = await uploadFile([coverFile], req, "stores");
-        coverImage = coverImages[0];
+      if (req.files['cover_sliders']) {
+        const coverFiles = req.files['cover_sliders'];
+        const coverImages = await uploadFile(coverFiles, req, "stores");
+        cover_sliders = coverImages;
       }
     }
 
     const newStore = {
       _id: getId(),
       storeLogo: logo,
-      coverImage: coverImage,
+      cover_sliders: cover_sliders,
       appName,
       name_ar,
       name_he,
@@ -335,7 +336,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
     }
 
     let logo = store.storeLogo;
-    let coverImage = store.coverImage;
+    let cover_sliders = store.cover_sliders || [];
 
     if (req.files) {
       if (req.files['logo'] && req.files['logo'][0]) {
@@ -347,20 +348,41 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
         }
       }
       
-      if (req.files['coverImage'] && req.files['coverImage'][0]) {
-        const coverFile = req.files['coverImage'][0];
-        const coverImages = await uploadFile([coverFile], req, "stores");
-        coverImage = coverImages[0];
-        if (store.coverImage) {
-          await deleteImages([store.coverImage], req);
-        }
+      if (req.files['cover_sliders']) {
+        const coverFiles = req.files['cover_sliders'];
+        const coverImages = await uploadFile(coverFiles, req, "stores");
+        cover_sliders = [...cover_sliders, ...coverImages];
       }
     }
+
+    // Handle existing cover sliders that should be kept
+    const existingCoverSliders = req.body.existing_cover_sliders 
+      ? (Array.isArray(req.body.existing_cover_sliders) 
+          ? req.body.existing_cover_sliders 
+          : [req.body.existing_cover_sliders])
+      : [];
+    
+    // Remove deleted cover sliders
+    const deletedSliders = store.cover_sliders?.filter(slider => 
+      !existingCoverSliders.includes(slider.uri)
+    ) || [];
+    
+    if (deletedSliders.length > 0) {
+      await deleteImages(deletedSliders, req);
+    }
+
+    // Keep existing sliders that weren't deleted and add new ones
+    const existingSliders = store.cover_sliders?.filter(slider => 
+      existingCoverSliders.includes(slider.uri)
+    ) || [];
+
+    // Combine existing and new sliders
+    cover_sliders = [...existingSliders, ...cover_sliders];
 
     const updatedStore = {
       ...store,
       storeLogo: logo,
-      coverImage: coverImage,
+      cover_sliders: cover_sliders,
       appName,
       name_ar,
       name_he,
