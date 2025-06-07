@@ -188,8 +188,8 @@ router.post(
     try {
       const dbAdmin = req.app.db['shoofi'];
       const { id } = req.params;
-      const { name, nameAR, nameHE, extras, order, supportedGeneralCategoryIds } = req.body;
-      if (!name || !nameAR || !nameHE) {
+      const { nameAR, nameHE, extras, order, supportedGeneralCategoryIds } = req.body;
+      if (!nameAR || !nameHE) {
         return res.status(400).json({ message: 'Category name, nameAR, and nameHE are required' });
       }
       const category = await dbAdmin.categories.findOne({ _id: getId(id) });
@@ -205,7 +205,6 @@ router.post(
       }
       const updatedCategory = {
         ...category,
-        name,
         nameAR,
         nameHE,
         extras: extras ? JSON.parse(extras) : [],
