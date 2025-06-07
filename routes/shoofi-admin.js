@@ -72,7 +72,7 @@ router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
   }
 });
 
-router.post("/api/shoofiAdmin/category/list", async (req, res, next) => {
+router.get("/api/shoofiAdmin/category/list", async (req, res, next) => {
   const dbAdmin = req.app.db['shoofi'];
   const categoryList = await dbAdmin.categories.find().toArray();
   res.status(200).json(categoryList);
@@ -119,10 +119,10 @@ router.post(
   async (req, res, next) => {
     try {
       const dbAdmin = req.app.db['shoofi'];
-      const { name, nameAR, nameHE, extras, order } = req.body;
+      const { nameAR, nameHE, extras, order,generalCategoryId } = req.body;
 
-      if (!name || !nameAR || !nameHE) {
-        return res.status(400).json({ message: 'Category name, nameAR, and nameHE are required' });
+      if (!nameAR || !nameHE) {
+        return res.status(400).json({ message: 'Category nameAR, and nameHE are required' });
       }
 
       let images = [];
@@ -132,12 +132,12 @@ router.post(
 
       const newCategory = {
         _id: getId(),
-        name,
         nameAR,
         nameHE,
         extras: extras ? JSON.parse(extras) : [],
         image: images.length > 0 ? images[0] : '',
         order: order ? Number(order) : 0,
+        generalCategoryId: generalCategoryId,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -211,14 +211,14 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
       return res.status(400).json({ message: 'categoryId is required' });
     }
     const dbAdmin = req.app.db['shoofi'];
-    const storesList = await dbAdmin.stores.find().toArray();
+    const storesList = await dbAdmin.stores.find({categoryIds: { $in: [getId(categoryId)] }}).toArray();
     let result = [];
     for (let i = 0; i < storesList.length; i++) {
       const dbName = storesList[i].appName;
       const db = req.app.db[dbName];
       // Adjust the field name if your store uses a different one
-      const storeDataArr = await db.store.find({ categoryId }).toArray();
-      result.push(...storeDataArr);
+      const storeDataArr = await db.store.find({}).toArray();
+      result.push({store: storesList[i], storeData: storeDataArr[0]});
     }
     res.status(200).json(result);
   } catch (err) {
@@ -359,6 +359,28 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
     res.status(200).json(stores);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch stores by city', error: err.message });
+  }
+});
+
+router.delete("/api/shoofiAdmin/category/:id", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { id } = req.params;
+    const category = await dbAdmin.categories.findOne({ _id: getId(id) });
+    
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    // Delete the category image if it exists
+    if (category.image && category.image.uri) {
+      await deleteImages([category.image], req);
+    }
+
+    await dbAdmin.categories.deleteOne({ _id: getId(id) });
+    res.status(200).json({ message: 'Category deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to delete category', error: err.message });
   }
 });
 

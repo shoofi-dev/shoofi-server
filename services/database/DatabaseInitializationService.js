@@ -5,6 +5,7 @@ class DatabaseInitializationService {
     // Setup collections for the database
     db.users = db.collection('users');
     db.categories = db.collection('categories');
+    db.generalCategories = db.collection('general-categories');
     db.products = db.collection('products');
     db.variants = db.collection('variants');
     db.orders = db.collection('orders');
