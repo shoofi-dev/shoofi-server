@@ -54,7 +54,7 @@ const getUTCOffset = () => {
 // Show orders
 router.post(
   "/api/order/admin/orders/:page?",
-  auth.required,
+
   async (req, res, next) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
@@ -624,6 +624,7 @@ router.post(
       );
     }
     const offsetHours = getUTCOffset();
+
     const orderDoc = {
       ...parsedBodey,
       order: {
@@ -1305,6 +1306,113 @@ router.post("/api/order/statistics/new-orders/:page?", async (req, res) => {
     res.status(400).json({
       message: "Customer search failed.",
     });
+  }
+});
+
+router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
+  try {
+    const appName = req.headers['app-name'];
+    const dbAdmin = req.app.db['shoofi'];
+    const storesList = await dbAdmin.stores.find().toArray();
+    let allOrders = [];
+    let totalItems = 0;
+    const pageNum = req.body.pageNumber || 1;
+    const pageSize = 10;
+    const skip = (pageNum - 1) * pageSize;
+
+    // Date filter if provided
+    let dateFilter = {};
+    if (req.body.startDate && req.body.endDate) {
+      const offsetHours = getUTCOffset();
+
+      var start = moment(req.body.startDate).utcOffset(offsetHours);
+      start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+      var end = moment(req.body.endDate).utcOffset(offsetHours);
+      end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+
+      dateFilter = {
+        orderDate: { $gte: start.format(), $lt: end.format() }
+      };
+    }
+
+    // Status filter if provided
+    let statusFilter = {};
+    if (req.body.status && req.body.status.length > 0) {
+      statusFilter = { status: { $in: req.body.status } };
+    }
+
+    // City filter if provided
+    let filteredStores = storesList;
+    if (req.body.cityIds && req.body.cityIds.length > 0) {
+      filteredStores = storesList.filter(store => 
+        req.body.cityIds.includes(store.cityId)
+      );
+    }
+
+    // Combine filters
+    const filterBy = {
+      ...dateFilter,
+      ...statusFilter
+    };
+
+    // Get orders from each store
+    for (const store of filteredStores) {
+      const db = req.app.db[store.appName];
+      if (!db) continue;
+
+      const storeOrders = await db.orders
+        .find(filterBy)
+        .sort({ created: -1 })
+        .toArray();
+
+      // Add store info to each order
+      const ordersWithStoreInfo = storeOrders.map(order => ({
+        ...order,
+        storeName: store.storeName,
+        storeAppName: store.appName
+      }));
+
+      allOrders = [...allOrders, ...ordersWithStoreInfo];
+    }
+
+    // Sort all orders by creation date
+    allOrders.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+    // Get total count before pagination
+    totalItems = allOrders.length;
+
+    // Apply pagination
+    const paginatedOrders = allOrders.slice(skip, skip + pageSize);
+
+    // Get customer details for each order
+    const finalOrders = [];
+    for (const order of paginatedOrders) {
+      const customerDB = getCustomerAppName(req, order.storeAppName);
+      const customer = await customerDB.customers.findOne({
+        _id: getId(order.customerId)
+      });
+
+      finalOrders.push({
+        ...order,
+        customerDetails: {
+          name: customer?.fullName || order?.name,
+          phone: customer?.phone || order?.phone,
+          branchId: order?.branchId
+        }
+      });
+    }
+
+    res.status(200).json({
+      ordersList: finalOrders,
+      totalItems,
+      currentPage: pageNum,
+      totalPages: Math.ceil(totalItems / pageSize)
+    });
+
+  } catch (error) {
+    console.error("Error fetching all orders:", error);
+    res.status(400).json({ message: "Failed to fetch orders" });
   }
 });
 
