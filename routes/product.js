@@ -19,7 +19,7 @@ const rimraf = require("rimraf");
 const fs = require("fs");
 const path = require("path");
 const router = express.Router();
-const BUCKET_NAME = "app-main-bucket";
+const BUCKET_NAME = "shoofi-spaces";
 const uploadFile = async (files, req, folderName) => {
   const appName = req.headers["app-name"];
   const db = req.app.db['shoofi'];
@@ -262,9 +262,9 @@ router.post(
 
 
     if (req.files && req.files.length > 1) {
-      doc.img = req.body.img.concat(await uploadFile(req.files, req));
+      doc.img = req.body.img.concat(await uploadFile(req.files, req, `stores/${appName}/products`));
     } else {
-      doc.img = await uploadFile(req.files, req);
+      doc.img = await uploadFile(req.files, req, `stores/${appName}/products`);
     }
     try {
       const newDoc = await db.products.insertOne(doc);
@@ -323,7 +323,7 @@ router.post(
 
     if (req.files) {
       if (req.files.length > 0) {
-        productDoc.img = await uploadFile(req.files, req);
+        productDoc.img = await uploadFile(req.files, req, `stores/${appName}/products`);
         await deleteImages(product.img, req);
       }
     }

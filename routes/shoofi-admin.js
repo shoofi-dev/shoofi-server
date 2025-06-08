@@ -260,13 +260,13 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
     if (req.files) {
       if (req.files['logo'] && req.files['logo'][0]) {
         const logoFile = req.files['logo'][0];
-        const logoImages = await uploadFile([logoFile], req, "stores");
+        const logoImages = await uploadFile([logoFile], req, `stores/${appName}/logo`);
         logo = logoImages[0];
       }
       
       if (req.files['cover_sliders']) {
         const coverFiles = req.files['cover_sliders'];
-        const coverImages = await uploadFile(coverFiles, req, "stores");
+        const coverImages = await uploadFile(coverFiles, req, `stores/${appName}/cover_sliders`);
         cover_sliders = coverImages;
       }
     }
@@ -341,7 +341,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
     if (req.files) {
       if (req.files['logo'] && req.files['logo'][0]) {
         const logoFile = req.files['logo'][0];
-        const logoImages = await uploadFile([logoFile], req, "stores");
+        const logoImages = await uploadFile([logoFile], req, `stores/${appName}/logo`);
         logo = logoImages[0];
         if (store.storeLogo) {
           await deleteImages([store.storeLogo], req);
@@ -350,7 +350,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       
       if (req.files['cover_sliders']) {
         const coverFiles = req.files['cover_sliders'];
-        const coverImages = await uploadFile(coverFiles, req, "stores");
+        const coverImages = await uploadFile(coverFiles, req, `stores/${appName}/cover_sliders`);
         cover_sliders = [...cover_sliders, ...coverImages];
       }
     }

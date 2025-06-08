@@ -40,11 +40,12 @@ router.post("/api/category/general/add", upload.array("img"), async (req, res) =
   const db = req.app.db[appName];
   const { nameAR, nameHE } = req.body;
   let images = [];
+  const newCategoryId = getId();
   if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, "general-categories");
+    images = await uploadFile(req.files, req, `general-categories/${newCategoryId}/logo`);
   }
   const newCategory = {
-    _id: getId(),
+    _id: newCategoryId,
     nameAR,
     nameHE,
     img: images,
@@ -62,7 +63,7 @@ router.post("/api/category/general/update/:id", upload.array("img"), async (req,
   const category = await db.generalCategories.findOne({ _id: getId(id) });
   let images = category.img;
   if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, `${appName}/categories`);
+    images = await uploadFile(req.files, req, `general-categories/${id}/logo`);
     if (category.img && category.img.length > 0) {
       await deleteImages(category.img, req);
     }

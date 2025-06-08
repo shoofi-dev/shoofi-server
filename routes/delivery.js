@@ -521,14 +521,14 @@ router.post(
       } catch (e) {
         return res.status(400).json({ message: 'Invalid supportedCities format' });
       }
-
+      const newCompanyId = getId();
       let images = [];
       if (req.files && req.files.length > 0) {
-        images = await uploadFile(req.files, req, "delivery-companies");
+        images = await uploadFile(req.files, req, `delivery-companies/${newCompanyId}/logo`);
       }
 
       const newCompany = {
-        _id: getId(),
+        _id: newCompanyId,
         nameAR,
         nameHE,
         start,
@@ -602,7 +602,7 @@ router.post(
 
       let image = company.image;
       if (req.files && req.files.length > 0) {
-        image = (await uploadFile(req.files, req, "delivery-companies"))[0];
+        image = (await uploadFile(req.files, req, `delivery-companies/${companyId}/logo`))[0];
         if (company.image) {
           await deleteImages([company.image], req);
         }

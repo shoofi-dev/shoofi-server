@@ -271,7 +271,7 @@ router.post("/api/store-category/add", upload.array("img"), async (req, res) => 
   const { nameAR, nameHE } = req.body;
   let images = [];
   if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, "categories");
+    images = await uploadFile(req.files, req, `stores/${appName}/categories`);
   }
   const newCategory = {
     _id: getId(),
@@ -292,7 +292,7 @@ router.post("/api/store-category/update/:id", upload.array("img"), async (req, r
   const category = await db.categories.findOne({ _id: getId(id) });
   let images = category.img;
   if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, `${appName}/categories`);
+    images = await uploadFile(req.files, req, `stores/${appName}/categories`);
     if (category.img && category.img.length > 0) {
       await deleteImages(category.img, req);
     }

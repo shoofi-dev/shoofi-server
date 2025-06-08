@@ -12,6 +12,7 @@ COPY utils/ /var/expressCart/utils/
 COPY routes/ /var/expressCart/routes/
 COPY consts/ /var/expressCart/consts/
 COPY services/ /var/expressCart/services/
+COPY controllers/ /var/expressCart/controllers/
 
 COPY app.js /var/expressCart/
 COPY package.json /var/expressCart/
