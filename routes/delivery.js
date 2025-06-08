@@ -460,8 +460,8 @@ router.post('/api/delivery/city/add', async (req, res) => {
 router.post('/api/delivery/city/update/:id', async (req, res) => {
   const db = req.app.db['delivery-company'];
   const { id } = req.params;
-  const { name } = req.body;
-  await db.cities.updateOne({ _id: getId(id) }, { $set: { name, updatedAt: new Date() } });
+  const { nameAR, nameHE, geometry } = req.body;
+  await db.cities.updateOne({ _id: getId(id) }, { $set: { nameAR, nameHE, geometry, updatedAt: new Date() } });
   res.json({ message: 'City updated' });
 });
 
