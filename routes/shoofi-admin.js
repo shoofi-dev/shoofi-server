@@ -11,6 +11,7 @@ const RestaurantAvailabilityService = require("../services/delivery/RestaurantAv
 const { getDb } = require("../lib/db");
 const { MongoClient } = require("mongodb");
 const DatabaseInitializationService = require('../services/database/DatabaseInitializationService');
+const adsRouter = require("./ads");
 
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -455,5 +456,7 @@ router.delete("/api/shoofiAdmin/category/:id", async (req, res) => {
     res.status(500).json({ message: 'Failed to delete category', error: err.message });
   }
 });
+
+router.use("/api/ads", adsRouter);
 
 module.exports = router;

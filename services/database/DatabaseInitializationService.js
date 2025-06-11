@@ -33,6 +33,7 @@ class DatabaseInitializationService {
     db.extras = db.collection('extras');
     db.areas = db.collection('areas');
     db.cities = db.collection('cities');
+    db.ads = db.collection('ads');
 
     return db;
   }

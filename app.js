@@ -50,6 +50,7 @@ if (baseConfig === false) {
 
 // require the routes
 const shoofiAdmin = require("./routes/shoofi-admin");
+const ads = require("./routes/ads");
 const index = require("./routes/index");
 const admin = require("./routes/admin");
 const category = require("./routes/category");
@@ -108,6 +109,7 @@ app.use((req, res, next) => {
 
 // Setup the routes
 app.use("/", shoofiAdmin);
+app.use("/", ads);
 app.use("/", index);
 app.use("/", customer);
 app.use("/", calander);
