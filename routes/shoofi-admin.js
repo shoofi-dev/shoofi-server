@@ -249,7 +249,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -272,6 +272,14 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
       }
     }
 
+    let location = undefined;
+    if (lat !== undefined && lng !== undefined) {
+      location = {
+        type: 'Point',
+        coordinates: [Number(lng), Number(lat)]
+      };
+    }
+
     const newStore = {
       _id: getId(),
       storeLogo: logo,
@@ -279,12 +287,15 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
       appName,
       name_ar,
       name_he,
+      descriptionAR: descriptionAR || '',
+      descriptionHE: descriptionHE || '',
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : [],
       phone: phone || '',
       address: address || '',
+      ...(location ? { location } : {}),
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -315,6 +326,11 @@ router.get("/api/shoofiAdmin/store/:id", async (req, res) => {
     if (!store) {
       return res.status(404).json({ message: 'Store not found' });
     }
+    // If location exists, add lat/lng for frontend compatibility
+    if (store.location && Array.isArray(store.location.coordinates)) {
+      store.lat = store.location.coordinates[1];
+      store.lng = store.location.coordinates[0];
+    }
     res.status(200).json(store);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch store', error: err.message });
@@ -325,7 +341,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -376,9 +392,36 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
     const existingSliders = store.cover_sliders?.filter(slider => 
       existingCoverSliders.includes(slider.uri)
     ) || [];
+    // if(deletedSliders?.length > 0){
+    //   cover_sliders = cover_sliders?.filter(slider => 
+    //     !deletedSliders.includes(slider.uri)
+    //   ) || [];
+    // }
 
+
+       // Remove deletedSliders from cover_sliders
+    if (Array.isArray(deletedSliders) && deletedSliders.length > 0) {
+      const deletedSlidersWithoutUri = deletedSliders.map((slider) => slider.uri);
+      cover_sliders = cover_sliders.filter(slider => !deletedSlidersWithoutUri.includes(slider.uri));
+    }
     // Combine existing and new sliders
-    cover_sliders = [...existingSliders, ...cover_sliders];
+    if (deletedSliders?.length === 0) {
+      const allSliders = [...existingSliders, ...cover_sliders];
+      const seen = new Set();
+      cover_sliders = allSliders.filter(slider => {
+        if (seen.has(slider.uri)) return false;
+        seen.add(slider.uri);
+        return true;
+      });
+    }
+
+    let location = store.location;
+    if (lat !== undefined && lng !== undefined) {
+      location = {
+        type: 'Point',
+        coordinates: [Number(lng), Number(lat)]
+      };
+    }
 
     const updatedStore = {
       ...store,
@@ -387,12 +430,15 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       appName,
       name_ar,
       name_he,
+      descriptionAR: descriptionAR || store.descriptionAR || '',
+      descriptionHE: descriptionHE || store.descriptionHE || '',
       business_visible: business_visible === 'true',
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : store.supportedGeneralCategoryIds || [],
       phone: phone || store.phone || '',
       address: address || store.address || '',
+      ...(location ? { location } : {}),
       updatedAt: new Date()
     };
 

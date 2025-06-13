@@ -315,9 +315,11 @@ router.get('/api/delivery/areas', async (req, res) => {
 // Add area
 router.post('/api/delivery/area/add', async (req, res) => {
   const db = req.app.db['delivery-company'];
-  const { name, geometry, cityId } = req.body;
+  const { name, geometry, cityId, minETA, maxETA } = req.body;
   if (!name || !geometry || !cityId) return res.status(400).json({ message: 'Name, geometry and cityId required' });
   const area = { name, geometry, cityId, createdAt: new Date(), updatedAt: new Date() };
+  if (minETA !== undefined) area.minETA = minETA;
+  if (maxETA !== undefined) area.maxETA = maxETA;
   const result = await db.areas.insertOne(area);
   res.status(201).json({ ...area, _id: result.insertedId });
 });
@@ -326,8 +328,11 @@ router.post('/api/delivery/area/add', async (req, res) => {
 router.post('/api/delivery/area/update/:id', async (req, res) => {
   const db = req.app.db['delivery-company'];
   const { id } = req.params;
-  const { name, geometry, cityId } = req.body;
-  await db.areas.updateOne({ _id: getId(id) }, { $set: { name, geometry, cityId, updatedAt: new Date() } });
+  const { name, geometry, cityId, minETA, maxETA } = req.body;
+  const updateObj = { name, geometry, cityId, updatedAt: new Date() };
+  if (minETA !== undefined) updateObj.minETA = minETA;
+  if (maxETA !== undefined) updateObj.maxETA = maxETA;
+  await db.areas.updateOne({ _id: getId(id) }, { $set: updateObj });
   res.json({ message: 'Area updated' });
 });
 
@@ -770,6 +775,84 @@ router.get('/api/delivery/areas/by-city/:cityId', async (req, res) => {
     res.status(200).json(areas);
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch areas by city', error: err.message });
+  }
+});
+
+router.post("/api/delivery/available-drivers", async (req, res) => {
+  try {
+    const { location, storeLocation } = req.body;
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return res.status(400).json({ message: 'location (lat, lng) is required.' });
+    }
+
+    const deliveryDB = req.app.db['delivery-company'];
+
+    // 1. Find the area containing the location
+    const area = await deliveryDB.areas.findOne({
+      geometry: {
+        $geoIntersects: {
+          $geometry: {
+            type: "Point",
+            coordinates: [location.lng, location.lat]
+          }
+        }
+      }
+    });
+
+    if (!area) {
+      return res.json({ available: false, reason: "No delivery area found for this location." });
+    }
+
+    // 2. Find all delivery companies (stores) that support this area
+    const companies = await deliveryDB.store.find({
+      supportedAreas: { $elemMatch: { areaId: area._id } }
+    }).toArray();
+
+    if (!companies.length) {
+      return res.json({ available: false, reason: "No delivery companies support this area." });
+    }
+
+    // 3. For each company, find all active drivers
+    const results = await Promise.all(companies.map(async (company) => {
+      const drivers = await deliveryDB.customers.find({
+        role: "driver",
+        isActive: true,
+        companyId: company._id.toString()
+      }).toArray();
+      return {
+        company,
+        drivers
+      };
+    }));
+
+    // 4. Filter out companies with no drivers
+    const companiesWithDrivers = results.filter(r => r.drivers.length > 0);
+
+    // Calculate distance if storeLocation is provided
+    let distanceKm = undefined;
+    if (storeLocation && typeof storeLocation.lat === 'number' && typeof storeLocation.lng === 'number') {
+      // Haversine formula
+      const toRad = (value) => (value * Math.PI) / 180;
+      const R = 6371; // Earth radius in km
+      const dLat = toRad(storeLocation.lat - location.lat);
+      const dLon = toRad(storeLocation.lng - location.lng);
+      const lat1 = toRad(location.lat);
+      const lat2 = toRad(storeLocation.lat);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      distanceKm = R * c;
+    }
+
+    return res.json({
+      available: companiesWithDrivers.length > 0,
+      companies: companiesWithDrivers,
+      area,
+      ...(distanceKm !== undefined ? { distanceKm: Math.round(distanceKm * 10) / 10 } : {})
+    });
+  } catch (err) {
+    console.error('Error checking available drivers:', err);
+    res.status(500).json({ message: 'Failed to check available drivers', error: err.message });
   }
 });
 
