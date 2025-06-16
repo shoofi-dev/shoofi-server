@@ -3,6 +3,7 @@ const utcTimeService = require("../../utils/utc-time");
 const pushNotificationWebService = require("../../utils/push-notification/push-web");
 const { getId } = require("../../lib/common");
 const APP_CONSTS = require("../../consts/consts");
+const { assignBestDeliveryDriver } = require("./assignDriver");
 
 async function bookDelivery({ deliveryData, appDb }) {
   try {
@@ -15,63 +16,70 @@ async function bookDelivery({ deliveryData, appDb }) {
       .utcOffset(offsetHours)
       .format("HH:mm");
 
-    let companyId = null;
-    let companyName = null;
+
     // Only apply logic for stores not in SARI_APPS_DB_LIST
-    if (
-      deliveryData.appName &&
-      !APP_CONSTS.SARI_APPS_DB_LIST.includes(deliveryData.appName) &&
-      deliveryData.storeLocation &&
-      deliveryData.coverageRadius
-    ) {
-      const bestCompany = await findBestDeliveryCompany({
-        storeLocation: deliveryData.storeLocation,
-        appDb
-      });
-      if (bestCompany) {
-        companyId = bestCompany._id;
-        companyName = bestCompany.name;
-      }
-    }
+    // if (
+    //   deliveryData.appName &&
+    //   deliveryData.storeLocation &&
+    //   deliveryData.coverageRadius
+    // ) {
+    //   const bestCompany = await findBestDeliveryCompany({
+    //     storeLocation: deliveryData.storeLocation,
+    //     appDb
+    //   });
+    //   if (bestCompany) {
+    //     companyId = bestCompany._id;
+    //     companyName = bestCompany.name;
+    //   }
+    // }
 
-    await db.bookDelivery.insertOne({
-      ...deliveryData,
-      deliveryDeltaMinutes,
-      status: "1",
-      created: moment(new Date()).utcOffset(offsetHours).format(),
-      companyId,
-      companyName,
-    });
-    if(APP_CONSTS.SARI_APPS_DB_LIST.includes(deliveryData.appName)){
-      const adminCustomer = await db.customers.find({
-        role: "admin",
-        $or: [
-          { companyId: { $exists: false } },
-          { companyId: null }
-        ]
-      }).toArray();
-      pushNotificationWebService.sendNotificationToDevice(
-        adminCustomer[0].notificationToken,
-        { storeName: deliveryData?.storeName }
-      );
-    }else{
-      const adminCustomer = await db.customers.find({
-        role: "admin",
-        companyId: companyId
-      }).toArray();
-      if(adminCustomer.length > 0){
-      pushNotificationWebService.sendNotificationToDevice(
-        adminCustomer[0].notificationToken,
-        { storeName: deliveryData?.storeName }
-      );
-    }
-    }
+// ...
+const result = await assignBestDeliveryDriver({ appDb: appDb, location: { lat:deliveryData.customerLocation.latitude, lng:deliveryData.customerLocation.longitude } });
+if (!result.success) {
+  // TODO: handle error - no driver found
+  
+} else {
+  console.log("driver", result.driver);
+  console.log("company", result.company);
+  console.log("area", result.area);
+  console.log("activeOrderCount", result.activeOrderCount);
 
-    return {
-      success: true,
-      message: "Delivery created successfully",
-      deliveryId: "12345", // Example ID
-    };
+  const bookDelivery = await db.bookDelivery.insertOne({
+    ...deliveryData,
+    deliveryDeltaMinutes,
+    status: "1",
+    created: moment(new Date()).utcOffset(offsetHours).format(),
+    area: result.area,
+    company: result.company,
+    driver: result.driver,
+    activeOrderCount: result.activeOrderCount
+  });
+      pushNotificationWebService.sendNotificationToDevice(
+        result.driver.notificationToken, 
+        { storeName: deliveryData?.storeName }  
+      );
+      return {
+        success: true,
+        message: "Delivery created successfully",
+        deliveryId: bookDelivery._id, // Example ID
+      };
+}
+
+
+
+    //   const adminCustomer = await db.customers.find({
+    //     role: "admin",
+    //     companyId: companyId
+    //   }).toArray();
+    //   if(adminCustomer.length > 0){
+    //   pushNotificationWebService.sendNotificationToDevice(
+    //     adminCustomer[0].notificationToken,
+    //     { storeName: deliveryData?.storeName }
+    //   );
+    // }
+    
+
+
   } catch (error) {
     console.error("Error in createDelivery:", error);
     throw new Error("Error creating delivery");

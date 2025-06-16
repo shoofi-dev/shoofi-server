@@ -6,12 +6,13 @@ const APP_CONSTS = require("../consts/consts");
 const apiPath = 'https://api.sms4free.co.il/ApiSMS/SendSMS';
 const apiBalance = 'https://api.sms4free.co.il/ApiSMS/AvailableSMS';
 
-sendSMS = async function ( phoneNumber, smsContent, req, db = null, appName = null) {
+sendSMS = async function ( phoneNumber, smsContent, req, db = null, appNamex = null) {
   let sms4freeSecret = null;
+  const appName = 'shoofi';
   if(req){
-     sms4freeSecret = await req.app.db[req.headers['app-name']].amazonconfigs.findOne({app: "sms4free"});
+     sms4freeSecret = await req.app.db[appName].amazonconfigs.findOne({app: "sms4free"});
   }else{
-    sms4freeSecret = await db[appName || req.headers['app-name']].amazonconfigs.findOne({app: "sms4free"});
+    sms4freeSecret = await db[appName].amazonconfigs.findOne({app: "sms4free"});
   }
   if(!sms4freeSecret.isActive){
     return;
@@ -43,7 +44,7 @@ sendSMS = async function ( phoneNumber, smsContent, req, db = null, appName = nu
             isSuccess: true
           };
         if(req && req.headers && req.headers['app-name']){
-            await req.app.db[req.headers['app-name']].smsHistory.insertOne(data);
+            await req.app.db[appName].smsHistory.insertOne(data);
          }else{
           if(db){
             if(appName){
@@ -67,7 +68,7 @@ sendSMS = async function ( phoneNumber, smsContent, req, db = null, appName = nu
         isSuccess: false
       };
       if(req){
-        await req.app.db[appName || req.headers['app-name']].smsHistory.insertOne(data);
+        await req.app.db[appName].smsHistory.insertOne(data);
       }else{
         if(db){
           await db.smsHistory.insertOne(data);

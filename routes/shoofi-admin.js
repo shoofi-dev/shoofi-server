@@ -60,6 +60,12 @@ router.post("/api/shoofiAdmin/store/list", async (req, res, next) => {
     res.status(200).json(storesLostFinal);
 });
 
+router.get("/api/shoofiAdmin/store/z-cr", async (req, res, next) => {
+  const db = req.app.db['shoofi'];
+  const storeData = await db.store.findOne({ id: 1 });
+  const credentials = storeData.credentials;
+  res.status(200).json(credentials);
+});
 
 router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
   try {

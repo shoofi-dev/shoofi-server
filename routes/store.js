@@ -103,7 +103,7 @@ router.post("/api/store", async (req, res, next) => {
       //   const isCompanyOpen = await storeService.isDeliveryCompanyOpen(req);
       //   isDeliveryOpen = isCompanyOpen;
       // }
-  
+      delete store.credentials;
       return {
         ...store,
         isOpen: isStoreOpen,

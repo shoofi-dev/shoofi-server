@@ -669,6 +669,18 @@ router.post(
         return;
       }
 
+      if (!customer.addresses || customer.addresses.length === 0) {
+        // Add the address from the order to the customer's addresses array
+        if (orderDoc.order.address) {    
+          await customerDB.customers.updateOne(
+            { _id: getId(customer._id) },
+            { $push: { addresses: orderDoc.order.address } }
+          );
+          // Optionally, update the in-memory customer object if you use it later
+          customer.addresses = [orderDoc.order.address];
+        }
+      }
+
       await customerDB.customers.findOneAndUpdate(
         { _id: getId(customerId) },
         {
@@ -952,8 +964,10 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         return;
       }
       const storeData = await db.store.findOne({ id: 1 });
+      const shoofiDB = req.app.db['shoofi'];
+      const shoofiStore = await shoofiDB.store.findOne({ id: 1 });
 
-      if(storeData.isSendSmsToDeliveryCompany){
+      if(shoofiStore.isSendSmsToDeliveryCompany){
         const smsDeliveryContent = smsService.getOrderDeliveryCompanyContent(
           customer.fullName,
           order.orderId,
@@ -969,7 +983,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         );
         await smsService.sendSMS("0542454362", smsDeliveryContent, req);
       }
-      if(storeData.isSendNotificationToDeliveryCompany){
+      if(shoofiStore.isSendNotificationToDeliveryCompany){
       const deliveryData = {
         fullName: customer.fullName,
         phone: customer.phone,

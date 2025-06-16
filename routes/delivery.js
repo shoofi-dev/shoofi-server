@@ -315,11 +315,12 @@ router.get('/api/delivery/areas', async (req, res) => {
 // Add area
 router.post('/api/delivery/area/add', async (req, res) => {
   const db = req.app.db['delivery-company'];
-  const { name, geometry, cityId, minETA, maxETA } = req.body;
+  const { name, geometry, cityId, minETA, maxETA, price } = req.body;
   if (!name || !geometry || !cityId) return res.status(400).json({ message: 'Name, geometry and cityId required' });
   const area = { name, geometry, cityId, createdAt: new Date(), updatedAt: new Date() };
   if (minETA !== undefined) area.minETA = minETA;
   if (maxETA !== undefined) area.maxETA = maxETA;
+  if (price !== undefined) area.price = price;
   const result = await db.areas.insertOne(area);
   res.status(201).json({ ...area, _id: result.insertedId });
 });
@@ -328,10 +329,11 @@ router.post('/api/delivery/area/add', async (req, res) => {
 router.post('/api/delivery/area/update/:id', async (req, res) => {
   const db = req.app.db['delivery-company'];
   const { id } = req.params;
-  const { name, geometry, cityId, minETA, maxETA } = req.body;
+  const { name, geometry, cityId, minETA, maxETA, price } = req.body;
   const updateObj = { name, geometry, cityId, updatedAt: new Date() };
   if (minETA !== undefined) updateObj.minETA = minETA;
   if (maxETA !== undefined) updateObj.maxETA = maxETA;
+  if (price !== undefined) updateObj.price = price;
   await db.areas.updateOne({ _id: getId(id) }, { $set: updateObj });
   res.json({ message: 'Area updated' });
 });
@@ -815,7 +817,7 @@ router.post("/api/delivery/available-drivers", async (req, res) => {
     // 3. For each company, find all active drivers
     const results = await Promise.all(companies.map(async (company) => {
       const drivers = await deliveryDB.customers.find({
-        role: "driver",
+        role: { $in: ["driver", "admin"] },
         isActive: true,
         companyId: company._id.toString()
       }).toArray();
@@ -856,5 +858,41 @@ router.post("/api/delivery/available-drivers", async (req, res) => {
   }
 });
 
+
+router.post("/api/delivery/location/supported", async (req, res) => {
+  try {
+    const { location } = req.body;
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return res.status(400).json({ message: 'location (lat, lng) is required.' });
+    }
+
+    const deliveryDB = req.app.db['delivery-company'];
+
+    // 1. Find the area containing the location
+    const area = await deliveryDB.areas.findOne({
+      geometry: {
+        $geoIntersects: {
+          $geometry: {
+            type: "Point",
+            coordinates: [location.lng, location.lat]
+          }
+        }
+      }
+    });
+
+    if (!area) {
+      return res.json({ available: false, reason: "No delivery area found for this location." });
+    }
+
+
+    return res.json({
+      available: true,
+      area,
+    });
+  } catch (err) {
+    console.error('Error checking available drivers:', err);
+    res.status(500).json({ message: 'Failed to check available drivers', error: err.message });
+  }
+});
 
 module.exports = router;
