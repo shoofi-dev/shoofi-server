@@ -73,6 +73,7 @@ const delivery = require("./routes/delivery");
 const pushNotificationWeb = require("./routes/push-notification-web");
 const globalSearchRoutes = require('./routes/global-search');
 const couponRoutes = require('./routes/coupon');
+const creditCardRoutes = require('./routes/creditCard');
 
 firebaseAdmin.initializeApp({
   credential: firebaseAdmin.credential.cert(serviceAccount),
@@ -134,6 +135,7 @@ app.use("/", pushNotificationWeb);
 app.use("/", analytics);
 app.use("/", globalSearchRoutes);
 app.use("/", couponRoutes);
+app.use("/", creditCardRoutes);
 
 // Payment route(s)
 // _.forEach(config.paymentGateway, (gateway) => {

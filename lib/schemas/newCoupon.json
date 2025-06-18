@@ -70,6 +70,14 @@
         "isActive": {
             "type": "boolean",
             "default": true
+        },
+        "isCustomerSpecific": {
+            "type": "boolean",
+            "default": false
+        },
+        "customerId": {
+            "type": "string",
+            "format": "objectid"
         }
     },
     "required": [
@@ -89,7 +97,8 @@
             "maxDiscount": "Maximum discount must be a positive number",
             "minOrderAmount": "Minimum order amount must be a positive number",
             "usageLimit": "Usage limit must be a positive number",
-            "usagePerUser": "Usage per user must be a positive number"
+            "usagePerUser": "Usage per user must be a positive number",
+            "customerId": "Customer ID must be a valid ObjectId"
         }
     }
 } 

@@ -743,29 +743,52 @@ router.post("/api/customer/search-customer", async (req, res) => {
   const db = req.app.db[appName];
   const customerDB = getCustomerAppName(req, appName);
   const searchQuery = req.body.searchQuery;
-  let userStatus = req.body?.userStatus;
+  const userStatus = req.body?.userStatus;
+  const page = parseInt(req.body.page) || 1;
+  const limit = parseInt(req.body.limit) || 20;
+  const skip = (page - 1) * limit;
+  
   let query = {};
 
-  if (searchQuery) {
-    query = {
-      ...query,
-      $or: [
-        { phone: { $regex: searchQuery, $options: "i" } }, // Case-insensitive regex search
-        { fullName: { $regex: searchQuery, $options: "i" } },
-      ],
-    };
+  if (searchQuery && searchQuery.trim().length >= 3) {
+    // Use text search if available, otherwise use regex
+    if (searchQuery.trim().length >= 3) {
+      query = {
+        $or: [
+          { phone: { $regex: `^${searchQuery}`, $options: "i" } }, // Starts with for better performance
+          { fullName: { $regex: searchQuery, $options: "i" } },
+        ],
+      };
+    }
   }
-
-  if (userStatus) {
-    query = {
-      ...query,
-      status: userStatus,
-    };
-  }
-  const customer = await customerDB.customers.find(query).toArray();
 
   try {
-    res.status(200).json(customer);
+    // Get total count for pagination
+    const totalCount = await customerDB.customers.countDocuments(query);
+    
+    // Get paginated results
+    const customers = await customerDB.customers
+      .find(query)
+      .sort({ fullName: 1 }) // Sort by name for consistent results
+      .skip(skip)
+      .limit(limit)
+      .project({ 
+        _id: 1, 
+        fullName: 1, 
+        phone: 1,
+        email: 1 
+      }) // Only return needed fields
+      .toArray();
+
+    res.status(200).json({
+      customers,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      }
+    });
   } catch (ex) {
     console.error(colors.red("Failed to search customer: ", ex));
     res.status(400).json({
@@ -1158,5 +1181,31 @@ router.get('/api/customer/:customerId/addresses', customerAddressController.getA
 router.put('/api/customer/:customerId/addresses/:addressId', customerAddressController.updateAddress);
 router.delete('/api/customer/:customerId/addresses/:addressId', customerAddressController.deleteAddress);
 router.patch('/api/customer/:customerId/addresses/:addressId/default', customerAddressController.setDefaultAddress);
+
+// Get customer by ID for admin use
+router.get('/api/customer/:customerId', async (req, res) => {
+  const appName = req.headers["app-name"];
+  const customerDB = getCustomerAppName(req, appName);
+  
+  try {
+    const customer = await customerDB.customers.findOne({
+      _id: getId(req.params.customerId)
+    });
+    
+    if (!customer) {
+      res.status(404).json({ message: "Customer not found" });
+      return;
+    }
+    
+    res.status(200).json({
+      _id: customer._id,
+      fullName: customer.fullName,
+      phone: customer.phone
+    });
+  } catch (error) {
+    console.error('Error fetching customer:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 module.exports = router;

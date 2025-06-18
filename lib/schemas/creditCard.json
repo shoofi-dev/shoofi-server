@@ -1,0 +1,37 @@
+{
+  "creditCard": {
+    "type": "object",
+    "properties": {
+      "customerId": {
+        "type": "string",
+        "description": "Customer ID"
+      },
+      "ccToken": {
+        "type": "string",
+        "description": "Credit card token from payment provider"
+      },
+      "last4Digits": {
+        "type": "string",
+        "description": "Last 4 digits of the credit card"
+      },
+      "ccType": {
+        "type": "string",
+        "description": "Credit card type (visa, mastercard, etc.)"
+      },
+      "holderName": {
+        "type": "string",
+        "description": "Card holder name"
+      },
+      "isDefault": {
+        "type": "boolean",
+        "description": "Whether this is the default card"
+      },
+      "isActive": {
+        "type": "boolean",
+        "description": "Whether the card is active"
+      }
+    },
+    "required": ["customerId", "ccToken", "last4Digits", "ccType", "holderName"],
+    "additionalProperties": false
+  }
+} 

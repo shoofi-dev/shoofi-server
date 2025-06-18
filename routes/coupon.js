@@ -27,6 +27,15 @@ router.post('/api/coupons/apply', async (req, res) => {
         });
     }
 
+    // Check if coupon is customer-specific
+    if (coupon.isCustomerSpecific && coupon.customerId) {
+        if (coupon.customerId.toString() !== req.body.userId) {
+            return res.status(400).json({
+                message: 'This coupon is not valid for your account'
+            });
+        }
+    }
+
     // Validate dates
     if (!moment().isBetween(moment(coupon.start), moment(coupon.end))) {
         return res.status(400).json({
@@ -82,7 +91,8 @@ router.post('/api/coupons/apply', async (req, res) => {
             code: coupon.code,
             type: coupon.type,
             value: coupon.value,
-            maxDiscount: coupon.maxDiscount
+            maxDiscount: coupon.maxDiscount,
+            isCustomerSpecific: coupon.isCustomerSpecific
         },
         discountAmount: discountAmount
     });
@@ -142,6 +152,34 @@ router.get('/api/coupons/available', async (req, res) => {
     }
 });
 
+// Get coupons available for a specific customer
+router.get('/api/coupons/customer/:customerId/available', async (req, res) => {
+    const appName = req.headers['app-name'];
+    const db = req.app.db[appName];
+    const customerId = req.params.customerId;
+
+    try {
+        const coupons = await db.coupons.find({
+            isActive: true,
+            start: { $lte: new Date() },
+            end: { $gte: new Date() },
+            $or: [
+                { isCustomerSpecific: false }, // General coupons
+                { 
+                    isCustomerSpecific: true, 
+                    customerId: customerId 
+                } // Customer-specific coupons for this customer
+            ]
+        }).toArray();
+
+        return res.status(200).json(coupons);
+    } catch (err) {
+        return res.status(400).json({
+            message: 'Failed to fetch customer coupons'
+        });
+    }
+});
+
 // Get user coupon history
 router.get('/api/coupons/user/:userId/history', async (req, res) => {
     const appName = req.headers['app-name'];
@@ -165,8 +203,30 @@ router.get('/api/admin/coupons',  async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
 
-    const coupons = await db.coupons.find().toArray();
-    return res.status(200).json(coupons);
+    try {
+        // Get all coupons
+        const coupons = await db.coupons.find().toArray();
+        
+        // Get usage statistics for each coupon
+        const couponsWithUsage = await Promise.all(coupons.map(async (coupon) => {
+            const usageCount = await db.couponUsages.countDocuments({ 
+                couponCode: coupon.code 
+            });
+            
+            return {
+                ...coupon,
+                usageCount: usageCount,
+                isUsed: usageCount > 0
+            };
+        }));
+        
+        return res.status(200).json(couponsWithUsage);
+    } catch (error) {
+        console.error('Error fetching coupons with usage:', error);
+        return res.status(500).json({
+            message: 'Failed to fetch coupons'
+        });
+    }
 });
 
 // Create coupon
@@ -179,6 +239,14 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
             message: 'Coupon code already exists'
         });
     }
+    
+    // Validate customer-specific coupon
+    if (req.body.isCustomerSpecific && !req.body.customerId) {
+        return res.status(400).json({
+            message: 'Customer ID is required for customer-specific coupons'
+        });
+    }
+    
     const couponDoc = {
         code: req.body.code.toUpperCase(),
         type: req.body.type,
@@ -194,11 +262,18 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
             products: req.body.products || [],
             stores: req.body.stores || []
         },
-        isActive: true
+        isActive: true,
+        isCustomerSpecific: req.body.isCustomerSpecific || false,
+        customerId: req.body.isCustomerSpecific ? req.body.customerId : null
     };
 
-    // Validate schema
-    const schemaValidate = validateJson('newCoupon', couponDoc);
+    // Validate schema - only include customerId in validation if isCustomerSpecific is true
+    const validationDoc = { ...couponDoc };
+    if (!req.body.isCustomerSpecific) {
+        delete validationDoc.customerId;
+    }
+    
+    const schemaValidate = validateJson('newCoupon', validationDoc);
     if (!schemaValidate.result) {
         return res.status(400).json(schemaValidate.errors);
     }
@@ -242,6 +317,13 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
 
+    // Validate customer-specific coupon
+    if (req.body.isCustomerSpecific && !req.body.customerId) {
+        return res.status(400).json({
+            message: 'Customer ID is required for customer-specific coupons'
+        });
+    }
+
     const couponDoc = {
         couponId: req.body.couponId,
         code: req.body.code.toUpperCase(),
@@ -258,11 +340,18 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
             products: req.body.products || [],
             stores: req.body.stores || []
         },
-        isActive: req.body.isActive
+        isActive: req.body.isActive,
+        isCustomerSpecific: req.body.isCustomerSpecific || false,
+        customerId: req.body.isCustomerSpecific ? req.body.customerId : null
     };
 
-    // Validate schema
-    const schemaValidate = validateJson('editCoupon', couponDoc);
+    // Validate schema - only include customerId in validation if isCustomerSpecific is true
+    const validationDoc = { ...couponDoc };
+    if (!req.body.isCustomerSpecific) {
+        delete validationDoc.customerId;
+    }
+    
+    const schemaValidate = validateJson('editCoupon', validationDoc);
     if (!schemaValidate.result) {
         return res.status(400).json(schemaValidate.errors);
     }

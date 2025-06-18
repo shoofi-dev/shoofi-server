@@ -23,6 +23,105 @@ const moment = require("moment");
 const router = express.Router();
 const deliveryService = require("../services/delivery/book-delivery");
 
+// Helper function to process credit card payment
+const processCreditCardPayment = async (paymentData, orderDoc, req) => {
+  const shoofiDB = req.app.db['shoofi'];
+  const shoofiStoreData = await shoofiDB.store.findOne({ id: 1 });
+  
+  if (!shoofiStoreData?.credentials) {
+    throw new Error('Payment credentials not configured');
+  }
+
+  const zdCreditCredentials = shoofiStoreData.credentials;
+  
+  // Prepare payment payload
+  const paymentPayload = {
+    TerminalNumber: zdCreditCredentials.credentials_terminal_number,
+    Password: zdCreditCredentials.credentials_password,
+    CardNumber: paymentData.ccToken,
+    TransactionSum: orderDoc.total,
+    ExtraData: orderDoc.orderId?.toString(),
+    HolderID: paymentData.id?.toString(),
+    CVV: paymentData.cvv,
+    PhoneNumber: paymentData.phone,
+    CustomerEmail: paymentData.email || 'shoofi.dev@gmail.com'
+  };
+
+  try {
+    const response = await axios.post(
+      'https://pci.zcredit.co.il/ZCreditWS/api/Transaction/CommitFullTransaction',
+      paymentPayload
+    );
+
+    const paymentResult = response.data;
+    
+    if (paymentResult.HasError) {
+      return {
+        success: false,
+        error: paymentResult.ReturnMessage || 'Payment failed',
+        paymentData: {
+          payload: paymentPayload,
+          data: paymentResult,
+          status: "failed"
+        }
+      };
+    }
+
+    return {
+      success: true,
+      paymentData: {
+        payload: paymentPayload,
+        data: paymentResult,
+        ReferenceNumber: paymentResult.ReferenceNumber,
+        ZCreditInvoiceReceiptResponse: paymentResult.ZCreditInvoiceReceiptResponse,
+        ZCreditChargeResponse: paymentResult,
+        status: "success"
+      }
+    };
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    return {
+      success: false,
+      error: error.message || 'Payment processing failed',
+      paymentData: {
+        payload: paymentPayload,
+        error: error.message,
+        status: "error"
+      }
+    };
+  }
+};
+
+// Helper function to send order notifications
+const sendOrderNotifications = async (orderDoc, req, appName) => {
+  const customerDB = getCustomerAppName(req, appName);
+  const customer = await customerDB.customers.findOne({
+    _id: getId(orderDoc.customerId),
+  });
+  
+  if (!customer) {
+    console.error('Customer not found for notifications');
+    return;
+  }
+
+  const smsContent = smsService.getOrderRecivedContent(
+    customer.fullName,
+    orderDoc.total,
+    orderDoc.order.receipt_method,
+    orderDoc.orderId,
+    orderDoc.app_language
+  );
+  
+  await smsService.sendSMS(customer.phone, smsContent, req);
+  await smsService.sendSMS("0542454362", smsContent, req);
+  
+  websockets.fireWebscoketEvent({
+    type: "new order", 
+    customerIds: [orderDoc.customerId], 
+    isAdmin: true, 
+    appName
+  });
+};
 
 const generateQR = async (latitude, longitude) => {
   try {
@@ -425,10 +524,11 @@ router.post("/api/order/addRefund", async (req, res, next) => {
 router.post("/api/order/updateCCPayment", async (req, res, next) => {
   const appName = req.headers['app-name'];
     const db = req.app.db[appName];
+    const shoofiDB = req.app.db['shoofi'];
   const parsedBodey = req.body;
 
   try {
-    const storeData = await db.store.findOne({ id: 1 });
+    const shoofiStoreData = await shoofiDB.store.findOne({ id: 1 });
     const orderDoc = await db.orders.findOne({
       _id: getId(parsedBodey.orderId),
     });
@@ -444,7 +544,7 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
       return;
     }
 
-    const zdCreditCredentials = storeData.credentials;
+    const zdCreditCredentials = shoofiStoreData.credentials;
 
     const data = {
       TerminalNumber: zdCreditCredentials.credentials_terminal_number,
@@ -641,16 +741,73 @@ router.post(
       created: moment(new Date()).utcOffset(offsetHours).format(),
       customerId,
       orderId: generatedOrderId,
-      status: isCreditCardPay ? "0" : "1",
+      status: isCreditCardPay ? "0" : "1", // Start with pending for credit card
       isPrinted: false,
       isViewd: false,
       isViewdAdminAll: false,
       ipAddress: req.ip,
       appName: appName,
     };
+    
     try {
       const newDoc = await db.orders.insertOne(orderDoc);
       const orderId = newDoc.insertedId;
+      
+      // Handle credit card payment server-side
+      if (isCreditCardPay && parsedBodey.paymentData) {
+        try {
+          const paymentResult = await processCreditCardPayment(
+            parsedBodey.paymentData,
+            orderDoc,
+            req
+          );
+          
+          if (paymentResult.success) {
+            // Update order with successful payment
+            await db.orders.updateOne(
+              { _id: orderId },
+              {
+                $set: {
+                  status: "1",
+                  ccPaymentRefData: paymentResult.paymentData,
+                  isShippingPaid: orderDoc.order.receipt_method === 'DELIVERY'
+                }
+              }
+            );
+            
+            // Send notifications for successful payment
+            await sendOrderNotifications(orderDoc, req, appName);
+            
+            res.status(200).json({
+              message: "Order created and payment processed successfully",
+              orderId,
+              paymentStatus: "success"
+            });
+            return;
+          } else {
+            // Payment failed - keep order in pending status
+            res.status(200).json({
+              message: "Order created but payment failed",
+              orderId,
+              paymentStatus: "failed",
+              paymentError: paymentResult.error
+            });
+            return;
+          }
+        } catch (paymentError) {
+          console.error("Payment processing error:", paymentError);
+          // Keep order in pending status if payment processing fails
+          res.status(200).json({
+            message: "Order created but payment processing failed",
+            orderId,
+            paymentStatus: "error",
+            paymentError: paymentError.message
+          });
+          return;
+        }
+      }
+      
+      // For non-credit card payments or if no payment data
       if(req.headers["app-name"] === 'buffalo' || req.headers["app-name"] === 'world-of-swimming'){
         res.status(200).json({
           message: "Order created successfully",
@@ -658,6 +815,7 @@ router.post(
         });
         return;
       }
+      
       const customerDB = getCustomerAppName(req,appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(customerId),
@@ -691,53 +849,9 @@ router.post(
         },
         { multi: false, returnOriginal: false }
       );
-      // orderDoc.order.items.forEach(async (item) => {
-      //   const product = await db.products.findOne({
-      //     _id: getId(item.item_id),
-      //   });
 
-      //   let updatedProduct = {};
-      //   const currentCount =
-      //     product.extras.size.options[item.size].count - item.qty;
-      //   product.extras.size.options[item.size].count =
-      //     currentCount <= 0 ? 0 : currentCount;
-      //   updatedProduct = { ...product };
-      //   await db.products.updateOne(
-      //     { _id: getId(item.item_id) },
-      //     { $set: updatedProduct },
-      //     {}
-      //   );
-      // });
-
-      // const finalOrderDoc = {
-      //   ...orderDoc,
-      //   customerDetails: {
-      //     name: customer.fullName,
-      //     phone: customer.phone,
-      //   },
-      // };
       if (!isCreditCardPay) {
-        const smsContent = smsService.getOrderRecivedContent(
-          customer.fullName,
-          orderDoc.total,
-          orderDoc.order.receipt_method,
-          generatedOrderId,
-          orderDoc.app_language
-        );
-        await smsService.sendSMS(customer.phone, smsContent, req);
-        await smsService.sendSMS("0542454362", smsContent, req);
-
-        // pushNotification.pushToClient(
-        //   "64f29e682e73e1593bb4d0c5",
-        //   "طلبية جديدة",
-        //   req
-        // );
-        // pushNotification.pushToClient(
-        //   "657da85f418e0056e070a000",
-        //   "طلبية جديدة",
-        //   req
-        // );
-        websockets.fireWebscoketEvent({type: "new order", customerIds:[customerId], isAdmin: true, appName});
+        await sendOrderNotifications(orderDoc, req, appName);
       }
 
       res.status(200).json({

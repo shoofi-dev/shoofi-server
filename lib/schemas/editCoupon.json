@@ -73,6 +73,13 @@
         },
         "isActive": {
             "type": "boolean"
+        },
+        "isCustomerSpecific": {
+            "type": "boolean"
+        },
+        "customerId": {
+            "type": "string",
+            "format": "objectid"
         }
     },
     "required": [

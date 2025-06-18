@@ -36,6 +36,7 @@ class DatabaseInitializationService {
     db.ads = db.collection('ads');
     db.coupons = db.collection('coupons');
     db.couponUsages = db.collection('couponUsages');
+    db.creditCards = db.collection('creditCards');
 
     return db;
   }
