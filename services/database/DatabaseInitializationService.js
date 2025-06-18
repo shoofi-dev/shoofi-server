@@ -34,6 +34,8 @@ class DatabaseInitializationService {
     db.areas = db.collection('areas');
     db.cities = db.collection('cities');
     db.ads = db.collection('ads');
+    db.coupons = db.collection('coupons');
+    db.couponUsages = db.collection('couponUsages');
 
     return db;
   }

@@ -1,0 +1,81 @@
+{
+    "$id": "editCoupon",
+    "type": "object",
+    "properties": {
+        "couponId": {
+            "type": "string",
+            "format": "objectid"
+        },
+        "code": {
+            "type": "string",
+            "isNotEmpty": true,
+            "minLength": 3,
+            "maxLength": 20
+        },
+        "type": {
+            "type": "string",
+            "enum": [
+                "percentage",
+                "fixed_amount",
+                "free_delivery"
+            ]
+        },
+        "value": {
+            "type": "number",
+            "minimum": 0
+        },
+        "maxDiscount": {
+            "type": "number",
+            "minimum": 0
+        },
+        "minOrderAmount": {
+            "type": "number",
+            "minimum": 0
+        },
+        "usageLimit": {
+            "type": "number",
+            "minimum": 0
+        },
+        "usagePerUser": {
+            "type": "number",
+            "minimum": 0
+        },
+        "start": {
+            "type": "object",
+            "format": "datetime"
+        },
+        "end": {
+            "type": "object",
+            "format": "datetime"
+        },
+        "applicableTo": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "products": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "stores": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "isActive": {
+            "type": "boolean"
+        }
+    },
+    "required": [
+        "couponId"
+    ]
+} 

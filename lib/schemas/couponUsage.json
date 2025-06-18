@@ -1,0 +1,28 @@
+{
+    "$id": "couponUsage",
+    "type": "object",
+    "properties": {
+        "couponCode": {
+            "type": "string",
+            "isNotEmpty": true
+        },
+        "userId": {
+            "type": "string",
+            "format": "objectid"
+        },
+        "orderId": {
+            "type": "string",
+            "format": "objectid"
+        },
+        "discountAmount": {
+            "type": "number",
+            "minimum": 0
+        }
+    },
+    "required": [
+        "couponCode",
+        "userId",
+        "orderId",
+        "discountAmount"
+    ]
+} 
