@@ -25,15 +25,15 @@ const deliveryService = require("../services/delivery/book-delivery");
 
 // Helper function to process credit card payment
 const processCreditCardPayment = async (paymentData, orderDoc, req) => {
-  const shoofiDB = req.app.db['shoofi'];
+  const shoofiDB = req.app.db["shoofi"];
   const shoofiStoreData = await shoofiDB.store.findOne({ id: 1 });
-  
+
   if (!shoofiStoreData?.credentials) {
-    throw new Error('Payment credentials not configured');
+    throw new Error("Payment credentials not configured");
   }
 
   const zdCreditCredentials = shoofiStoreData.credentials;
-  
+
   // Prepare payment payload
   const paymentPayload = {
     TerminalNumber: zdCreditCredentials.credentials_terminal_number,
@@ -44,26 +44,47 @@ const processCreditCardPayment = async (paymentData, orderDoc, req) => {
     HolderID: paymentData.id?.toString(),
     CVV: paymentData.cvv,
     PhoneNumber: paymentData.phone,
-    CustomerEmail: paymentData.email || 'shoofi.dev@gmail.com'
+    CustomerEmail: paymentData.email || "shoofi.dev@gmail.com",
+    ZCreditInvoiceReceipt: {
+      Type: "0",
+      RecepientName: `${paymentData.userName} - ${paymentData.phone}`,
+      RecepientCompanyID: "",
+      Address: "",
+      City: "",
+      ZipCode: "",
+      PhoneNum: paymentData.phone,
+      FaxNum: "",
+      TaxRate: "17",
+      Comment: "",
+      ReceipientEmail: "invoices@shoofi.app",
+      EmailDocumentToReceipient: true,
+      ReturnDocumentInResponse: "",
+      Items: [{
+        ItemDescription: `מוצר - ${orderDoc.orderId?.toString()}`,
+        ItemQuantity: "1",
+        ItemPrice: orderDoc.total?.toString(),
+        IsTaxFree: "false"
+      }]
+    }
   };
 
   try {
     const response = await axios.post(
-      'https://pci.zcredit.co.il/ZCreditWS/api/Transaction/CommitFullTransaction',
+      "https://pci.zcredit.co.il/ZCreditWS/api/Transaction/CommitFullTransaction",
       paymentPayload
     );
 
     const paymentResult = response.data;
-    
+
     if (paymentResult.HasError) {
       return {
         success: false,
-        error: paymentResult.ReturnMessage || 'Payment failed',
+        error: paymentResult.ReturnMessage || "Payment failed",
         paymentData: {
           payload: paymentPayload,
           data: paymentResult,
-          status: "failed"
-        }
+          status: "failed",
+        },
       };
     }
 
@@ -73,21 +94,22 @@ const processCreditCardPayment = async (paymentData, orderDoc, req) => {
         payload: paymentPayload,
         data: paymentResult,
         ReferenceNumber: paymentResult.ReferenceNumber,
-        ZCreditInvoiceReceiptResponse: paymentResult.ZCreditInvoiceReceiptResponse,
+        ZCreditInvoiceReceiptResponse:
+          paymentResult.ZCreditInvoiceReceiptResponse,
         ZCreditChargeResponse: paymentResult,
-        status: "success"
-      }
+        status: "success",
+      },
     };
   } catch (error) {
-    console.error('Payment processing error:', error);
+    console.error("Payment processing error:", error);
     return {
       success: false,
-      error: error.message || 'Payment processing failed',
+      error: error.message || "Payment processing failed",
       paymentData: {
         payload: paymentPayload,
         error: error.message,
-        status: "error"
-      }
+        status: "error",
+      },
     };
   }
 };
@@ -98,9 +120,9 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
   const customer = await customerDB.customers.findOne({
     _id: getId(orderDoc.customerId),
   });
-  
+
   if (!customer) {
-    console.error('Customer not found for notifications');
+    console.error("Customer not found for notifications");
     return;
   }
 
@@ -111,15 +133,15 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
     orderDoc.orderId,
     orderDoc.app_language
   );
-  
+
   await smsService.sendSMS(customer.phone, smsContent, req);
   await smsService.sendSMS("0542454362", smsContent, req);
-  
+
   websockets.fireWebscoketEvent({
-    type: "new order", 
-    customerIds: [orderDoc.customerId], 
-    isAdmin: true, 
-    appName
+    type: "new order",
+    customerIds: [orderDoc.customerId],
+    isAdmin: true,
+    appName,
   });
 };
 
@@ -155,7 +177,7 @@ router.post(
   "/api/order/admin/orders/:page?",
 
   async (req, res, next) => {
-    const appName = req.headers['app-name'];
+    const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     let finalOrders = [];
 
@@ -187,57 +209,59 @@ router.post(
       //   { orderDate: { $gte: start.format(), $lt: end.format() } },
       //   { datetime: { $gte: start.format(), $lt: end.format() } },
       // ];
-      if(req.body.isOrderLaterSupport){
+      if (req.body.isOrderLaterSupport) {
         filterBy = {
           ...filterBy,
           orderDate: { $gte: start.format(), $lt: end.format() },
         };
-      }else{
+      } else {
         filterBy = {
           ...filterBy,
           datetime: { $gte: start.format(), $lt: end.format() },
         };
       }
 
-
-
-      if(req.body.isOrderLaterSupport){
-        statusCount =  await db.orders.aggregate([
-          {
-            $match: {
-              orderDate: {
-                $gte: start.format(), $lt: end.format() 
+      if (req.body.isOrderLaterSupport) {
+        statusCount = await db.orders
+          .aggregate([
+            {
+              $match: {
+                orderDate: {
+                  $gte: start.format(),
+                  $lt: end.format(),
+                },
+                isViewd: true,
               },
-              isViewd: true
-            }
-          },
+            },
             {
               $group: {
                 _id: "$status",
-                count: { $sum: 1 }
-              }
-            }
-          ]).toArray();
-      }else{
-        statusCount =  await db.orders.aggregate([
-          {
-            $match: {
-              datetime: {
-                $gte: start.format(), $lt: end.format() 
+                count: { $sum: 1 },
               },
-              isViewd: true
-            }
-          },
+            },
+          ])
+          .toArray();
+      } else {
+        statusCount = await db.orders
+          .aggregate([
+            {
+              $match: {
+                datetime: {
+                  $gte: start.format(),
+                  $lt: end.format(),
+                },
+                isViewd: true,
+              },
+            },
             {
               $group: {
                 _id: "$status",
-                count: { $sum: 1 }
-              }
-            }
-          ]).toArray();
+                count: { $sum: 1 },
+              },
+            },
+          ])
+          .toArray();
       }
-
-
     }
     if (req.body.isNotPrinted) {
       filterBy.isPrinted = false;
@@ -261,37 +285,40 @@ router.post(
     });
     // orders?.data?.forEach(async (order)=>{
     for (const order of orders?.data) {
-      const customerDB = getCustomerAppName(req,appName);
+      const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(order.customerId),
       });
-        // const dataUri = await textToImage.generate(customer.fullName, {
-        //   maxWidth: 200,
-        //   textAlign: "center",
-        // });
-        finalOrders.push({
-          ...order,
-          customerDetails: {
-            name: customer?.fullName || order?.name,
-            phone: customer?.phone  || order?.phone,
-            branchId: order?.branchId,
-            // recipetName: dataUri,
-          },
-        });
-      
+      // const dataUri = await textToImage.generate(customer.fullName, {
+      //   maxWidth: 200,
+      //   textAlign: "center",
+      // });
+      finalOrders.push({
+        ...order,
+        customerDetails: {
+          name: customer?.fullName || order?.name,
+          phone: customer?.phone || order?.phone,
+          branchId: order?.branchId,
+          // recipetName: dataUri,
+        },
+      });
     }
     // If API request, return json
     // if(req.apiAuthenticated){
     res
       .status(200)
-      .json({ ordersList: finalOrders, totalItems: orders?.totalItems, statusCount });
+      .json({
+        ordersList: finalOrders,
+        totalItems: orders?.totalItems,
+        statusCount,
+      });
     // }
   }
 );
 
 router.get("/api/order/admin/not-printed", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   let finalOrders = [];
 
   finalOrders = await db.orders
@@ -304,8 +331,8 @@ router.get("/api/order/admin/not-printed", async (req, res, next) => {
 });
 
 router.get("/api/order/admin/not-viewd", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
 
   const orders = await db.orders
     .find({
@@ -315,7 +342,7 @@ router.get("/api/order/admin/not-viewd", async (req, res, next) => {
     .toArray();
   const finalOrders = [];
   for (const order of orders) {
-    const customerDB = getCustomerAppName(req,appName);
+    const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
       _id: getId(order.customerId),
     });
@@ -334,8 +361,8 @@ router.get("/api/order/admin/not-viewd", async (req, res, next) => {
 });
 
 router.get("/api/order/admin/all/not-viewd", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
 
   const orders = await db.orders
     .find({
@@ -345,18 +372,18 @@ router.get("/api/order/admin/all/not-viewd", async (req, res, next) => {
     .toArray();
   const finalOrders = [];
   for (const order of orders) {
-    const customerDB = getCustomerAppName(req,appName);
+    const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
       _id: getId(order.customerId),
     });
-      finalOrders.push({
-        ...order,
-        customerDetails: {
-          name: customer?.fullName || order?.name,
-          phone: customer?.phone  || order?.phone,
-          branchId: order?.branchId,
-        },
-      });
+    finalOrders.push({
+      ...order,
+      customerDetails: {
+        name: customer?.fullName || order?.name,
+        phone: customer?.phone || order?.phone,
+        branchId: order?.branchId,
+      },
+    });
   }
 
   res.status(200).json(finalOrders);
@@ -366,7 +393,7 @@ router.get(
   "/api/order/customer-invoices",
   auth.required,
   async (req, res, next) => {
-    const appName = req.headers['app-name'];
+    const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     const customerId = req.auth.id;
 
@@ -433,14 +460,13 @@ router.get("/api/order/customer-orders", auth.required, async (req, res) => {
 
     // Group orders by their database
     const ordersByAppName = {};
-    customer.orders.forEach(order => {
+    customer.orders.forEach((order) => {
       const appNameTmp = order.appName || appName; // Use the order's db if specified, otherwise use current app
       if (!ordersByAppName[appNameTmp]) {
         ordersByAppName[appNameTmp] = [];
       }
       ordersByAppName[appNameTmp].push(order.appName ? order.orderId : order);
     });
-
 
     const offsetHours = getUTCOffset();
     var start = moment(new Date()).subtract(1, "days").utcOffset(offsetHours);
@@ -453,8 +479,8 @@ router.get("/api/order/customer-orders", auth.required, async (req, res) => {
     const allOrders = [];
     for (const [dbName, orderIds] of Object.entries(ordersByAppName)) {
       const currentDb = req.app.db[dbName];
-      const oids = orderIds.map(id => getId(id));
-      
+      const oids = orderIds.map((id) => getId(id));
+
       const orders = await paginateData(
         true,
         req,
@@ -467,7 +493,7 @@ router.get("/api/order/customer-orders", auth.required, async (req, res) => {
         { created: -1 },
         currentDb // Pass the current database to paginateData
       );
-      
+
       allOrders.push(...orders.data);
     }
 
@@ -476,14 +502,14 @@ router.get("/api/order/customer-orders", auth.required, async (req, res) => {
 
     res.status(200).json(allOrders);
   } catch (ex) {
-    console.error((`Failed get customer orders: ${ex}`));
+    console.error(`Failed get customer orders: ${ex}`);
     res.status(400).json({ message: "Failed to get customer orders" });
   }
 });
 
 router.post("/api/order/byDate", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   let finalOrders = [];
 
   finalOrders = await db.orders
@@ -499,8 +525,8 @@ router.post("/api/order/byDate", async (req, res, next) => {
 });
 
 router.post("/api/order/addRefund", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   const parsedBodey = req.body;
 
   try {
@@ -522,9 +548,9 @@ router.post("/api/order/addRefund", async (req, res, next) => {
 });
 
 router.post("/api/order/updateCCPayment", async (req, res, next) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
-    const shoofiDB = req.app.db['shoofi'];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const shoofiDB = req.app.db["shoofi"];
   const parsedBodey = req.body;
 
   try {
@@ -533,7 +559,7 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
       _id: getId(parsedBodey.orderId),
     });
     const customerId = orderDoc.customerId;
-    const customerDB = getCustomerAppName(req,appName);
+    const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
       _id: getId(customerId),
     });
@@ -589,7 +615,7 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
           },
           status: "1",
         };
-        if(orderDoc.order.receipt_method === 'DELIVERY'){
+        if (orderDoc.order.receipt_method === "DELIVERY") {
           updateData.isShippingPaid = true;
         }
         await db.orders.updateOne(
@@ -601,7 +627,6 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
           },
           { multi: false }
         );
-      
 
         const finalOrderDoc = {
           ...orderDoc,
@@ -610,7 +635,12 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
             phone: customer.phone,
           },
         };
-        websockets.fireWebscoketEvent({type: "new order", customerIds:[customerId], isAdmin: true, appName});
+        websockets.fireWebscoketEvent({
+          type: "new order",
+          customerIds: [customerId],
+          isAdmin: true,
+          appName,
+        });
 
         const smsContent = smsService.getOrderRecivedContent(
           customer.fullName,
@@ -622,60 +652,73 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
         await smsService.sendSMS(customer.phone, smsContent, req);
         await smsService.sendSMS("0542454362", smsContent, req);
 
-        // setTimeout(async () => {
-        // await invoiceMailService.saveInvoice(docId, req);
+        // Send notifications for successful payment
+        await sendOrderNotifications(orderDoc, req, appName);
+        
+        // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
+        try {
+          const docId = response.data.ZCreditInvoiceReceiptResponse?.DocumentID;
+          if (docId) {
+            try {
+              await invoiceMailService.saveInvoice(docId, req);
+              
+              // Only attempt URL shortening if invoice save was successful
+              try {
+                const shortenedUrl = await turl.shorten(
+                  `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                );
+                
+                // Update order with shortened URL - non-critical update
+                try {
+                  await db.orders.updateOne(
+                    { _id: getId(orderDoc._id) },
+                    {
+                      $set: {
+                        "ccPaymentRefData.url": shortenedUrl
+                      },
+                    },
+                    { multi: false }
+                  );
+                } catch (urlUpdateError) {
+                  console.error("Failed to update order with invoice URL:", urlUpdateError);
+                }
+              } catch (urlError) {
+                console.error("Failed to shorten invoice URL:", urlError);
+              }
+            } catch (saveError) {
+              console.error("Failed to save invoice:", saveError);
+            }
+          } else {
+            console.error("No document ID in invoice response:", response.data.ZCreditInvoiceReceiptResponse);
+          }
+        } catch (invoiceError) {
+          console.error("Invoice processing error:", invoiceError);
+        }
 
-        // await turl
-        //   .shorten(
-        //     `https://creme-caramel-images.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
-        //   )
-        //   .then(async (res) => {
-        //     await db.orders.updateOne(
-        //       {
-        //         _id: getId(parsedBodey.orderId),
-        //       },
-        //       {
-        //         $set: {
-        //           ccPaymentRefData: {
-        //             payload: parsedBodey,
-        //             data: response.data,
-        //             url: res,
-        //           },
+        res.status(200).json({ errorMessage: "valid invoice doc" });
+        // } else {
+        //   await db.orders.updateOne(
+        //     {
+        //       _id: getId(parsedBodey.orderId),
+        //     },
+        //     {
+        //       $set: {
+        //         ccPaymentRefData: {
+        //           payload: parsedBodey,
+        //           data: 'no doc ID',
         //         },
+        //         status: "0",
         //       },
-        //       { multi: false }
-        //     );
-
-        //     // const invoiceSmsContent =
-        //     //   smsService.getOrderInvoiceContent(res);
-        //     // //smsService.sendSMS(customer.phone, smsContent, req);
-        //     // smsService.sendSMS("0542454362", invoiceSmsContent, req);
-        //   })
-        //   .catch((err) => {
-        //     //res.status(400).json({ errorMessage: err?.message });
-        //   });
-
-        // res.status(200).json(response.data);
+        //     },
+        //     { multi: false }
+        //   );
+        //   res.status(200).json({ errorMessage: "no invoice doc" });
+        // }
       });
     // }, 120000);
     res.status(200).json({ errorMessage: "valid invoice doc" });
-    // } else {
-    //   await db.orders.updateOne(
-    //     {
-    //       _id: getId(parsedBodey.orderId),
-    //     },
-    //     {
-    //       $set: {
-    //         ccPaymentRefData: {
-    //           payload: parsedBodey,
-    //           data: 'no doc ID',
-    //         },
-    //         status: "0",
-    //       },
-    //     },
-    //     { multi: false }
-    //   );
-    //   res.status(200).json({ errorMessage: "no invoice doc" });
+    // } catch (err) {
+    //   res.status(400).json({ errorMessage: err?.message });
     // }
   } catch (err) {
     res.status(400).json({ errorMessage: err?.message });
@@ -687,7 +730,7 @@ router.post(
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    const appName = req.headers['app-name'];
+    const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     const config = req.app.config;
     const parsedBodey = JSON.parse(req.body.body);
@@ -748,11 +791,11 @@ router.post(
       ipAddress: req.ip,
       appName: appName,
     };
-    
+
     try {
       const newDoc = await db.orders.insertOne(orderDoc);
       const orderId = newDoc.insertedId;
-      
+
       // Handle credit card payment server-side
       if (isCreditCardPay && parsedBodey.paymentData) {
         try {
@@ -761,7 +804,7 @@ router.post(
             orderDoc,
             req
           );
-          
+
           if (paymentResult.success) {
             // Update order with successful payment
             await db.orders.updateOne(
@@ -770,18 +813,58 @@ router.post(
                 $set: {
                   status: "1",
                   ccPaymentRefData: paymentResult.paymentData,
-                  isShippingPaid: orderDoc.order.receipt_method === 'DELIVERY'
-                }
+                  isShippingPaid: orderDoc.order.receipt_method === "DELIVERY",
+                },
               }
             );
-            
+
             // Send notifications for successful payment
             await sendOrderNotifications(orderDoc, req, appName);
             
+            // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
+            try {
+              const docId = paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse?.DocumentID;
+              if (docId) {
+                try {
+                  await invoiceMailService.saveInvoice(docId, req);
+                  
+                  // Only attempt URL shortening if invoice save was successful
+                  try {
+                    const shortenedUrl = await turl.shorten(
+                      `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                    );
+                    
+                    // Update order with shortened URL - non-critical update
+                    try {
+                      await db.orders.updateOne(
+                        { _id: getId(orderId) },
+                        {
+                          $set: {
+                            "ccPaymentRefData.url": shortenedUrl
+                          },
+                        },
+                        { multi: false }
+                      );
+                    } catch (urlUpdateError) {
+                      console.error("Failed to update order with invoice URL:", urlUpdateError);
+                    }
+                  } catch (urlError) {
+                    console.error("Failed to shorten invoice URL:", urlError);
+                  }
+                } catch (saveError) {
+                  console.error("Failed to save invoice:", saveError);
+                }
+              } else {
+                console.error("No document ID in invoice response:", paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse);
+              }
+            } catch (invoiceError) {
+              console.error("Invoice processing error:", invoiceError);
+            }
+
             res.status(200).json({
               message: "Order created and payment processed successfully",
               orderId,
-              paymentStatus: "success"
+              paymentStatus: "success",
             });
             return;
           } else {
@@ -790,7 +873,7 @@ router.post(
               message: "Order created but payment failed",
               orderId,
               paymentStatus: "failed",
-              paymentError: paymentResult.error
+              paymentError: paymentResult.error,
             });
             return;
           }
@@ -801,22 +884,25 @@ router.post(
             message: "Order created but payment processing failed",
             orderId,
             paymentStatus: "error",
-            paymentError: paymentError.message
+            paymentError: paymentError.message,
           });
           return;
         }
       }
-      
+
       // For non-credit card payments or if no payment data
-      if(req.headers["app-name"] === 'buffalo' || req.headers["app-name"] === 'world-of-swimming'){
+      if (
+        req.headers["app-name"] === "buffalo" ||
+        req.headers["app-name"] === "world-of-swimming"
+      ) {
         res.status(200).json({
           message: "Order created successfully",
           orderId,
         });
         return;
       }
-      
-      const customerDB = getCustomerAppName(req,appName);
+
+      const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(customerId),
       });
@@ -829,7 +915,7 @@ router.post(
 
       if (!customer.addresses || customer.addresses.length === 0) {
         // Add the address from the order to the customer's addresses array
-        if (orderDoc.order.address) {    
+        if (orderDoc.order.address) {
           await customerDB.customers.updateOne(
             { _id: getId(customer._id) },
             { $push: { addresses: orderDoc.order.address } }
@@ -844,7 +930,9 @@ router.post(
         {
           $set: {
             ...customer,
-            orders: customer.orders ? [...customer.orders, {orderId, appName}] : [{orderId, appName}],
+            orders: customer.orders
+              ? [...customer.orders, { orderId, appName }]
+              : [{ orderId, appName }],
           },
         },
         { multi: false, returnOriginal: false }
@@ -870,7 +958,7 @@ router.post(
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    const appName = req.headers['app-name'];
+    const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     const config = req.app.config;
     const parsedBodey = JSON.parse(req.body.body);
@@ -925,7 +1013,7 @@ router.post(
         { multi: false }
       );
 
-      const customerDB = getCustomerAppName(req,appName);
+      const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(customerId),
       });
@@ -953,7 +1041,13 @@ router.post(
           phone: customer.phone,
         },
       };
-      websockets.fireWebscoketEvent({type: "order updated", data: finalOrderDoc, customerIds:[customerId], isAdmin: true, appName});
+      websockets.fireWebscoketEvent({
+        type: "order updated",
+        data: finalOrderDoc,
+        customerIds: [customerId],
+        isAdmin: true,
+        appName,
+      });
 
       indexOrders(req.app).then(() => {
         res.status(200).json({
@@ -968,8 +1062,8 @@ router.post(
 );
 
 router.post("/api/order/update", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   try {
     const updateobj = req.body.updateData;
     await db.orders.updateOne(
@@ -981,9 +1075,15 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     );
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
     const customerId = order?.customerId;
-    websockets.fireWebscoketEvent({type: "order status updated", data: updateobj, customerIds:[customerId], isAdmin: true, appName});
+    websockets.fireWebscoketEvent({
+      type: "order status updated",
+      data: updateobj,
+      customerIds: [customerId],
+      isAdmin: true,
+      appName,
+    });
 
-    const customerDB = getCustomerAppName(req,appName);
+    const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
       _id: getId(order.customerId),
     });
@@ -1035,9 +1135,9 @@ router.post("/api/order/update", auth.required, async (req, res) => {
 });
 
 router.post("/api/order/update/viewd", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
-  
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+
   try {
     const updateobj = req.body.updateData;
     const offsetHours = getUTCOffset();
@@ -1045,14 +1145,14 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
     let updateData = {
       isViewd: updateobj.isViewd,
       isViewdAdminAll: updateobj.isViewdAdminAll,
+    };
+    if (!updateobj.isOrderLaterSupport) {
+      const orderDate = moment(updateobj.currentTime)
+        .utcOffset(offsetHours)
+        .add(updateobj.readyMinutes, "m")
+        .format();
+      updateData.orderDate = orderDate;
     }
-    if(!updateobj.isOrderLaterSupport){
-      const orderDate = moment(updateobj.currentTime).utcOffset(offsetHours)
-      .add(updateobj.readyMinutes, "m")
-      .format();
-       updateData.orderDate = orderDate;
-      }
-
 
     await db.orders.updateOne(
       {
@@ -1066,8 +1166,8 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
 
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
 
-    if(order.order.receipt_method == "DELIVERY"){
-      const customerDB = getCustomerAppName(req,appName);
+    if (order.order.receipt_method == "DELIVERY") {
+      const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(order.customerId),
       });
@@ -1078,10 +1178,10 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         return;
       }
       const storeData = await db.store.findOne({ id: 1 });
-      const shoofiDB = req.app.db['shoofi'];
+      const shoofiDB = req.app.db["shoofi"];
       const shoofiStore = await shoofiDB.store.findOne({ id: 1 });
 
-      if(shoofiStore.isSendSmsToDeliveryCompany){
+      if (shoofiStore.isSendSmsToDeliveryCompany) {
         const smsDeliveryContent = smsService.getOrderDeliveryCompanyContent(
           customer.fullName,
           order.orderId,
@@ -1097,27 +1197,30 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         );
         await smsService.sendSMS("0542454362", smsDeliveryContent, req);
       }
-      if(shoofiStore.isSendNotificationToDeliveryCompany){
-      const deliveryData = {
-        fullName: customer.fullName,
-        phone: customer.phone,
-        price: order.orderPrice || '',
-        pickupTime: updateobj.readyMinutes,
-        storeName: storeData.storeName,
-        appName: storeData.appName,
-        storeId: storeData._id,
-        bookId: order.orderId,
-        storeLocation: storeData.location,
-        coverageRadius: storeData.coverageRadius,
-        customerLocation: order?.order?.geo_positioning,
-      };
+      if (shoofiStore.isSendNotificationToDeliveryCompany) {
+        const deliveryData = {
+          fullName: customer.fullName,
+          phone: customer.phone,
+          price: order.orderPrice || "",
+          pickupTime: updateobj.readyMinutes,
+          storeName: storeData.storeName,
+          appName: storeData.appName,
+          storeId: storeData._id,
+          bookId: order.orderId,
+          storeLocation: storeData.location,
+          coverageRadius: storeData.coverageRadius,
+          customerLocation: order?.order?.geo_positioning,
+        };
 
-      deliveryService.bookDelivery({deliveryData, appDb: req.app.db});
+        deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
+      }
     }
-
-    }
-    websockets.fireWebscoketEvent({type: "order viewed updated", customerIds:[order.customerId], isAdmin: true, appName});
-
+    websockets.fireWebscoketEvent({
+      type: "order viewed updated",
+      customerIds: [order.customerId],
+      isAdmin: true,
+      appName,
+    });
 
     // pushNotification.pushToClient(order.customerId, "TEEEEEST", req);
 
@@ -1131,8 +1234,8 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
 });
 
 router.post("/api/order/book-delivery", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   try {
     const updateobj = req.body.updateData;
 
@@ -1145,9 +1248,15 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
     );
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
     const customerId = order.customerId;
-    websockets.fireWebscoketEvent({type: "order status updated", data: updateobj, customerIds:[customerId], isAdmin: true, appName});
+    websockets.fireWebscoketEvent({
+      type: "order status updated",
+      data: updateobj,
+      customerIds: [customerId],
+      isAdmin: true,
+      appName,
+    });
 
-    const customerDB = getCustomerAppName(req,appName);
+    const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
       _id: getId(order.customerId),
     });
@@ -1160,7 +1269,7 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
 
     const storeData = await db.store.findOne({ id: 1 });
 
-    if(storeData.isSendSmsToDeliveryCompany){
+    if (storeData.isSendSmsToDeliveryCompany) {
       const smsContent = smsService.getOrderDeliveryCompanyContent(
         customer.fullName,
         order.orderId,
@@ -1171,25 +1280,27 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
       await smsService.sendSMS(storeData.order_company_number, smsContent, req);
       await smsService.sendSMS("0542454362", smsContent, req);
     }
-    if(storeData.isSendNotificationToDeliveryCompany){
-
-    const deliveryData = {
-      fullName: customer.fullName,
-      phone: customer.phone,
-      price: order.orderPrice || '',
-      pickupTime: updateobj.readyMinutes || 0,
-      storeName: storeData.storeName,
-      appName: storeData.appName,
-      storeId: storeData._id,
-      bookId: order.orderId,
-      storeLocation: storeData.location,
-      coverageRadius: storeData.coverageRadius,
-      customerLocation: order?.order?.geo_positioning,
-
+    if (storeData.isSendNotificationToDeliveryCompany) {
+      const deliveryData = {
+        fullName: customer.fullName,
+        phone: customer.phone,
+        price: order.orderPrice || "",
+        pickupTime: updateobj.readyMinutes || 0,
+        storeName: storeData.storeName,
+        appName: storeData.appName,
+        storeId: storeData._id,
+        bookId: order.orderId,
+        storeLocation: storeData.location,
+        coverageRadius: storeData.coverageRadius,
+        customerLocation: order?.order?.geo_positioning,
+      };
+      deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
     }
-    deliveryService.bookDelivery({deliveryData, appDb: req.app.db});
-  }
-    websockets.fireWebscoketEvent({type: "order delivery booked", isAdmin: true, appName});
+    websockets.fireWebscoketEvent({
+      type: "order delivery booked",
+      isAdmin: true,
+      appName,
+    });
 
     return res
       .status(200)
@@ -1200,154 +1311,179 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
   }
 });
 
-router.post("/api/order/book-custom-delivery", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
+router.post(
+  "/api/order/book-custom-delivery",
+  auth.required,
+  async (req, res) => {
+    const appName = req.headers["app-name"];
     const db = req.app.db[appName];
 
     const isStoreOpen = await storeService.isDeliveryCompanyOpen(req);
-    if(!isStoreOpen){
-      return res
-      .status(200)
-      .json({ isStoreOpen });
+    if (!isStoreOpen) {
+      return res.status(200).json({ isStoreOpen });
     }
-  try {
-    const deliveryData = req.body.deliveryData;
-    const offsetHours = getUTCOffset();
+    try {
+      const deliveryData = req.body.deliveryData;
+      const offsetHours = getUTCOffset();
 
-    var deliveryDeltaMinutes = moment().add(deliveryData.time, "m").utcOffset(offsetHours).format('HH:mm');
-    const insertRetsult = await db.bookDelivery.insertOne({
-      ...deliveryData,
+      var deliveryDeltaMinutes = moment()
+        .add(deliveryData.time, "m")
+        .utcOffset(offsetHours)
+        .format("HH:mm");
+      const insertRetsult = await db.bookDelivery.insertOne({
+        ...deliveryData,
         deliveryDeltaMinutes,
         isDelivered: false,
         isCanceled: false,
         created: moment(new Date()).utcOffset(offsetHours).format(),
-     });
+      });
 
-
-    const storeData = await db.store.findOne({ id: 1 });
-    if(storeData.isSendSmsToDeliveryCompany){
-      const smsContent = smsService.getCustomOrderDeliveryCompanyContent(
-        deliveryData.fullName || "",
-        deliveryData.phone,
-        deliveryData.price,
-        deliveryDeltaMinutes,
-      );
-    await smsService.sendSMS(storeData.order_company_number, smsContent, req);
-    await smsService.sendSMS("0542454362", smsContent, req);
-    }
-    if(storeData.isSendNotificationToDeliveryCompany){
-
-    const deliveryDataX = {
-      fullName: deliveryData.fullName,
-      phone: deliveryData.phone,
-      price: deliveryData.price || '',
-      pickupTime: deliveryData.time,
-      storeName: storeData.storeName,
-      appName: storeData.appName,
-      storeId: storeData._id,
-      bookId: insertRetsult?.insertedId.toString(),
-      storeLocation: storeData.location,
-      coverageRadius: storeData.coverageRadius,
-      customerLocation: order?.order?.geo_positioning,
-    }
-    deliveryService.bookDelivery({deliveryData: deliveryDataX, appDb: req.app.db});
-  }
-
-    // websockets.fireWebscoketEvent("order delivery booked");
-    return res
-      .status(200)
-      .json({ message: "order custom delivery booked successfully", isStoreOpen });
-  } catch (ex) {
-    console.info("Error order custom delivery booked", ex);
-    return res.status(400).json({ message: "order custom delivery booke failed" });
-  }
-});
-
-router.post("/api/order/update-custom-delivery", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
-  try {
-    let updateData = req.body.updateData;
-    const id = updateData._id;
-    delete updateData._id;
-    await db.bookDelivery.updateOne(
-      {
-        _id: getId(
-          id
-        ),
-      },
-      { $set: updateData },
-      { multi: false }
-    );
-
-    if(updateData.isCanceled === true){
       const storeData = await db.store.findOne({ id: 1 });
-      if(storeData.isSendSmsToDeliveryCompany){
-        const smsDeliveryContent = smsService.getOrderDeliveryCompanyCanceledContent(
-          updateData.fullName,
-          updateData.deliveryDeltaMinutes,
-          updateData.phone,
-          updateData.price,
+      if (storeData.isSendSmsToDeliveryCompany) {
+        const smsContent = smsService.getCustomOrderDeliveryCompanyContent(
+          deliveryData.fullName || "",
+          deliveryData.phone,
+          deliveryData.price,
+          deliveryDeltaMinutes
         );
         await smsService.sendSMS(
           storeData.order_company_number,
-          smsDeliveryContent,
+          smsContent,
           req
         );
-        await smsService.sendSMS("0542454362", smsDeliveryContent, req);
+        await smsService.sendSMS("0542454362", smsContent, req);
       }
-      if(storeData.isSendNotificationToDeliveryCompany){
-      const deliveryDataX = {
-        bookId: id,
-        status: '-1' 
+      if (storeData.isSendNotificationToDeliveryCompany) {
+        const deliveryDataX = {
+          fullName: deliveryData.fullName,
+          phone: deliveryData.phone,
+          price: deliveryData.price || "",
+          pickupTime: deliveryData.time,
+          storeName: storeData.storeName,
+          appName: storeData.appName,
+          storeId: storeData._id,
+          bookId: insertRetsult?.insertedId.toString(),
+          storeLocation: storeData.location,
+          coverageRadius: storeData.coverageRadius,
+          customerLocation: order?.order?.geo_positioning,
+        };
+        deliveryService.bookDelivery({
+          deliveryData: deliveryDataX,
+          appDb: req.app.db,
+        });
       }
-      deliveryService.updateDelivery({deliveryData: deliveryDataX, appDb: req.app.db});
-    }
-    }
 
-
-    // websockets.fireWebscoketEvent("order delivery booked");
-    return res
-      .status(200)
-      .json({ message: "order custom delivery updated successfully" });
-  } catch (ex) {
-    console.info("Error order custom delivery updated", ex);
-    return res.status(400).json({ message: "order custom delivery updated failed" });
+      // websockets.fireWebscoketEvent("order delivery booked");
+      return res
+        .status(200)
+        .json({
+          message: "order custom delivery booked successfully",
+          isStoreOpen,
+        });
+    } catch (ex) {
+      console.info("Error order custom delivery booked", ex);
+      return res
+        .status(400)
+        .json({ message: "order custom delivery booke failed" });
+    }
   }
-});
+);
 
+router.post(
+  "/api/order/update-custom-delivery",
+  auth.required,
+  async (req, res) => {
+    const appName = req.headers["app-name"];
+    const db = req.app.db[appName];
+    try {
+      let updateData = req.body.updateData;
+      const id = updateData._id;
+      delete updateData._id;
+      await db.bookDelivery.updateOne(
+        {
+          _id: getId(id),
+        },
+        { $set: updateData },
+        { multi: false }
+      );
+
+      if (updateData.isCanceled === true) {
+        const storeData = await db.store.findOne({ id: 1 });
+        if (storeData.isSendSmsToDeliveryCompany) {
+          const smsDeliveryContent =
+            smsService.getOrderDeliveryCompanyCanceledContent(
+              updateData.fullName,
+              updateData.deliveryDeltaMinutes,
+              updateData.phone,
+              updateData.price
+            );
+          await smsService.sendSMS(
+            storeData.order_company_number,
+            smsDeliveryContent,
+            req
+          );
+          await smsService.sendSMS("0542454362", smsDeliveryContent, req);
+        }
+        if (storeData.isSendNotificationToDeliveryCompany) {
+          const deliveryDataX = {
+            bookId: id,
+            status: "-1",
+          };
+          deliveryService.updateDelivery({
+            deliveryData: deliveryDataX,
+            appDb: req.app.db,
+          });
+        }
+      }
+
+      // websockets.fireWebscoketEvent("order delivery booked");
+      return res
+        .status(200)
+        .json({ message: "order custom delivery updated successfully" });
+    } catch (ex) {
+      console.info("Error order custom delivery updated", ex);
+      return res
+        .status(400)
+        .json({ message: "order custom delivery updated failed" });
+    }
+  }
+);
 
 router.post("/api/order/get-custom-delivery", async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   try {
     const isAll = req.body.isAll;
     const offsetHours = getUTCOffset();
 
-    const startOfToday = moment().utcOffset(offsetHours).startOf('day').subtract(7,'d');
+    const startOfToday = moment()
+      .utcOffset(offsetHours)
+      .startOf("day")
+      .subtract(7, "d");
 
-// Get the end of today in UTC
-    const endOfToday = moment().utcOffset(offsetHours).endOf('day').add(3,'h');
+    // Get the end of today in UTC
+    const endOfToday = moment().utcOffset(offsetHours).endOf("day").add(3, "h");
 
     let filterBy = {
       created: {
         $gte: startOfToday.format(),
-        $lte: endOfToday.format()
-      }
+        $lte: endOfToday.format(),
+      },
     };
 
-    if(!isAll){
+    if (!isAll) {
       filterBy = {
         ...filterBy,
         isDelivered: false,
         isCanceled: false,
-      }
+      };
     }
 
     const bookingList = await db.bookDelivery
-    .find(filterBy).sort({ created: -1 })
-    .toArray();
-  res.status(200).json(bookingList);
+      .find(filterBy)
+      .sort({ created: -1 })
+      .toArray();
+    res.status(200).json(bookingList);
   } catch (ex) {
     console.info("Error getting delivery list", ex);
     return res.status(400).json({ message: "Error getting delivery list" });
@@ -1355,8 +1491,8 @@ router.post("/api/order/get-custom-delivery", async (req, res) => {
 });
 
 router.post("/api/order/printed", auth.required, async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   try {
     await db.orders.updateOne(
       {
@@ -1368,7 +1504,11 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
       { multi: false }
     );
     if (req.body.status === false) {
-      websockets.fireWebscoketEvent({type: "print not printed", isAdmin: true, appName});
+      websockets.fireWebscoketEvent({
+        type: "print not printed",
+        isAdmin: true,
+        appName,
+      });
     }
     return res.status(200).json({ message: "Order successfully printed" });
   } catch (ex) {
@@ -1384,8 +1524,8 @@ function relDiff(a, b) {
   return diff.toFixed(2);
 }
 router.post("/api/order/statistics/new-orders/:page?", async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   let pageNum = 1;
   if (req.body.pageNumber) {
     pageNum = req.body.pageNumber;
@@ -1439,8 +1579,8 @@ router.post("/api/order/statistics/new-orders/:page?", async (req, res) => {
 
 router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
   try {
-    const appName = req.headers['app-name'];
-    const dbAdmin = req.app.db['shoofi'];
+    const appName = req.headers["app-name"];
+    const dbAdmin = req.app.db["shoofi"];
     const storesList = await dbAdmin.stores.find().toArray();
     let allOrders = [];
     let totalItems = 0;
@@ -1460,7 +1600,7 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
       end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
 
       dateFilter = {
-        orderDate: { $gte: start.format(), $lt: end.format() }
+        orderDate: { $gte: start.format(), $lt: end.format() },
       };
     }
 
@@ -1473,7 +1613,7 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
     // City filter if provided
     let filteredStores = storesList;
     if (req.body.cityIds && req.body.cityIds.length > 0) {
-      filteredStores = storesList.filter(store => 
+      filteredStores = storesList.filter((store) =>
         req.body.cityIds.includes(store.cityId)
       );
     }
@@ -1481,7 +1621,7 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
     // Combine filters
     const filterBy = {
       ...dateFilter,
-      ...statusFilter
+      ...statusFilter,
     };
 
     // Get orders from each store
@@ -1495,10 +1635,10 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
         .toArray();
 
       // Add store info to each order
-      const ordersWithStoreInfo = storeOrders.map(order => ({
+      const ordersWithStoreInfo = storeOrders.map((order) => ({
         ...order,
         storeName: store.storeName,
-        storeAppName: store.appName
+        storeAppName: store.appName,
       }));
 
       allOrders = [...allOrders, ...ordersWithStoreInfo];
@@ -1518,7 +1658,7 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
     for (const order of paginatedOrders) {
       const customerDB = getCustomerAppName(req, order.storeAppName);
       const customer = await customerDB.customers.findOne({
-        _id: getId(order.customerId)
+        _id: getId(order.customerId),
       });
 
       finalOrders.push({
@@ -1526,8 +1666,8 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
         customerDetails: {
           name: customer?.fullName || order?.name,
           phone: customer?.phone || order?.phone,
-          branchId: order?.branchId
-        }
+          branchId: order?.branchId,
+        },
       });
     }
 
@@ -1535,9 +1675,8 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
       ordersList: finalOrders,
       totalItems,
       currentPage: pageNum,
-      totalPages: Math.ceil(totalItems / pageSize)
+      totalPages: Math.ceil(totalItems / pageSize),
     });
-
   } catch (error) {
     console.error("Error fetching all orders:", error);
     res.status(400).json({ message: "Failed to fetch orders" });

@@ -10,10 +10,10 @@ var {
   } = require("@aws-sdk/client-s3");
   const { promisify } = require('util');
 
-const BUCKET_NAME = "creme-caramel-images";
-const imapConfig = {
-  user: "creme.caramel.app@gmail.com",
-  password: "jgnutreblnwhhqpv",
+  const BUCKET_NAME = "shoofi-spaces";
+  const imapConfig = {
+  user: "invoices@shoofi.app",
+  password: "qqrdqeelnowmrfsc",
   host: "imap.gmail.com",
   port: 993,
   tls: true,
@@ -32,7 +32,7 @@ const searchAndFetch = async (searchString, req) => {
 
   imap.once("ready", async () => {
     console.log("Connected to Gmail via IMAP");
-    const appName = req.headers['app-name'];
+    const appName = 'shoofi';
     const db = req.app.db[appName];
     const amazonConfig = await db.amazonconfigs.findOne({ app: "amazon" });
 
