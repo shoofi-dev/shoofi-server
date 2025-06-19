@@ -131,8 +131,42 @@ router.get("/api/store/download-app", async (req, res) => {
 router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const stores = await dbAdmin.stores.find().toArray();
-    res.status(200).json(stores);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search;
+    
+    // Build search query
+    let searchQuery = {};
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      searchQuery = {
+        $or: [
+          { name_ar: searchRegex },
+          { name_he: searchRegex },
+          { appName: searchRegex },
+          { descriptionAR: searchRegex },
+          { descriptionHE: searchRegex }
+        ]
+      };
+    }
+    
+    const stores = await dbAdmin.stores.find(searchQuery)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+    
+    const total = await dbAdmin.stores.countDocuments(searchQuery);
+    
+    res.status(200).json({
+      stores,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        itemsPerPage: limit
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch stores', error: err.message });
   }
@@ -477,11 +511,53 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
     const cityId = req.params.cityId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search;
     const { ObjectId } = require('mongodb');
-    const stores = await dbAdmin.stores.find({
+    
+    // Build base query for city filtering
+    const cityQuery = {
       supportedCities: { $elemMatch: { $eq: ObjectId(cityId) } }
-    }).toArray();
-    res.status(200).json(stores);
+    };
+    
+    // Build search query
+    let searchQuery = {};
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      searchQuery = {
+        $or: [
+          { name_ar: searchRegex },
+          { name_he: searchRegex },
+          { appName: searchRegex },
+          { descriptionAR: searchRegex },
+          { descriptionHE: searchRegex }
+        ]
+      };
+    }
+    
+    // Combine city and search queries
+    const combinedQuery = searchQuery.$or ? 
+      { $and: [cityQuery, searchQuery] } : 
+      cityQuery;
+    
+    const stores = await dbAdmin.stores.find(combinedQuery)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+    
+    const total = await dbAdmin.stores.countDocuments(combinedQuery);
+    
+    res.status(200).json({
+      stores,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        itemsPerPage: limit
+      }
+    });
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch stores by city', error: err.message });
   }
