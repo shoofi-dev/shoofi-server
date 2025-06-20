@@ -211,7 +211,7 @@ router.get("/api/store/download-app/:appName?", async (req, res) => {
 
 router.get("/api/store/is-should-update", async (req, res) => {
   const version = req.headers["app-version"];
-  const appName = req.headers['app-name'];
+  const appName = 'shoofi';
     const db = req.app.db[appName];
   const storeData = await db.store.findOne({ id: 1 });
   const isValidVersion = compareVersions(version, storeData.minVersion);
@@ -260,51 +260,101 @@ router.post("/api/store/add", async (req, res, next) => {
 router.get("/api/store-category/all", async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
-  const categories = await db.categories.find().toArray();
+  const categories = await db.categories.find().sort({ order: 1 }).toArray();
   res.status(200).json(categories);
 });
 
 // Add store category
 router.post("/api/store-category/add", upload.array("img"), async (req, res) => {
-  const appName = req.headers["app-name"];
-  const db = req.app.db[appName];
-  const { nameAR, nameHE } = req.body;
-  let images = [];
-  if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, `stores/${appName}/categories`);
+  try {
+    const appName = req.headers['app-name'];
+    const db = req.app.db[appName];
+    const { nameAR, nameHE, order } = req.body;
+
+    if (!nameAR || !nameHE) {
+      return res.status(400).json({ message: 'nameAR and nameHE are required' });
+    }
+
+    let images = [];
+    if (req.files && req.files.length > 0) {
+      images = await uploadFile(req.files, req, `${appName}/store-categories`);
+    }
+
+    const newCategory = {
+      nameAR,
+      nameHE,
+      order: Number(order) || 0,
+      img: images,
+      createdAt: new Date(),
+    };
+
+    await db.categories.insertOne(newCategory);
+    res.status(201).json(newCategory);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to add store category", error: err.message });
   }
-  const newCategory = {
-    _id: getId(),
-    nameAR,
-    nameHE,
-    img: images,
-  };
-  await db.categories.insertOne(newCategory);
-  res.status(201).json(newCategory);
 });
 
 // Update store category
 router.post("/api/store-category/update/:id", upload.array("img"), async (req, res) => {
-  const appName = req.headers["app-name"];
-  const db = req.app.db[appName];
-  const { id } = req.params;
-  const { nameAR, nameHE } = req.body;
-  const category = await db.categories.findOne({ _id: getId(id) });
-  let images = category.img;
-  if (req.files && req.files.length > 0) {
-    images = await uploadFile(req.files, req, `stores/${appName}/categories`);
-    if (category.img && category.img.length > 0) {
-      await deleteImages(category.img, req);
+  try {
+    const appName = req.headers['app-name'];
+    const db = req.app.db[appName];
+    const { id } = req.params;
+    const { nameAR, nameHE, order } = req.body;
+
+    let images = [];
+    const category = await db.categories.findOne({ _id: getId(id) });
+    let currentImages = category.img || [];
+
+    if (req.files && req.files.length > 0) {
+      images = await uploadFile(req.files, req, `${appName}/store-categories`);
+      currentImages = images;
     }
+    
+    const updatedCategory = {
+      nameAR,
+      nameHE,
+      order: Number(order) || 0,
+      img: currentImages,
+      updatedAt: new Date(),
+    };
+
+    await db.categories.updateOne({ _id: getId(id) }, { $set: updatedCategory });
+    res.status(200).json(updatedCategory);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update store category", error: err.message });
   }
-  const updatedCategory = {
-    ...category,
-    nameAR,
-    nameHE,
-    img: images,
-  };
-  await db.categories.updateOne({ _id: getId(id) }, { $set: updatedCategory });
-  res.status(200).json(updatedCategory);
+});
+
+router.post("/api/store-category/update-order", async (req, res) => {
+  try {
+    const appName = req.headers['app-name'];
+    const db = req.app.db[appName];
+    const { categories } = req.body; // Expecting an array of {_id, order}
+
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ message: "Invalid payload, expected 'categories' array" });
+    }
+
+    const bulkOps = categories.map(cat => ({
+      updateOne: {
+        filter: { _id: getId(cat._id) },
+        update: { $set: { order: cat.order } }
+      }
+    }));
+
+    if (bulkOps.length > 0) {
+      await db.categories.bulkWrite(bulkOps);
+    }
+    
+    res.status(200).json({ message: "Category order updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update category order", error: err.message });
+  }
 });
 
 // Delete store category

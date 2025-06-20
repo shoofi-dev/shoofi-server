@@ -49,12 +49,21 @@ function compareVersions(version1, version2) {
 router.post("/api/customer/validateAuthCode", async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
-  const customerDB = getCustomerAppName(req, appName);
   const customerObj = {
     phone: req.body.phone,
     authCode: req.body.authCode,
   };
-  const customer = await customerDB.customers.findOne({ phone: customerObj.phone });
+  const shoofiDB = req.app.db['shoofi'];
+  const deliveryDB = req.app.db['delivery-company'];
+  let customer = null;
+  let customerDB = null;
+  if(req.body.phone.startsWith("11")){
+    customer = await deliveryDB.customers.findOne({ userName: customerObj.phone });
+    customerDB = deliveryDB;
+  }else{
+    customer = await shoofiDB.customers.findOne({ phone: customerObj.phone });
+    customerDB = shoofiDB;
+  }
   if (customer === undefined || customer === null) {
     res.status(400).json({
       message: "A customer with that phone does not exist.",
@@ -109,7 +118,8 @@ router.post("/api/customer/validateAuthCode", async (req, res) => {
 router.post("/api/customer/create", async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
-  const customerDB = getCustomerAppName(req, appName);
+  const shoofiDB = req.app.db['shoofi'];
+  const deliveryDB = req.app.db['delivery-company'];
   const random4DigitsCode = Math.floor(1000 + Math.random() * 9000);
   const customerObj = {
     phone: sanitize(req.body.phone),
@@ -123,10 +133,23 @@ router.post("/api/customer/create", async (req, res) => {
   //   return;
   // }
 
-  const customer = await customerDB.customers.findOne({ phone: req.body.phone });
+  
+  let customer = null;
+  let customerDB = null;
+  let findByKey= null;
+  if(req.body.phone.startsWith("11")){
+    customer = await deliveryDB.customers.findOne({ userName: req.body.phone });
+    customerDB = deliveryDB;
+    findByKey = "userName";
+  }else{
+    customer = await shoofiDB.customers.findOne({ phone: req.body.phone });
+    customerDB = shoofiDB;
+    findByKey = "phone";
+  }
+
   if (customer) {
     const updatedCustomer = await customerDB.customers.findOneAndUpdate(
-      { phone: req.body.phone },
+      { [findByKey]: req.body.phone },
       {
         $set: { ...customer, authCode: random4DigitsCode, token: null },
       },
@@ -409,36 +432,26 @@ router.get("/api/customer/details", auth.required, async (req, res) => {
   const customerId = req.auth.id;
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
-  const customerDB = getCustomerAppName(req, appName);
+  const deliveryDB = req.app.db['delivery-company'];
+  const shoofiDB = req.app.db['shoofi'];
+  let customer = null;
+  let customerDB = null;
+
+
   try {
-    const customer = await customerDB.customers.findOne({
-      _id: getId(customerId),
-    });
+    const driverCustomer = await deliveryDB.customers.findOne({ _id: getId(customerId), });  
+    if(driverCustomer){
+      customer = driverCustomer;
+      customerDB = deliveryDB;
+    }else{
+      customer = await shoofiDB.customers.findOne({ _id: getId(customerId), });
+      customerDB = shoofiDB;
+    }
     if (!customer) {
       res.status(400).json({
         message: "Customer not found",
       });
       return;
-    }
-
-    let activeCoursePackage = null;
-    if (customer?.coursesList) {
-       activeCoursePackage = customer?.coursesList.find(
-        (course) => course.isActive
-      );
-
-      if (activeCoursePackage) {
-        console.log("Found active course:", activeCoursePackage);
-      } else {
-        console.log("No active course found.");
-      }
-    }
-    
-    let courseData = null;
-    if (activeCoursePackage?.courseId) {
-      courseData = await db.courses.findOne({
-        _id: getId(activeCoursePackage.courseId),
-      });
     }
 
 
@@ -452,12 +465,9 @@ router.get("/api/customer/details", auth.required, async (req, res) => {
         roles: customer.roles,
         planId: customer?.planId,
         branchId: customer?.branchId,
-        courseData,
-        coursePackage: activeCoursePackage,
-        coursesList: customer?.coursesList,
-        paymentHistory: customer?.paymentHistory,
         status: customer?.status,
-        appName: customer?.appName
+        appName: customer?.appName,
+        isDriver: customer?.isDriver
       },
     });
   } catch (ex) {

@@ -5,10 +5,30 @@ const { getId } = require("../../lib/common");
 const APP_CONSTS = require("../../consts/consts");
 const { assignBestDeliveryDriver } = require("./assignDriver");
 
+// Helper function to create notifications in database
+const createNotification = async (db, recipientId, title, message, type = 'system', data = {}) => {
+  try {
+    const notification = {
+      recipientId: getId(recipientId),
+      title,
+      message,
+      type,
+      isRead: false,
+      createdAt: moment().utcOffset(utcTimeService.getUTCOffset()).format(),
+      data,
+    };
+    
+    await db.notifications.insertOne(notification);
+    return notification;
+  } catch (error) {
+    console.error('Error creating notification:', error);
+    throw error;
+  }
+};
+
 async function bookDelivery({ deliveryData, appDb }) {
   try {
     const db = appDb["delivery-company"];
-    // Your logic (e.g., saving to DB, calling an external API)
     const offsetHours = utcTimeService.getUTCOffset();
 
     var deliveryDeltaMinutes = moment()
@@ -16,70 +36,72 @@ async function bookDelivery({ deliveryData, appDb }) {
       .utcOffset(offsetHours)
       .format("HH:mm");
 
+    const result = await assignBestDeliveryDriver({ 
+      appDb: appDb, 
+      location: { 
+        lat: deliveryData.customerLocation.latitude, 
+        lng: deliveryData.customerLocation.longitude 
+      } 
+    });
 
-    // Only apply logic for stores not in SARI_APPS_DB_LIST
-    // if (
-    //   deliveryData.appName &&
-    //   deliveryData.storeLocation &&
-    //   deliveryData.coverageRadius
-    // ) {
-    //   const bestCompany = await findBestDeliveryCompany({
-    //     storeLocation: deliveryData.storeLocation,
-    //     appDb
-    //   });
-    //   if (bestCompany) {
-    //     companyId = bestCompany._id;
-    //     companyName = bestCompany.name;
-    //   }
-    // }
+    if (!result.success) {
+      // TODO: handle error - no driver found
+      return {
+        success: false,
+        message: "No available driver found for this location",
+      };
+    } else {
+      console.log("driver", result.driver);
+      console.log("company", result.company);
+      console.log("area", result.area);
+      console.log("activeOrderCount", result.activeOrderCount);
 
-// ...
-const result = await assignBestDeliveryDriver({ appDb: appDb, location: { lat:deliveryData.customerLocation.latitude, lng:deliveryData.customerLocation.longitude } });
-if (!result.success) {
-  // TODO: handle error - no driver found
-  
-} else {
-  console.log("driver", result.driver);
-  console.log("company", result.company);
-  console.log("area", result.area);
-  console.log("activeOrderCount", result.activeOrderCount);
+      // Create the delivery booking with the new structure
+      const bookingData = {
+        ...deliveryData,
+        deliveryDeltaMinutes,
+        status: "1",
+        created: moment(new Date()).utcOffset(offsetHours).format(),
+        area: result.area,
+        company: result.company,
+        driver: result.driver,
+        activeOrderCount: result.activeOrderCount,
+        bookId: `${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 900000) + 100000}-${Math.floor(Math.random() * 9000) + 1000}`,
+        appName: deliveryData.appName || 'shoofi-app',
+        expectedDeliveryAt: moment().add(result.area?.maxETA || 30, 'minutes').utcOffset(offsetHours).format()
+      };
 
-  const bookDelivery = await db.bookDelivery.insertOne({
-    ...deliveryData,
-    deliveryDeltaMinutes,
-    status: "1",
-    created: moment(new Date()).utcOffset(offsetHours).format(),
-    area: result.area,
-    company: result.company,
-    driver: result.driver,
-    activeOrderCount: result.activeOrderCount
-  });
+      const bookDeliveryResult = await db.bookDelivery.insertOne(bookingData);
+      const insertedOrder = { ...bookingData, _id: bookDeliveryResult.insertedId };
+
+      // Send push notification to driver
       pushNotificationWebService.sendNotificationToDevice(
         result.driver.notificationToken, 
         { storeName: deliveryData?.storeName }  
       );
+
+      // Create database notification for driver
+      await createNotification(
+        db,
+        result.driver._id,
+        'New Order Assigned',
+        `You have been assigned a new order #${insertedOrder.bookId}`,
+        'order',
+        { 
+          orderId: insertedOrder._id, 
+          bookId: insertedOrder.bookId, 
+          customerName: deliveryData.fullName,
+          customerPhone: deliveryData.phone 
+        }
+      );
+
       return {
         success: true,
         message: "Delivery created successfully",
-        deliveryId: bookDelivery._id, // Example ID
+        deliveryId: insertedOrder._id,
+        bookId: insertedOrder.bookId,
       };
-}
-
-
-
-    //   const adminCustomer = await db.customers.find({
-    //     role: "admin",
-    //     companyId: companyId
-    //   }).toArray();
-    //   if(adminCustomer.length > 0){
-    //   pushNotificationWebService.sendNotificationToDevice(
-    //     adminCustomer[0].notificationToken,
-    //     { storeName: deliveryData?.storeName }
-    //   );
-    // }
-    
-
-
+    }
   } catch (error) {
     console.error("Error in createDelivery:", error);
     throw new Error("Error creating delivery");
@@ -101,10 +123,13 @@ async function updateDelivery({ deliveryData, appDb }) {
   if (order?.status === "1" && updateData?.status === "2") {
     isPushEmploye = true;
   }
+  if (updateData.status === "0") {
+    isPushEmploye = true;
+  }
   if (updateData.status === "-1") {
     isPushEmploye = true;
-    isPushAdmin = true;
   }
+  
   await db.bookDelivery.updateOne(
     {
       bookId: (id),
@@ -113,26 +138,52 @@ async function updateDelivery({ deliveryData, appDb }) {
     { multi: false }
   );
 
-  if (isPushEmploye && order?.assignee) {
+  // Create notifications for driver
+  if (isPushEmploye && order?.driver?._id) {
     const employe = await db.customers.findOne({
-      _id: getId(order?.assignee),
+      _id: getId(order.driver._id),
     });
+    
     if (employe) {
+      // Send push notification
       pushNotificationWebService.sendNotificationToDevice(
         employe?.notificationToken,
         { storeName: order?.storeName },
         updateData.status
       );
-    }
-  }
-  if (isPushAdmin && order) {
-    const adminCustomer = await db.customers.find({ role: "admin" }).toArray();
-    if (adminCustomer) {
-      pushNotificationWebService.sendNotificationToDevice(
-        adminCustomer[0].notificationToken,
-        { storeName: order?.storeName },
-        updateData.status
-      );
+      
+      // Create database notification
+      let notificationTitle = '';
+      let notificationMessage = '';
+      let notificationType = 'order';
+      
+      switch(updateData.status) {
+        case '2':
+          notificationTitle = 'Order Assigned';
+          notificationMessage = `You have been assigned a new order #${order.bookId || order._id}`;
+          break;
+        case '0':
+          notificationTitle = 'Order Delivered';
+          notificationMessage = `Order #${order.bookId || order._id} has been successfully delivered`;
+          notificationType = 'payment';
+          break;
+        case '-1':
+          notificationTitle = 'Order Cancelled';
+          notificationMessage = `Order #${order.bookId || order._id} has been cancelled`;
+          notificationType = 'alert';
+          break;
+      }
+      
+      if (notificationTitle && notificationMessage) {
+        await createNotification(
+          db, 
+          order.driver._id, 
+          notificationTitle, 
+          notificationMessage, 
+          notificationType,
+          { orderId: order._id, bookId: order.bookId, status: updateData.status }
+        );
+      }
     }
   }
 }

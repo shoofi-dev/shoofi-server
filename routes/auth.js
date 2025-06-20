@@ -5,34 +5,32 @@ const jwt = require("jsonwebtoken");
 const { getId } = require("../lib/common");
 const fakeTokenForBuffalo = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6IjA1NDI0NTQzNjIiLCJpZCI6IjY1N2RhODVmNDE4ZTAwNTZlMDcwYTAwMCIsImV4cCI6MTc1NDkyNzQ3OCwiaWF0IjoxNzIzODIzNDc4fQ.aVmYgx_MJkfpWYBFI6TDI4YfZSAhEhBBz_R3S7K9l3M";
 const getTokenFromHeaders = async (req, res) => {
-  const appName = req.headers['app-name'];
-  let db = null;
 
-  if(APP_CONSTS.SARI_APPS_DB_LIST.includes(appName)){
-    db = req.app.db[appName];
-  }else{
-    db = req.app.db['shoofi'];
-  }
   const {
     headers: { authorization },
   } = req;
   var token = authorization?.split(" ")[1],
     decoded;
   try {
-    if(req.headers['app-name'] === 'buffalo' || req.headers['app-name'] === 'delivery-company'){
-      return fakeTokenForBuffalo;
-    }else{
       decoded = jwt.verify(token, "secret");
-    }
   } catch (e) {
     console.log("E", e);
     return null;
   }
-  const cutomerId = decoded.id;
   // check for existing customer
-  const customer = await db.customers.findOne({
-    _id: getId(cutomerId),
-  });
+  
+  const deliveryDB = req.app.db['delivery-company'];
+  const shoofiDB = req.app.db['shoofi'];
+  let customer = null;
+  const customerId = decoded.id;
+
+ 
+    const driverCustomer = await deliveryDB.customers.findOne({ _id: getId(customerId), });  
+    if(driverCustomer){
+      customer = driverCustomer;
+    }else{
+      customer = await shoofiDB.customers.findOne({ _id: getId(customerId), });
+    }
 
   if (!customer) {
     return null;
