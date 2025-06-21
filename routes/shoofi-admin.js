@@ -16,9 +16,9 @@ const adsRouter = require("./ads");
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+  // limits: {
+  //   fileSize: 2 * 1024 * 1024 // 5MB limit
+  // }
 });
 
 // Create separate upload handlers for different file fields

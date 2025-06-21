@@ -1072,7 +1072,7 @@ router.post("/api/delivery/driver/earnings", async (req, res) => {
     const end = endDate ? moment(endDate).utcOffset(offsetHours) : moment().utcOffset(offsetHours);
     
     const deliveredOrders = await db.bookDelivery.find({
-      "driver._id": driverId,
+      "driver._id": ObjectId(driverId),
       status: '0',
       created: { $gte: start.format(), $lte: end.format() }
     }).toArray();
