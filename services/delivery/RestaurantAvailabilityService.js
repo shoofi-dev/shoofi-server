@@ -68,16 +68,23 @@ class RestaurantAvailabilityService {
       supportedCities: { $in: nearbyCityIds }
     }).toArray();
 
+    console.log(`Found ${availableStores.length} stores in nearby cities`);
+
     // Verify each store's database and filter out invalid ones
     const verifiedStores = await Promise.all(
       availableStores.map(async store => {
+        console.log(`Verifying database for store: ${store.name} (${store.appName})`);
         const isValid = await verifyStoreDatabase(store.appName, generalDB);
+        if (!isValid) {
+          console.log(`Store ${store.name} (${store.appName}) database verification failed`);
+        }
         return isValid ? store : null;
       })
     );
 
     // Filter out null values (invalid stores)
     const validStores = verifiedStores.filter(store => store !== null);
+    console.log(`After database verification: ${validStores.length} valid stores out of ${availableStores.length} total`);
 
     // For each valid store, find delivery companies that can deliver to the customer
     const results = await Promise.all(validStores.map(async store => {
@@ -119,35 +126,41 @@ class RestaurantAvailabilityService {
 
 const verifyStoreDatabase = async (appName, client) => {
   try {
-    // Check if database exists
+    // Check if database exists by trying to access it
+    if (!client[appName]) {
+      console.log(`Database ${appName} does not exist`);
+      return false;
+    }
+
     const db = client[appName];
+    
+    // Check if we can list collections (this will fail if database doesn't exist)
     const collections = await db.listCollections().toArray();
     const collectionNames = collections.map(col => col.name);
 
     // Check required collections
     const hasCategories = collectionNames.includes('categories');
     const hasProducts = collectionNames.includes('products');
+    
     if (hasCategories && hasProducts) {
-      const categoryCount = hasCategories ? await db.collection('categories').countDocuments() : 0;
-      const productCount = hasProducts ? await db.collection('products').countDocuments() : 0;
+      const categoryCount = await db.collection('categories').countDocuments();
+      const productCount = await db.collection('products').countDocuments();
+      
       if (categoryCount > 0 && productCount > 0) {
+        console.log(`Database ${appName} is valid with ${categoryCount} categories and ${productCount} products`);
         return true;
+      } else {
+        console.log(`Database ${appName} exists but has no data: ${categoryCount} categories, ${productCount} products`);
+        return false;
       }
+    } else {
+      console.log(`Database ${appName} missing required collections. Found:`, collectionNames);
       return false;
     }
-    return false;     
 
   } catch (error) {
-    console.error(`Error verifying store database ${appName}:`, error);
-    return {
-      exists: false,
-      hasCategories: false,
-      hasProducts: false,
-      categoryCount: 0,
-      productCount: 0,
-      collections: [],
-      error: error.message
-    };
+    console.error(`Error verifying store database ${appName}:`, error.message);
+    return false;
   }
 };
 

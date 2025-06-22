@@ -63,7 +63,9 @@ router.post("/api/store/get-by-name", async (req, res, next) => {
 
     const store = await db.store.findOne({ id: 1 });
     const isOpenHours = storeService.checkIsStoreOpenHours(store.start, store.end);
-    const isOpenDays = storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
+    const isOpenDays = true;
+    // TODO: check if the store is open all days
+    // storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
     let isStoreOpen = (isOpenHours && isOpenDays && !store.isStoreClose) || (store.isAlwaysOpen && !store.isStoreClose);
 
 
@@ -90,10 +92,10 @@ router.post("/api/store", async (req, res, next) => {
   stores.data = await Promise.all(
     stores.data.map(async (store) => {
       const isOpenHours = storeService.checkIsStoreOpenHours(store.start, store.end);
-      const isOpenDays = storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
-      console.log("isOpenDays", isOpenDays);
-      console.log("isOpenHours", isOpenHours);
-      console.log("!store.isStoreClose", !store.isStoreClose);
+      const isOpenDays = true
+      // TODO: check if the store is open all days
+      // storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
+
   
       let isStoreOpen = (isOpenHours && isOpenDays && !store.isStoreClose) || (store.isAlwaysOpen && !store.isStoreClose);
       console.log("isStoreOpen", isStoreOpen);

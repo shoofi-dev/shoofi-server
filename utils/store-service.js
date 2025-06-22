@@ -168,8 +168,9 @@ const isDeliveryCompanyOpen = async (req) => {
     deliveryCompanystore.start,
     deliveryCompanystore.end
   );
-  const isOpenDays =
-    storeService.checkIsStoreOpenDay("Sunday", deliveryCompanystore.end) ||
+  const isOpenDays = true;
+  // TODO: check if the store is open all days
+    // storeService.checkIsStoreOpenDay("Sunday", deliveryCompanystore.end) ||
     deliveryCompanystore?.isOpendAllDays;
   let isStoreOpen =
     (isOpenHours && isOpenDays && !deliveryCompanystore.isStoreClose) ||
