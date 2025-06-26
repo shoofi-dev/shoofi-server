@@ -58,6 +58,8 @@ async function bookDelivery({ deliveryData, appDb }) {
       console.log("activeOrderCount", result.activeOrderCount);
       const expectedDeliveryAt = moment(pickupTime, "HH:mm").add(parseInt(result.area?.maxETA), 'minutes').utcOffset(offsetHours).format("HH:mm");
       // Create the delivery booking with the new structure
+      const now = moment().utcOffset(offsetHours);
+
       const bookingData = {
         ...deliveryData,
         pickupTime,
@@ -69,10 +71,11 @@ async function bookDelivery({ deliveryData, appDb }) {
         activeOrderCount: result.activeOrderCount,
         bookId: deliveryData.bookId || `${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 900000) + 100000}-${Math.floor(Math.random() * 9000) + 1000}`,
         appName: deliveryData.appName || 'shoofi-app',
-        expectedDeliveryAt: moment(expectedDeliveryAt, "HH:mm") .set({
-          year: moment().year(),
-          month: moment().month(),
-          date: moment().date(),
+
+        expectedDeliveryAt: moment(expectedDeliveryAt, "HH:mm").set({
+          year: now.year(),
+          month: now.month(),
+          date: now.date(),
         }).utcOffset(offsetHours).format()
       };
 
