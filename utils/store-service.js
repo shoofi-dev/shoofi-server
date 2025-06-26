@@ -178,9 +178,72 @@ const isDeliveryCompanyOpen = async (req) => {
   return isStoreOpen;
 };
 
+/**
+ * Checks if the store is open right now based on the new openHours object structure.
+ * openHours: {
+ *   sunday: { isOpen, start, end }, ...
+ * }
+ */
+function isStoreOpenNow(openHours) {
+  if (!openHours) return false;
+  const now = new Date();
+  const days = [
+    "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+  ];
+  const todayIdx = now.getDay();
+  const today = days[todayIdx];
+  const todayHours = openHours[today];
+
+  // Helper to parse time
+  function parseTime(str, baseDate) {
+    const [h, m] = str.split(":").map(Number);
+    const d = new Date(baseDate);
+    d.setHours(h, m, 0, 0);
+    return d;
+  }
+
+  // 1. Check today's config (normal case)
+  if (todayHours && todayHours.isOpen) {
+    const start = parseTime(todayHours.start, now);
+    const end = parseTime(todayHours.end, now);
+
+    if (end > start) {
+      // Normal same-day hours
+      if (now >= start && now <= end) return true;
+    } else {
+      // Overnight hours (e.g., 17:00-03:00)
+      if (now >= start) return true;
+      // We'll check yesterday's config below for the after-midnight part
+    }
+  }
+
+  // 2. Check yesterday's config for overnight shift
+  const yesterdayIdx = (todayIdx + 6) % 7;
+  const yesterday = days[yesterdayIdx];
+  const yesterdayHours = openHours[yesterday];
+  if (yesterdayHours && yesterdayHours.isOpen) {
+    const yStart = parseTime(yesterdayHours.start, now);
+    const yEnd = parseTime(yesterdayHours.end, now);
+    if (yEnd < yStart) {
+      // Overnight shift from yesterday
+      // yEnd is today, so set its date to today
+      yEnd.setDate(yEnd.getDate() + 1);
+      if (now <= yEnd) {
+        // Only if now is after midnight and before yEnd
+        const midnight = new Date(now);
+        midnight.setHours(0, 0, 0, 0);
+        if (now >= midnight && now <= yEnd) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 const storeService = {
   checkIsStoreOpenDay: checkIsStoreOpenDay,
   checkIsStoreOpenHours: checkIsStoreOpenHours,
   isDeliveryCompanyOpen: isDeliveryCompanyOpen,
+  isStoreOpenNow: isStoreOpenNow,
 };
 module.exports = storeService;

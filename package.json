@@ -81,6 +81,7 @@
     "paypal-rest-sdk": "^1.6.9",
     "qrcode": "^1.5.3",
     "rand-token": "^0.4.0",
+    "redis": "^4.7.1",
     "rimraf": "^2.7.1",
     "sanitize-html": "^2.3.2",
     "sitemap": "^1.6.0",

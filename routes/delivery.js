@@ -655,7 +655,7 @@ router.post(
       if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
         return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
       }
-      if (typeof companyId === 'undefined') {
+      if (typeof id === 'undefined' && typeof companyId === 'undefined') {
         return res.status(400).json({ message: 'id is required' });
       }
       let parsedSupportedCities = [];
@@ -1500,6 +1500,23 @@ router.get("/api/delivery/admin/alerts", async (req, res) => {
   } catch (ex) {
     console.error("Error getting delivery alerts", ex);
     return res.status(500).json({ message: "Error getting delivery alerts" });
+  }
+});
+
+// Get delivery by bookId
+router.get("/api/delivery/book/:bookId", async (req, res) => {
+  const appName = 'delivery-company';
+  const db = req.app.db[appName];
+  try {
+    const { bookId } = req.params;
+    const delivery = await db.bookDelivery.findOne({ bookId: bookId });
+    if (!delivery) {
+      return res.status(404).json({ message: 'Delivery not found' });
+    }
+    res.status(200).json(delivery);
+  } catch (ex) {
+    console.info("Error getting delivery by bookId", ex);
+    return res.status(400).json({ message: "Error getting delivery by bookId" });
   }
 });
 

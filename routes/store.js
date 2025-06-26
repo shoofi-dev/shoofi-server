@@ -61,13 +61,8 @@ router.post("/api/store/get-by-name", async (req, res, next) => {
   const appName = req.body.appName;
   const db = req.app.db[appName];
 
-    const store = await db.store.findOne({ id: 1 });
-    const isOpenHours = storeService.checkIsStoreOpenHours(store.start, store.end);
-    const isOpenDays = true;
-    // TODO: check if the store is open all days
-    // storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
-    let isStoreOpen = (isOpenHours && isOpenDays && !store.isStoreClose) || (store.isAlwaysOpen && !store.isStoreClose);
-
+  const store = await db.store.findOne({ id: 1 });
+  const isStoreOpen = storeService.isStoreOpenNow(store.openHours) && !store.isStoreClose;
 
   res.status(200).json({
     isOpen: isStoreOpen
@@ -82,6 +77,8 @@ router.get("/api/store/get/:appName?", async (req, res) => {
 });
 
 router.post("/api/store", async (req, res, next) => {
+  console.time('myFunctionTime2');
+
   let pageNum = 1;
   if (req.params.page) {
     pageNum = req.params.page;
@@ -91,15 +88,7 @@ router.post("/api/store", async (req, res, next) => {
 
   stores.data = await Promise.all(
     stores.data.map(async (store) => {
-      const isOpenHours = storeService.checkIsStoreOpenHours(store.start, store.end);
-      const isOpenDays = true
-      // TODO: check if the store is open all days
-      // storeService.checkIsStoreOpenDay('Sunday', store.end) || store?.isOpendAllDays;
-
-  
-      let isStoreOpen = (isOpenHours && isOpenDays && !store.isStoreClose) || (store.isAlwaysOpen && !store.isStoreClose);
-      console.log("isStoreOpen", isStoreOpen);
-  
+      const isStoreOpen = storeService.isStoreOpenNow(store.openHours) && !store.isStoreClose;
       let isDeliveryOpen = store.delivery_support;
       // if (store.delivery_support && store.isSendNotificationToDeliveryCompany) {
       //   const isCompanyOpen = await storeService.isDeliveryCompanyOpen(req);
@@ -114,6 +103,8 @@ router.post("/api/store", async (req, res, next) => {
       };
     })
   );
+  console.timeEnd('myFunctionTime2');
+
   res.status(200).json(stores);
 });
 

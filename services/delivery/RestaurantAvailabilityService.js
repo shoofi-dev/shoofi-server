@@ -97,7 +97,7 @@ class RestaurantAvailabilityService {
       // Filter companies that support the customer's area
       const availableDeliveryCompanies = deliveryCompanies
         .filter(company => {
-          if (!customerArea) return false;
+          if (!customerArea || !company?.supportedAreas) return false;
           return company.supportedAreas.some(
             supportedArea => supportedArea.areaId.equals(customerArea._id)
           );

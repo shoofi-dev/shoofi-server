@@ -186,7 +186,7 @@ router.post(
       pageNum = req.body.pageNumber;
     }
 
-    let statusList = ["1", "2", "3", "4", "5"];
+    let statusList = ["1", "2", "3", "4", "5","6"];
     if (req.body.statusList) {
       statusList = req.body.statusList;
     }
@@ -367,7 +367,7 @@ router.get("/api/order/admin/all/not-viewd", async (req, res, next) => {
   const orders = await db.orders
     .find({
       isViewdAdminAll: false,
-      status: "1",
+      status: "6",
     })
     .toArray();
   const finalOrders = [];
@@ -784,7 +784,7 @@ router.post(
       created: moment(new Date()).utcOffset(offsetHours).format(),
       customerId,
       orderId: generatedOrderId,
-      status: isCreditCardPay ? "0" : "1", // Start with pending for credit card
+      status: isCreditCardPay ? "0" : "6", // Start with pending for credit card
       isPrinted: false,
       isViewd: false,
       isViewdAdminAll: false,
@@ -1152,6 +1152,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         .add(updateobj.readyMinutes, "m")
         .format();
       updateData.orderDate = orderDate;
+      updateData.status = "1";
     }
 
     await db.orders.updateOne(
@@ -1680,6 +1681,74 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
   } catch (error) {
     console.error("Error fetching all orders:", error);
     res.status(400).json({ message: "Failed to fetch orders" });
+  }
+});
+
+// Get only active orders for the authenticated customer
+router.get("/api/order/customer-active-orders", auth.required, async (req, res) => {
+  const customerId = req.auth.id;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const customerDB = getCustomerAppName(req, appName);
+
+  // Active statuses (from frontend: inProgressStatuses = ["1"])
+  const activeStatuses = ["1","3","6","2","11"];
+
+  try {
+    const customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    if (!customer) {
+      res.status(400).json({
+        message: "Customer not found",
+      });
+      return;
+    }
+
+    if (!customer.orders || !customer.orders.length) {
+      res.status(200).json([]);
+      return;
+    }
+
+    // Group orders by their database
+    const ordersByAppName = {};
+    customer.orders.forEach((order) => {
+      const appNameTmp = order.appName || appName; // Use the order's db if specified, otherwise use current app
+      if (!ordersByAppName[appNameTmp]) {
+        ordersByAppName[appNameTmp] = [];
+      }
+      ordersByAppName[appNameTmp].push(order.appName ? order.orderId : order);
+    });
+
+    // Fetch active orders from each database
+    const allOrders = [];
+    for (const [dbName, orderIds] of Object.entries(ordersByAppName)) {
+      const currentDb = req.app.db[dbName];
+      const oids = orderIds.map((id) => getId(id));
+
+      const orders = await paginateData(
+        true,
+        req,
+        1,
+        "orders",
+        {
+          _id: { $in: oids },
+          status: { $in: activeStatuses },
+        },
+        { created: -1 },
+        currentDb // Pass the current database to paginateData
+      );
+
+      allOrders.push(...orders.data);
+    }
+
+    // Sort all orders by creation date
+    allOrders.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+    res.status(200).json(allOrders);
+  } catch (ex) {
+    console.error(`Failed get customer active orders: ${ex}`);
+    res.status(400).json({ message: "Failed to get customer active orders" });
   }
 });
 

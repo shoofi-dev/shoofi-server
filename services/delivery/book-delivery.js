@@ -31,7 +31,7 @@ async function bookDelivery({ deliveryData, appDb }) {
     const db = appDb["delivery-company"];
     const offsetHours = utcTimeService.getUTCOffset();
 
-    var deliveryDeltaMinutes = moment()
+    var pickupTime = moment()
       .add(deliveryData.pickupTime, "m")
       .utcOffset(offsetHours)
       .format("HH:mm");
@@ -43,6 +43,7 @@ async function bookDelivery({ deliveryData, appDb }) {
         lng: deliveryData.customerLocation.longitude 
       } 
     });
+    
 
     if (!result.success) {
       // TODO: handle error - no driver found
@@ -55,20 +56,24 @@ async function bookDelivery({ deliveryData, appDb }) {
       console.log("company", result.company);
       console.log("area", result.area);
       console.log("activeOrderCount", result.activeOrderCount);
-
+      const expectedDeliveryAt = moment(pickupTime, "HH:mm").add(parseInt(result.area?.maxETA), 'minutes').utcOffset(offsetHours).format("HH:mm");
       // Create the delivery booking with the new structure
       const bookingData = {
         ...deliveryData,
-        deliveryDeltaMinutes,
+        pickupTime,
         status: "1",
         created: moment(new Date()).utcOffset(offsetHours).format(),
         area: result.area,
         company: result.company,
         driver: result.driver,
         activeOrderCount: result.activeOrderCount,
-        bookId: `${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 900000) + 100000}-${Math.floor(Math.random() * 9000) + 1000}`,
+        bookId: deliveryData.bookId || `${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 900000) + 100000}-${Math.floor(Math.random() * 9000) + 1000}`,
         appName: deliveryData.appName || 'shoofi-app',
-        expectedDeliveryAt: moment().add(result.area?.maxETA || 30, 'minutes').utcOffset(offsetHours).format()
+        expectedDeliveryAt: moment(expectedDeliveryAt, "HH:mm") .set({
+          year: moment().year(),
+          month: moment().month(),
+          date: moment().date(),
+        }).utcOffset(offsetHours).format()
       };
 
       const bookDeliveryResult = await db.bookDelivery.insertOne(bookingData);
