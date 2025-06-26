@@ -56,7 +56,7 @@ async function bookDelivery({ deliveryData, appDb }) {
       console.log("company", result.company);
       console.log("area", result.area);
       console.log("activeOrderCount", result.activeOrderCount);
-      let expectedDeliveryAtTemp = moment(pickupTime, "HH:mm").add(parseInt(result.area?.maxETA), 'minutes');
+      let expectedDeliveryAtTemp = moment(pickupTime, "HH:mm").utcOffset(offsetHours, true).add(parseInt(result.area?.maxETA), 'minutes').utcOffset(offsetHours, true);
       // Create the delivery booking with the new structure
       const now = moment().utcOffset(offsetHours);
       expectedDeliveryAtTemp.set({

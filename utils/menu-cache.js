@@ -19,8 +19,37 @@ class MenuCache {
 
   async initRedis() {
     try {
+      // Parse Redis URL to extract connection options
+      const redisUrl = process.env.REDIS_URL;
+      
+      // Configure Redis client with SSL support for DigitalOcean managed Redis
       this.redisClient = redis.createClient({
-        url: process.env.REDIS_URL
+        url: redisUrl,
+        socket: {
+          tls: redisUrl.startsWith('rediss://'), // Enable TLS for rediss:// URLs
+          rejectUnauthorized: false, // Allow self-signed certificates
+          connectTimeout: 10000, // 10 seconds
+          lazyConnect: true, // Don't connect immediately
+        },
+        retry_strategy: (options) => {
+          if (options.error && options.error.code === 'ECONNREFUSED') {
+            // End reconnecting on a specific error and flush all commands with a individual error
+            console.error('Redis server refused connection');
+            return new Error('Redis server refused connection');
+          }
+          if (options.total_retry_time > 1000 * 60 * 60) {
+            // End reconnecting after a specific timeout and flush all commands with a individual error
+            console.error('Redis retry time exhausted');
+            return new Error('Retry time exhausted');
+          }
+          if (options.attempt > 10) {
+            // End reconnecting with built in error
+            console.error('Redis max retry attempts reached');
+            return undefined;
+          }
+          // Reconnect after
+          return Math.min(options.attempt * 100, 3000);
+        }
       });
 
       this.redisClient.on('error', (err) => {
@@ -28,8 +57,20 @@ class MenuCache {
         this.useRedis = false; // Fallback to memory cache
       });
 
+      this.redisClient.on('connect', () => {
+        console.log('✅ Redis connected for menu caching');
+      });
+
+      this.redisClient.on('ready', () => {
+        console.log('✅ Redis ready for menu caching');
+      });
+
+      this.redisClient.on('end', () => {
+        console.log('❌ Redis connection ended');
+        this.useRedis = false;
+      });
+
       await this.redisClient.connect();
-      console.log('✅ Redis connected for menu caching');
     } catch (error) {
       console.error('❌ Redis connection failed, using memory cache:', error);
       this.useRedis = false;
