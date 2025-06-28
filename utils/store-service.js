@@ -192,7 +192,7 @@ function isStoreOpenNow(openHours) {
   const days = [
     "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
   ];
-  const todayIdx = now.getDay();
+  const todayIdx = now.day();
   const today = days[todayIdx];
   const todayHours = openHours[today];
 
@@ -200,7 +200,7 @@ function isStoreOpenNow(openHours) {
   function parseTime(str, baseDate) {
     const [h, m] = str.split(":").map(Number);
     const d = moment(baseDate).utcOffset(offsetHours);
-    d.setHours(h, m, 0, 0);
+    d.hours(h).minutes(m).seconds(0).milliseconds(0);
     return d;
   }
 
@@ -229,11 +229,11 @@ function isStoreOpenNow(openHours) {
     if (yEnd < yStart) {
       // Overnight shift from yesterday
       // yEnd is today, so set its date to today
-      yEnd.setDate(yEnd.getDate() + 1);
+      yEnd.add(1, 'day');
       if (now <= yEnd) {
         // Only if now is after midnight and before yEnd
         const midnight = moment(now).utcOffset(offsetHours);
-        midnight.setHours(0, 0, 0, 0);
+        midnight.hours(0).minutes(0).seconds(0).milliseconds(0);
         if (now >= midnight && now <= yEnd) return true;
       }
     }
