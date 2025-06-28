@@ -103,28 +103,40 @@ router.post("/api/shoofiAdmin/category/list", async (req, res, next) => {
   res.status(200).json(categoryList);
 });
 
-router.get("/api/store/download-app", async (req, res) => {
-  const db = req.app.db[req.headers['db-name']];
+router.get("/api/store/download-app/:appType?", async (req, res) => {
+  let appN = "";
+  if (req.params.appType) {
+    appN = req.params.appType;
+  } else {
+    appN = req.headers["app-name"];
+  }
+  const db = req.app.db[appN];
+  const stores = await db.store.find().toArray();
+  const branch = stores[0];
 
-  const userAgent = req.get('user-agent');
-  if (userAgent.includes('iPhone') || userAgent.includes('iPad')) {
+  const userAgent = req.get("user-agent");
+  console.log("====Download app====", req.headers);
+  if (userAgent.includes("iPhone") || userAgent.includes("iPad")) {
     const data = {
-      source: 'default',
+      source: "default",
       created: new Date(),
       ipAddress: req.ip,
-      type: 'IOS'
+      type: "IOS",
+      appType: appN
     };
     await db.downloadAppQr.insertOne(data);
-    res.redirect('itms-apps://itunes.apple.com/app/6446260267');
-  } else if (userAgent.includes('Android')) {
+    res.redirect(`itms-apps://itunes.apple.com/app/${branch.appleAppId}`);
+  } else if (userAgent.includes("Android")) {
     const data = {
-      source: 'default',
+      source: "default",
       created: new Date(),
       ipAddress: req.ip,
-      type: 'ANDROID'
+      type: "ANDROID",
     };
     await db.downloadAppQr.insertOne(data);
-    res.redirect('https://play.google.com/store/apps/details?id=com.sariq.creme.caramel');
+    res.redirect(
+      `https://play.google.com/store/apps/details?id=${branch.androidAppId}`
+    );
   }
 });
 

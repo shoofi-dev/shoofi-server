@@ -165,42 +165,7 @@ router.post("/api/store/holiday/delete", async (req, res, next) => {
   }
 });
 
-router.get("/api/store/download-app/:appName?", async (req, res) => {
-  let appN = "";
-  if (req.params.appName) {
-    appN = req.params.appName;
-  } else {
-    appN = req.headers["app-name"];
-  }
-  const db = req.app.db[appN || 'pizza-gmel'];
-  const stores = await db.store.find().toArray();
-  const branch = stores[0];
 
-  const userAgent = req.get("user-agent");
-  console.log("====Download app====", req.headers);
-  if (userAgent.includes("iPhone") || userAgent.includes("iPad")) {
-    const data = {
-      source: "default",
-      created: new Date(),
-      ipAddress: req.ip,
-      type: "IOS",
-      appName: appN
-    };
-    await db.downloadAppQr.insertOne(data);
-    res.redirect(`itms-apps://itunes.apple.com/app/${branch.appleAppId}`);
-  } else if (userAgent.includes("Android")) {
-    const data = {
-      source: "default",
-      created: new Date(),
-      ipAddress: req.ip,
-      type: "ANDROID",
-    };
-    await db.downloadAppQr.insertOne(data);
-    res.redirect(
-      `https://play.google.com/store/apps/details?id=${branch.androidAppId}`
-    );
-  }
-});
 
 router.get("/api/store/is-should-update", async (req, res) => {
   const version = req.headers["app-version"];
