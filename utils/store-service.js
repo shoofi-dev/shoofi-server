@@ -185,6 +185,8 @@ const isDeliveryCompanyOpen = async (req) => {
  * }
  */
 function isStoreOpenNow(openHours) {
+  const offsetHours = getUTCOffset();
+
   if (!openHours) return false;
   const now = moment().utcOffset(offsetHours);
   const days = [
