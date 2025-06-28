@@ -70,7 +70,10 @@ router.get("/api/menu", async (req, res, next) => {
                 isInStore: 1,
                 count: 1,
                 supportedCategoryIds: 1,
-                categoryId: 1
+                categoryId: 1,
+                extras: 1,
+                isHidden: 1,
+                isInStore: 1,
               }
             }
           ],

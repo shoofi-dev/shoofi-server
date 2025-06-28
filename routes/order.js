@@ -1691,14 +1691,25 @@ router.get("/api/order/customer-active-orders", auth.required, async (req, res) 
   const db = req.app.db[appName];
   const customerDB = getCustomerAppName(req, appName);
 
+  const appType = req.headers["app-type"];
   // Active statuses (from frontend: inProgressStatuses = ["1"])
   const activeStatuses = ["1","3","6","2","11"];
-
+  let customer = null;
   try {
-    const customer = await customerDB.customers.findOne({
-      _id: getId(customerId),
-    });
-    if (!customer) {
+    if(appType === 'shoofi-shoofir'){
+      customer = await customerDB.customers.findOne({
+        _id: getId(customerId),
+      });
+    }else if(appType === 'shoofi-partner'){
+      customer = await customerDB.storeUsers.findOne({
+        _id: getId(customerId),
+      });
+    }else{
+      customer = await customerDB.customers.findOne({
+        _id: getId(customerId),
+      });
+    }
+      if (!customer) {
       res.status(400).json({
         message: "Customer not found",
       });

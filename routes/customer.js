@@ -48,21 +48,30 @@ function compareVersions(version1, version2) {
 
 router.post("/api/customer/validateAuthCode", async (req, res) => {
   const appName = req.headers["app-name"];
+  const appType = req.headers["app-type"];
   const db = req.app.db[appName];
   const customerObj = {
     phone: req.body.phone,
     authCode: req.body.authCode,
   };
-  const shoofiDB = req.app.db['shoofi'];
-  const deliveryDB = req.app.db['delivery-company'];
   let customer = null;
   let customerDB = null;
-  if(req.body.phone.startsWith("11")){
+  let collection = null;
+  if(appType === 'shoofi-shoofir'){
+    const deliveryDB = req.app.db['delivery-company'];
     customer = await deliveryDB.customers.findOne({ userName: customerObj.phone });
     customerDB = deliveryDB;
+    collection = "customers";
+  }else if(appType === 'shoofi-partner'){
+    const shoofiDB = req.app.db['shoofi'];
+    customer = await shoofiDB.storeUsers.findOne({ phone: customerObj.phone });
+    customerDB = shoofiDB;
+    collection = "storeUsers";
   }else{
+    const shoofiDB = req.app.db['shoofi'];
     customer = await shoofiDB.customers.findOne({ phone: customerObj.phone });
     customerDB = shoofiDB;
+    collection = "customers";
   }
   if (customer === undefined || customer === null) {
     res.status(400).json({
@@ -89,7 +98,7 @@ router.post("/api/customer/validateAuthCode", async (req, res) => {
 
     try {
       authService.toAuthJSON(customerNewUpdate, req).then(async (result) => {
-        const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+          const updatedCustomer = await customerDB[collection].findOneAndUpdate(
           { _id: getId(customer._id) },
           {
             $set: result,
@@ -120,6 +129,7 @@ router.post("/api/customer/create", async (req, res) => {
   const db = req.app.db[appName];
   const shoofiDB = req.app.db['shoofi'];
   const deliveryDB = req.app.db['delivery-company'];
+  const appType = req.headers["app-type"];
   const random4DigitsCode = Math.floor(1000 + Math.random() * 9000);
   const customerObj = {
     phone: sanitize(req.body.phone),
@@ -137,18 +147,26 @@ router.post("/api/customer/create", async (req, res) => {
   let customer = null;
   let customerDB = null;
   let findByKey= null;
-  if(req.body.phone.startsWith("11")){
+  let collection = null;
+  if(appType === 'shoofi-shoofir'){
     customer = await deliveryDB.customers.findOne({ userName: req.body.phone });
     customerDB = deliveryDB;
     findByKey = "userName";
+    collection = "customers";
+  }else if(appType === 'shoofi-partner'){
+    customer = await shoofiDB.storeUsers.findOne({ phone: req.body.phone });
+    customerDB = shoofiDB;
+    findByKey = "phone";
+    collection = "storeUsers";
   }else{
     customer = await shoofiDB.customers.findOne({ phone: req.body.phone });
     customerDB = shoofiDB;
     findByKey = "phone";
+    collection = "customers";
   }
 
   if (customer) {
-    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      const updatedCustomer = await customerDB[collection].findOneAndUpdate(
       { [findByKey]: req.body.phone },
       {
         $set: { ...customer, authCode: random4DigitsCode, token: null },
@@ -178,7 +196,7 @@ router.post("/api/customer/create", async (req, res) => {
   }
 
   try {
-    await customerDB.customers.insertOne(customerObj);
+    await customerDB[collection].insertOne(customerObj);
     if (
       // customerObj.phone !== "0542454362" &&
       customerObj.phone !== "0528602121" &&
@@ -434,15 +452,24 @@ router.get("/api/customer/details", auth.required, async (req, res) => {
   const db = req.app.db[appName];
   const deliveryDB = req.app.db['delivery-company'];
   const shoofiDB = req.app.db['shoofi'];
+  const appType = req.headers["app-type"];
   let customer = null;
   let customerDB = null;
 
 
   try {
-    const driverCustomer = await deliveryDB.customers.findOne({ _id: getId(customerId), });  
-    if(driverCustomer){
-      customer = driverCustomer;
-      customerDB = deliveryDB;
+    if(appType === 'shoofi-shoofir'){
+      const driverCustomer = await deliveryDB.customers.findOne({ _id: getId(customerId), });  
+      if(driverCustomer){
+        customer = driverCustomer;
+        customerDB = deliveryDB;
+      }else{
+        customer = await shoofiDB.customers.findOne({ _id: getId(customerId), });
+        customerDB = shoofiDB;
+      }
+    }else if(appType === 'shoofi-partner'){
+      customer = await shoofiDB.storeUsers.findOne({ _id: getId(customerId), });
+      customerDB = shoofiDB;
     }else{
       customer = await shoofiDB.customers.findOne({ _id: getId(customerId), });
       customerDB = shoofiDB;
@@ -481,13 +508,24 @@ router.post("/api/customer/update-name", auth.required, async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
   const customerDB = getCustomerAppName(req, appName);
+  const appType = req.headers["app-type"];
+  let collection = null;
   const customerObj = {
     fullName: req.body.fullName,
   };
 
-  const customer = await customerDB.customers.findOne({
-    _id: getId(customerId),
-  });
+  if(appType === 'shoofi-shoofir'){
+    customer = await customerDB.customers.findOne({
+      _id: getId(customerId),
+    });
+    collection = "customers";
+  }else if(appType === 'shoofi-partner'){
+    customer = await customerDB.storeUsers.findOne({ _id: getId(customerId), });
+    collection = "storeUsers";
+  }else{
+    customer = await customerDB.customers.findOne({ _id: getId(customerId), });
+    collection = "customers";
+  }
   if (!customer) {
     res.status(400).json({
       message: "Customer not found",
@@ -495,7 +533,7 @@ router.post("/api/customer/update-name", auth.required, async (req, res) => {
     return;
   }
   try {
-    const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+    const updatedCustomer = await customerDB[collection].findOneAndUpdate(
       { _id: getId(customerId) },
       {
         $set: { ...customer, fullName: req.body.fullName },
