@@ -186,7 +186,7 @@ const isDeliveryCompanyOpen = async (req) => {
  */
 function isStoreOpenNow(openHours) {
   if (!openHours) return false;
-  const now = new Date();
+  const now = moment().utcOffset(offsetHours);
   const days = [
     "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
   ];
@@ -197,7 +197,7 @@ function isStoreOpenNow(openHours) {
   // Helper to parse time
   function parseTime(str, baseDate) {
     const [h, m] = str.split(":").map(Number);
-    const d = new Date(baseDate);
+    const d = moment(baseDate).utcOffset(offsetHours);
     d.setHours(h, m, 0, 0);
     return d;
   }
@@ -230,7 +230,7 @@ function isStoreOpenNow(openHours) {
       yEnd.setDate(yEnd.getDate() + 1);
       if (now <= yEnd) {
         // Only if now is after midnight and before yEnd
-        const midnight = new Date(now);
+        const midnight = moment(now).utcOffset(offsetHours);
         midnight.setHours(0, 0, 0, 0);
         if (now >= midnight && now <= yEnd) return true;
       }
