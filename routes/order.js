@@ -851,7 +851,7 @@ router.post(
                     { _id: orderId },
                     {
                       $set: {
-                        status: "1",
+                        status: "6",
                         ccPaymentRefData: paymentResult.paymentData,
                         isShippingPaid: orderDoc.order.receipt_method === "DELIVERY",
                       },

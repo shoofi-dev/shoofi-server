@@ -472,8 +472,7 @@ router.post(
     try {
       await db.products.updateMany(
         {
-          categoryId: req.body.categoryId?.toString(),
-          subCategoryId: req.body.subCategoryId?.toString(),
+          supportedCategoryIds: { $in: [req.body.categoryId?.toString()] },
         },
         { $set: { isInStore: req.body.isInStore } }
       );

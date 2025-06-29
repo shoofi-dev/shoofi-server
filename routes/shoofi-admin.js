@@ -184,6 +184,34 @@ router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
   }
 });
 
+router.get("/api/shoofiAdmin/store/all-stores", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const search = req.query.search;
+    
+    // Build search query
+    let searchQuery = {};
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      searchQuery = {
+        $or: [
+          { name_ar: searchRegex },
+          { name_he: searchRegex },
+          { appName: searchRegex },
+          { descriptionAR: searchRegex },
+          { descriptionHE: searchRegex }
+        ]
+      };
+    }
+    
+    const stores = await dbAdmin.stores.find(searchQuery).toArray();
+    
+    res.status(200).json(stores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch stores', error: err.message });
+  }
+});
+
 router.post(
   "/api/shoofiAdmin/category/add",
   upload.array("img"),
