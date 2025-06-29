@@ -797,112 +797,6 @@ router.post(
       const newDoc = await db.orders.insertOne(orderDoc);
       const orderId = newDoc.insertedId;
 
-      // Handle credit card payment server-side
-      if (isCreditCardPay && parsedBodey.paymentData) {
-        try {
-          const paymentResult = await processCreditCardPayment(
-            parsedBodey.paymentData,
-            orderDoc,
-            req
-          );
-
-          if (paymentResult.success) {
-            // Update order with successful payment
-            await db.orders.updateOne(
-              { _id: orderId },
-              {
-                $set: {
-                  status: "1",
-                  ccPaymentRefData: paymentResult.paymentData,
-                  isShippingPaid: orderDoc.order.receipt_method === "DELIVERY",
-                },
-              }
-            );
-
-            // Send notifications for successful payment
-            await sendOrderNotifications(orderDoc, req, appName);
-            
-            // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
-            try {
-              const docId = paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse?.DocumentID;
-              if (docId) {
-                try {
-                  await invoiceMailService.saveInvoice(docId, req);
-                  
-                  // Only attempt URL shortening if invoice save was successful
-                  try {
-                    const shortenedUrl = await turl.shorten(
-                      `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
-                    );
-                    
-                    // Update order with shortened URL - non-critical update
-                    try {
-                      await db.orders.updateOne(
-                        { _id: getId(orderId) },
-                        {
-                          $set: {
-                            "ccPaymentRefData.url": shortenedUrl
-                          },
-                        },
-                        { multi: false }
-                      );
-                    } catch (urlUpdateError) {
-                      console.error("Failed to update order with invoice URL:", urlUpdateError);
-                    }
-                  } catch (urlError) {
-                    console.error("Failed to shorten invoice URL:", urlError);
-                  }
-                } catch (saveError) {
-                  console.error("Failed to save invoice:", saveError);
-                }
-              } else {
-                console.error("No document ID in invoice response:", paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse);
-              }
-            } catch (invoiceError) {
-              console.error("Invoice processing error:", invoiceError);
-            }
-
-            res.status(200).json({
-              message: "Order created and payment processed successfully",
-              orderId,
-              paymentStatus: "success",
-            });
-            return;
-          } else {
-            // Payment failed - keep order in pending status
-            res.status(200).json({
-              message: "Order created but payment failed",
-              orderId,
-              paymentStatus: "failed",
-              paymentError: paymentResult.error,
-            });
-            return;
-          }
-        } catch (paymentError) {
-          console.error("Payment processing error:", paymentError);
-          // Keep order in pending status if payment processing fails
-          res.status(200).json({
-            message: "Order created but payment processing failed",
-            orderId,
-            paymentStatus: "error",
-            paymentError: paymentError.message,
-          });
-          return;
-        }
-      }
-
-      // For non-credit card payments or if no payment data
-      if (
-        req.headers["app-name"] === "buffalo" ||
-        req.headers["app-name"] === "world-of-swimming"
-      ) {
-        res.status(200).json({
-          message: "Order created successfully",
-          orderId,
-        });
-        return;
-      }
-
       const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
         _id: getId(customerId),
@@ -942,6 +836,99 @@ router.post(
       if (!isCreditCardPay) {
         await sendOrderNotifications(orderDoc, req, appName);
       }
+            // Handle credit card payment server-side
+            if (isCreditCardPay && parsedBodey.paymentData) {
+              try {
+                const paymentResult = await processCreditCardPayment(
+                  parsedBodey.paymentData,
+                  orderDoc,
+                  req
+                );
+      
+                if (paymentResult.success) {
+                  // Update order with successful payment
+                  await db.orders.updateOne(
+                    { _id: orderId },
+                    {
+                      $set: {
+                        status: "1",
+                        ccPaymentRefData: paymentResult.paymentData,
+                        isShippingPaid: orderDoc.order.receipt_method === "DELIVERY",
+                      },
+                    }
+                  );
+      
+                  // Send notifications for successful payment
+                  await sendOrderNotifications(orderDoc, req, appName);
+                  
+                  // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
+                  try {
+                    const docId = paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse?.DocumentID;
+                    if (docId) {
+                      try {
+                        await invoiceMailService.saveInvoice(docId, req);
+                        
+                        // Only attempt URL shortening if invoice save was successful
+                        try {
+                          const shortenedUrl = await turl.shorten(
+                            `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                          );
+                          
+                          // Update order with shortened URL - non-critical update
+                          try {
+                            await db.orders.updateOne(
+                              { _id: getId(orderId) },
+                              {
+                                $set: {
+                                  "ccPaymentRefData.url": shortenedUrl
+                                },
+                              },
+                              { multi: false }
+                            );
+                          } catch (urlUpdateError) {
+                            console.error("Failed to update order with invoice URL:", urlUpdateError);
+                          }
+                        } catch (urlError) {
+                          console.error("Failed to shorten invoice URL:", urlError);
+                        }
+                      } catch (saveError) {
+                        console.error("Failed to save invoice:", saveError);
+                      }
+                    } else {
+                      console.error("No document ID in invoice response:", paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse);
+                    }
+                  } catch (invoiceError) {
+                    console.error("Invoice processing error:", invoiceError);
+                  }
+      
+                  res.status(200).json({
+                    message: "Order created and payment processed successfully",
+                    orderId,
+                    paymentStatus: "success",
+                  });
+                  return;
+                } else {
+                  // Payment failed - keep order in pending status
+                  res.status(200).json({
+                    message: "Order created but payment failed",
+                    orderId,
+                    paymentStatus: "failed",
+                    paymentError: paymentResult.error,
+                  });
+                  return;
+                }
+              } catch (paymentError) {
+                console.error("Payment processing error:", paymentError);
+                // Keep order in pending status if payment processing fails
+                res.status(200).json({
+                  message: "Order created but payment processing failed",
+                  orderId,
+                  paymentStatus: "error",
+                  paymentError: paymentError.message,
+                });
+                return;
+              }
+            }
 
       res.status(200).json({
         message: "Order created successfully",
