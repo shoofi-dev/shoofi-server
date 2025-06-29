@@ -279,6 +279,7 @@ router.post(
     if (req.body.oderDirecton != undefined) {
       oderDirecton = req.body.oderDirecton;
     }
+    console.log("=========filterBy=========", filterBy)
     // Get our paginated data
     const orders = await paginateData(true, req, pageNum, "orders", filterBy, {
       orderDate: oderDirecton,
