@@ -172,6 +172,90 @@ const getUTCOffset = () => {
   return israelOffsetMinutes;
 };
 
+// Helper function to get business day boundaries considering overnight hours
+const getBusinessDayBoundaries = async (targetDate, req, appName) => {
+  try {
+    const offsetHours = getUTCOffset();
+    const db = req.app.db[appName];
+    
+    // Get store data to check opening hours
+    const store = await db.store.findOne({ id: 1 });
+    const openHours = store?.openHours;
+    
+    if (!openHours) {
+      // Fallback to simple day boundaries if no openHours configured
+      const start = moment(targetDate).utcOffset(offsetHours);
+      start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+      const end = moment(targetDate).utcOffset(offsetHours);
+      end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+      
+      return { start, end };
+    }
+
+    const days = [
+      "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+    ];
+    
+    // Get the day of week for the target date
+    const targetDay = moment(targetDate).utcOffset(offsetHours);
+    const dayIdx = targetDay.day();
+    const dayName = days[dayIdx];
+    
+    // Get the previous day
+    const prevDayIdx = (dayIdx + 6) % 7;
+    const prevDayName = days[prevDayIdx];
+    
+    const todayHours = openHours[dayName];
+    const yesterdayHours = openHours[prevDayName];
+    
+    // Helper to parse time
+    function parseTime(str, baseDate) {
+      const [h, m] = str.split(":").map(Number);
+      const d = moment(baseDate).utcOffset(offsetHours);
+      d.hours(h).minutes(m).seconds(0).milliseconds(0);
+      return d;
+    }
+    
+    let businessStart, businessEnd;
+    
+    // Check if today has overnight hours (end < start)
+    if (todayHours && todayHours.isOpen && todayHours.end < todayHours.start) {
+      // Today has overnight hours, so business day starts from yesterday's start time
+      businessStart = parseTime(todayHours.start, targetDay.clone().subtract(1, 'day'));
+      businessEnd = parseTime(todayHours.end, targetDay);
+    } else if (yesterdayHours && yesterdayHours.isOpen && yesterdayHours.end < yesterdayHours.start) {
+      // Yesterday had overnight hours that extend into today
+      businessStart = parseTime(yesterdayHours.start, targetDay.clone().subtract(1, 'day'));
+      businessEnd = parseTime(yesterdayHours.end, targetDay);
+    } else if (todayHours && todayHours.isOpen) {
+      // Normal same-day hours
+      businessStart = parseTime(todayHours.start, targetDay);
+      businessEnd = parseTime(todayHours.end, targetDay);
+    } else {
+      // Store is closed today, use simple day boundaries
+      businessStart = moment(targetDate).utcOffset(offsetHours);
+      businessStart.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+      businessEnd = moment(targetDate).utcOffset(offsetHours);
+      businessEnd.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+    }
+    
+    return { start: businessStart, end: businessEnd };
+  } catch (error) {
+    console.error('Error in getBusinessDayBoundaries:', error);
+    // Fallback to simple day boundaries on error
+    const offsetHours = getUTCOffset();
+    const start = moment(targetDate).utcOffset(offsetHours);
+    start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+    const end = moment(targetDate).utcOffset(offsetHours);
+    end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+    
+    return { start, end };
+  }
+};
+
 // Show orders
 router.post(
   "/api/order/admin/orders/:page?",
@@ -200,11 +284,9 @@ router.post(
     const offsetHours = getUTCOffset();
     let statusCount = [];
     if (ordersDate) {
-      var start = moment(ordersDate).utcOffset(offsetHours);
-      start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
-
-      var end = moment(ordersDate).utcOffset(offsetHours);
-      end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+      // Use business day boundaries that handle overnight hours
+      const { start, end } = await getBusinessDayBoundaries(ordersDate, req, appName);
+      
       // filterBy["$or"] = [
       //   { orderDate: { $gte: start.format(), $lt: end.format() } },
       //   { datetime: { $gte: start.format(), $lt: end.format() } },
