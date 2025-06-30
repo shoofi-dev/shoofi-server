@@ -134,7 +134,7 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
     const { orderId, driverId } = req.body;
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
-      { $set: { status: "0", completedAt: new Date() } }
+      { $set: { status: "4", completedAt: new Date() } }
     );
     res.status(200).json({ message: "Order completed" });
   } catch (ex) {
@@ -1273,7 +1273,7 @@ router.post("/api/delivery/driver/notifications", async (req, res) => {
     const { driverId, limit = 20, offset = 0 } = req.body;
     
     const notifications = await db.notifications
-      .find({ recipientId: ObjectId(driverId) })
+      .find({ recipientId: ObjectId(driverId), isRead: false })
       .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit)
@@ -1418,8 +1418,8 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
       { $set: { driver: { _id: driver._id, name: driver.name, phone: driver.phone }, status: '2' } }
     );
     
-    const title = "New Order Assigned";
-    const message = `You have been assigned a new order: ${order.orderId}`;
+    const title = "تم تعيين طلب جديد";
+    const message = `لقد تم تعيينك للطلب: ${order.orderId}`;
     await createNotification(db, newDriverId, title, message, 'order', { orderId: order._id, bookId: order.bookId });
     
     res.status(200).json({ message: "Order reassigned successfully" });

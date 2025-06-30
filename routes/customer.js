@@ -59,7 +59,7 @@ router.post("/api/customer/validateAuthCode", async (req, res) => {
   let collection = null;
   if(appType === 'shoofi-shoofir'){
     const deliveryDB = req.app.db['delivery-company'];
-    customer = await deliveryDB.customers.findOne({ userName: customerObj.phone });
+    customer = await deliveryDB.customers.findOne({ phone: customerObj.phone });
     customerDB = deliveryDB;
     collection = "customers";
   }else if(appType === 'shoofi-partner'){
@@ -150,9 +150,9 @@ router.post("/api/customer/create", async (req, res) => {
   let findByKey= null;
   let collection = null;
   if(appType === 'shoofi-shoofir'){
-    customer = await deliveryDB.customers.findOne({ userName: req.body.phone });
+    customer = await deliveryDB.customers.findOne({ phone: req.body.phone });
     customerDB = deliveryDB;
-    findByKey = "userName";
+    findByKey = "phone";
     collection = "customers";
   }else if(appType === 'shoofi-partner'){
     customer = await shoofiDB.storeUsers.findOne({ phone: req.body.phone });

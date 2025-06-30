@@ -1281,6 +1281,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           storeLocation: storeData.location,
           coverageRadius: storeData.coverageRadius,
           customerLocation: order?.order?.geo_positioning,
+          order
         };
 
         deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });

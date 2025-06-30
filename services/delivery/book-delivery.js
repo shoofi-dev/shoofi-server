@@ -92,9 +92,9 @@ async function bookDelivery({ deliveryData, appDb }) {
       await createNotification(
         db,
         result.driver._id,
-        'New Order Assigned',
-        `You have been assigned a new order #${insertedOrder.bookId}`,
-        'order',
+        'تم تعيين طلب جديد',
+        `لقد تم تعيينك للطلب: #${insertedOrder.bookId}`,  
+        'order',  
         { 
           orderId: insertedOrder._id, 
           bookId: insertedOrder.bookId, 
@@ -167,17 +167,17 @@ async function updateDelivery({ deliveryData, appDb }) {
       
       switch(updateData.status) {
         case '2':
-          notificationTitle = 'Order Assigned';
-          notificationMessage = `You have been assigned a new order #${order.bookId || order._id}`;
+          notificationTitle = 'تم تعيين طلب جديد';
+          notificationMessage = `لقد تم تعيينك للطلب: #${order.bookId || order._id}`;
           break;
         case '0':
-          notificationTitle = 'Order Delivered';
-          notificationMessage = `Order #${order.bookId || order._id} has been successfully delivered`;
+          notificationTitle = 'تم تسليم الطلب';
+          notificationMessage = `تم تسليم الطلب: #${order.bookId || order._id}`;
           notificationType = 'payment';
           break;
         case '-1':
-          notificationTitle = 'Order Cancelled';
-          notificationMessage = `Order #${order.bookId || order._id} has been cancelled`;
+          notificationTitle = 'تم إلغاء الطلب';
+          notificationMessage = `تم إلغاء الطلب: #${order.bookId || order._id}`;
           notificationType = 'alert';
           break;
       }
