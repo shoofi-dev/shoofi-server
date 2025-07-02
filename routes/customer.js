@@ -85,6 +85,8 @@ router.post("/api/customer/validateAuthCode", async (req, res) => {
     // (customerObj.phone === "0542454362" && customerObj.authCode === "1234") ||
     (customerObj.phone === "0528602121" && customerObj.authCode === "1234") ||
     (customerObj.phone === "0586000060" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "0532206314" && customerObj.authCode === "1234") ||
+    (customerObj.phone === "0544280085" && customerObj.authCode === "1234") ||
     (customerObj.phone === "1234567891" && customerObj.authCode === "1234") ||
     (customerObj.phone === "1234567892" && customerObj.authCode === "1234") ||
     (customerObj.phone === "1234567893" && customerObj.authCode === "1234") ||
@@ -178,6 +180,8 @@ router.post("/api/customer/create", async (req, res) => {
       // customer.phone !== "0542454362" &&
       customer.phone !== "0528602121" &&
       customer.phone !== "0586000060" &&
+      customer.phone !== "0532206314" &&
+      customer.phone !== "0544280085" &&
       customer.phone !== "1234567891" &&
       customer.phone !== "1234567892" &&
       customer.phone !== "1234567893" &&
@@ -203,6 +207,8 @@ router.post("/api/customer/create", async (req, res) => {
       // customerObj.phone !== "0542454362" &&
       customerObj.phone !== "0528602121" &&
       customerObj.phone !== "0586000060" &&
+      customerObj.phone !== "0532206314" &&
+      customerObj.phone !== "0544280085" &&
       customerObj.phone !== "1234567891" &&
       customerObj.phone !== "1234567892" &&
       customerObj.phone !== "1234567893" &&
