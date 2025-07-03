@@ -218,9 +218,11 @@ const getBusinessDayBoundaries = async (targetDate, req, appName) => {
     }
     
     let businessStart, businessEnd;
+    const currentHour = moment().utcOffset(offsetHours).hour();
+    const midnight = 0;
     
     // Check if today has overnight hours (end < start)
-    if (todayHours && todayHours.isOpen && todayHours.end < todayHours.start) {
+    if (todayHours && todayHours.isOpen && todayHours.end < todayHours.start && currentHour > midnight) {
       // Today has overnight hours, so business day starts from yesterday's start time
       businessStart = parseTime(todayHours.start, targetDay.clone().subtract(1, 'day'));
       businessEnd = parseTime(todayHours.end, targetDay);
