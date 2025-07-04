@@ -46,6 +46,7 @@ async function findAllMatchingDrivers({ appDb, location }) {
 }
 
 async function assignBestDeliveryDriver({ appDb, location }) {
+  try {
   const allDrivers = await findAllMatchingDrivers({ appDb, location });
   
   if (!allDrivers.length) {
@@ -66,8 +67,12 @@ async function assignBestDeliveryDriver({ appDb, location }) {
     driver: best,
     company: best.company,
     area,
-    activeOrderCount: best.activeOrderCount
-  };
+      activeOrderCount: best.activeOrderCount
+    };
+  } catch (error) {
+    console.error('Error assigning best delivery driver:', error);
+    return { success: false, reason: "Error assigning best delivery driver." };
+  }
 }
 
 module.exports = { assignBestDeliveryDriver, findAllMatchingDrivers }; 

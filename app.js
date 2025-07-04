@@ -7,7 +7,7 @@ require('dotenv').config({ path: `.env.${process.env.NODE_ENV}` })
 console.log("process.env",process.env.DB_CONNECTION_STRING)
 const path = require("path");
 const express = require("express");
-const logger = require("morgan");
+// const logger = require("morgan");
 const cookieParser = require("cookie-parser");
 const session = require("express-session");
 const moment = require("moment");
@@ -18,10 +18,12 @@ const helmet = require("helmet");
 const colors = require("colors");
 const cron = require("node-cron");
 const crypto = require("crypto");
-const websockets = require("./utils/websockets");
+const websocketService = require("./services/websocket/websocket-service");
+const notificationService = require("./services/notification/notification-service");
 const smsService = require("./utils/sms");
-// const pushNotificationWebService = require("./utils/push-notification/push-web");
 const cronOrdersService = require("./utils/crons/orders");
+const persistentAlertsCron = require("./utils/crons/persistent-alerts-cron");
+const logger = require("./utils/logger");
 
 const {
   getConfig,
@@ -70,7 +72,7 @@ const user = require("./routes/user");
 const transactions = require("./routes/transactions");
 const reviews = require("./routes/reviews");
 const delivery = require("./routes/delivery");
-const pushNotificationWeb = require("./routes/push-notification-web");
+const notifications = require("./routes/notifications");
 const globalSearchRoutes = require('./routes/global-search');
 const couponRoutes = require('./routes/coupon');
 const creditCardRoutes = require('./routes/creditCard');
@@ -86,7 +88,7 @@ const app = express();
 app.enable("trust proxy");
 app.use(helmet());
 app.set("port", process.env.PORT || 1111);
-app.use(logger("dev"));
+// app.use(logger("dev"));
 app.use(express.urlencoded({ extended: false }));
 app.use(cors());
 // app.use(
@@ -131,7 +133,7 @@ app.use("/", admin);
 app.use("/", transactions);
 app.use("/", reviews);
 app.use("/", delivery);
-app.use("/", pushNotificationWeb);
+app.use("/api/notifications", notifications);
 app.use("/", analytics);
 app.use("/", globalSearchRoutes);
 app.use("/", couponRoutes);
@@ -232,6 +234,14 @@ cron.schedule("0 0 * * *", function () {
 
 });
 
+// Start persistent alerts cron jobs
+console.log(colors.blue("Starting persistent alerts cron jobs..."));
+persistentAlertsCron.startPersistentAlertsCron(app.db);
+persistentAlertsCron.startCleanupCron(app.db);
+console.log(colors.green("Persistent alerts cron jobs started successfully"));
+
+
+
 // cron.schedule('*/1 * * * *', function () {
 //   cronOrdersService.updateExpiredOrders(app.db)
 // });
@@ -295,9 +305,13 @@ cron.schedule("0 0 * * *", function () {
   try {
     const server = await app.listen(app.get("port"));
     console.log("APPJS")
-    websockets.initWebSockets(server);
+    
+    // Initialize WebSocket service
+    websocketService.init(server);
+    
+    // Initialize notification service
+    logger.info('Notification system initialized');
 
- 
     app.emit("appStarted");
     if (process.env.NODE_ENV !== "test") {
       console.log(

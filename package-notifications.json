@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "winston": "^3.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "expo-server-sdk": "^3.7.0",
+    "firebase-admin": "^11.11.0"
+  }
+} 

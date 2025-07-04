@@ -1,30 +1,9 @@
 const moment = require("moment");
 const utcTimeService = require("../../utils/utc-time");
-const pushNotificationWebService = require("../../utils/push-notification/push-web");
 const { getId } = require("../../lib/common");
 const APP_CONSTS = require("../../consts/consts");
 const { assignBestDeliveryDriver } = require("./assignDriver");
-
-// Helper function to create notifications in database
-const createNotification = async (db, recipientId, title, message, type = 'system', data = {}) => {
-  try {
-    const notification = {
-      recipientId: getId(recipientId),
-      title,
-      message,
-      type,
-      isRead: false,
-      createdAt: moment().utcOffset(utcTimeService.getUTCOffset()).format(),
-      data,
-    };
-    
-    await db.notifications.insertOne(notification);
-    return notification;
-  } catch (error) {
-    console.error('Error creating notification:', error);
-    throw error;
-  }
-};
+const notificationService = require("../notification/notification-service");
 
 async function bookDelivery({ deliveryData, appDb }) {
   try {
@@ -39,8 +18,8 @@ async function bookDelivery({ deliveryData, appDb }) {
     const result = await assignBestDeliveryDriver({ 
       appDb: appDb, 
       location: { 
-        lat: deliveryData.customerLocation.latitude, 
-        lng: deliveryData.customerLocation.longitude 
+        lat: deliveryData?.customerLocation?.latitude, 
+        lng: deliveryData?.customerLocation?.longitude 
       } 
     });
     
@@ -82,26 +61,38 @@ async function bookDelivery({ deliveryData, appDb }) {
       const bookDeliveryResult = await db.bookDelivery.insertOne(bookingData);
       const insertedOrder = { ...bookingData, _id: bookDeliveryResult.insertedId };
 
-      // Send push notification to driver
-      pushNotificationWebService.sendNotificationToDevice(
-        result.driver.notificationToken, 
-        { storeName: deliveryData?.storeName }  
-      );
-
-      // Create database notification for driver
-      await createNotification(
-        db,
-        result.driver._id,
-        'تم تعيين طلب جديد',
-        `لقد تم تعيينك للطلب: #${insertedOrder.bookId}`,  
-        'order',  
-        { 
-          orderId: insertedOrder._id, 
-          bookId: insertedOrder.bookId, 
-          customerName: deliveryData.fullName,
-          customerPhone: deliveryData.phone 
-        }
-      );
+      // Send notification to driver using new notification service
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: appDb
+          },
+          headers: {
+            'app-type': 'shoofi-shoofir'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: result.driver._id,
+          title: 'تم تعيين طلب جديد',
+          body: `لقد تم تعيينك للطلب: #${insertedOrder.bookId}`,
+          type: 'order',
+          appName: 'delivery-company',
+          appType: 'shoofi-shoofir',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: insertedOrder._id, 
+            bookId: insertedOrder.bookId, 
+            customerName: deliveryData.fullName,
+            customerPhone: deliveryData.phone 
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send notification to driver:", notificationError);
+        // Don't fail the delivery creation if notification fails
+      }
 
       return {
         success: true,
@@ -146,51 +137,62 @@ async function updateDelivery({ deliveryData, appDb }) {
     { multi: false }
   );
 
-  // Create notifications for driver
+  // Send notifications for driver using new notification service
   if (isPushEmploye && order?.driver?._id) {
     const employe = await db.customers.findOne({
       _id: getId(order.driver._id),
     });
     
     if (employe) {
-      // Send push notification
-      pushNotificationWebService.sendNotificationToDevice(
-        employe?.notificationToken,
-        { storeName: order?.storeName },
-        updateData.status
-      );
-      
-      // Create database notification
+      // Determine notification content based on status
       let notificationTitle = '';
-      let notificationMessage = '';
+      let notificationBody = '';
       let notificationType = 'order';
       
       switch(updateData.status) {
         case '2':
           notificationTitle = 'تم تعيين طلب جديد';
-          notificationMessage = `لقد تم تعيينك للطلب: #${order.bookId || order._id}`;
+          notificationBody = `لقد تم تعيينك للطلب: #${order.bookId || order._id}`;
           break;
         case '0':
           notificationTitle = 'تم تسليم الطلب';
-          notificationMessage = `تم تسليم الطلب: #${order.bookId || order._id}`;
+          notificationBody = `تم تسليم الطلب: #${order.bookId || order._id}`;
           notificationType = 'payment';
           break;
         case '-1':
           notificationTitle = 'تم إلغاء الطلب';
-          notificationMessage = `تم إلغاء الطلب: #${order.bookId || order._id}`;
+          notificationBody = `تم إلغاء الطلب: #${order.bookId || order._id}`;
           notificationType = 'alert';
           break;
       }
       
-      if (notificationTitle && notificationMessage) {
-        await createNotification(
-          db, 
-          order.driver._id, 
-          notificationTitle, 
-          notificationMessage, 
-          notificationType,
-          { orderId: order._id, bookId: order.bookId, status: updateData.status }
-        );
+      if (notificationTitle && notificationBody) {
+        try {
+          // Create a mock request object for the notification service
+          const mockReq = {
+            app: {
+              db: appDb
+            },
+            headers: {
+              'app-type': 'shoofi-shoofir'
+            }
+          };
+          
+          await notificationService.sendNotification({
+            recipientId: order.driver._id,
+            title: notificationTitle,
+            body: notificationBody,
+            type: notificationType,
+            appName: 'delivery-company',
+            appType: 'shoofi-shoofir',
+            channels: { websocket: true, push: true, email: false, sms: false },
+            data: { orderId: order._id, bookId: order.bookId, status: updateData.status },
+            req: mockReq
+          });
+        } catch (notificationError) {
+          console.error("Failed to send notification to driver:", notificationError);
+          // Don't fail the delivery update if notification fails
+        }
       }
     }
   }

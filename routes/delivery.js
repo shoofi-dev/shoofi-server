@@ -10,6 +10,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const { ObjectId } = require("mongodb");
 const deliveryService = require("../services/delivery/book-delivery");
 const { findAllMatchingDrivers } = require("../services/delivery/assignDriver");
+const notificationService = require("../services/notification/notification-service");
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -27,26 +28,7 @@ const getUTCOffset = () => {
   return israelOffsetMinutes;
 };
 
-// Helper function to create notifications in database
-const createNotification = async (db, recipientId, title, message, type = 'system', data = {}) => {
-  try {
-    const notification = {
-      recipientId: getId(recipientId),
-      title,
-      message,
-      type,
-      isRead: false,
-      createdAt: moment().utcOffset(getUTCOffset()).format(),
-      data,
-    };
-    
-    await db.notifications.insertOne(notification);
-    return notification;
-  } catch (error) {
-    console.error('Error creating notification:', error);
-    throw error;
-  }
-};
+
 
 router.post("/api/delivery/book", async (req, res) => {
   const appName = req.headers['app-name'];
@@ -81,10 +63,51 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
+    
+    // Update delivery status to approved
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
       { $set: { status: "2", approvedAt: new Date() } }
     );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery approval
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم تأكيد التوصيل",
+          body: `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`,
+          type: 'delivery_approved',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "2",
+            driverName: deliveryOrder.driver?.name || 'السائق'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for delivery approval:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
     res.status(200).json({ message: "Order approved" });
   } catch (ex) {
     console.info("Error approving order", ex);
@@ -98,10 +121,52 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
   const db = req.app.db[appName];
   try {
     const { orderId, driverId, reason } = req.body;
+    
+    // Update delivery status to cancelled by driver
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
       { $set: { status: "-1", cancelledAt: new Date(), cancelReason: reason || null } }
     );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery cancellation
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم إلغاء التوصيل",
+          body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`,
+          type: 'delivery_cancelled_driver',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "-1",
+            cancelReason: reason,
+            driverName: deliveryOrder.driver?.name || 'السائق'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for delivery cancellation:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
     res.status(200).json({ message: "Order cancelled" });
   } catch (ex) {
     console.info("Error cancelling order", ex);
@@ -109,16 +174,57 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
   }
 });
 
-// Start order
+// Start order (collected from restaurant)
 router.post("/api/delivery/driver/order/start", async (req, res) => {
   const appName = 'delivery-company';
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
+    
+    // Update delivery status to collected from restaurant
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
       { $set: { status: "3", startedAt: new Date() } }
     );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery start
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم استلام طلبك",
+          body: `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`,
+          type: 'delivery_collected',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "3",
+            driverName: deliveryOrder.driver?.name || 'السائق'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for delivery start:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
     res.status(200).json({ message: "Order started" });
   } catch (ex) {
     console.info("Error starting order", ex);
@@ -126,16 +232,57 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
   }
 });
 
-// Complete order
+// Complete order (delivered)
 router.post("/api/delivery/driver/order/complete", async (req, res) => {
   const appName = 'delivery-company';
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
+    
+    // Update delivery status to delivered
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
       { $set: { status: "4", completedAt: new Date() } }
     );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery completion
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم تسليم طلبك",
+          body: `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`,
+          type: 'delivery_completed',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "4",
+            driverName: deliveryOrder.driver?.name || 'السائق'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for delivery completion:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
     res.status(200).json({ message: "Order completed" });
   } catch (ex) {
     console.info("Error completing order", ex);
@@ -1267,25 +1414,13 @@ router.post("/api/delivery/driver/availability", async (req, res) => {
 
 // Get delivery driver notifications
 router.post("/api/delivery/driver/notifications", async (req, res) => {
-  const appName = 'delivery-company';
-  const db = req.app.db[appName];
   try {
     const { driverId, limit = 20, offset = 0 } = req.body;
     
-    const notifications = await db.notifications
-      .find({ recipientId: ObjectId(driverId), isRead: false })
-      .sort({ createdAt: -1 })
-      .skip(offset)
-      .limit(limit)
-      .toArray();
+    const options = { limit, offset, unreadOnly: true };
+    const result = await notificationService.getUserNotifications(driverId, 'delivery-company', req, options);
     
-    const totalCount = await db.notifications.countDocuments({ recipientId: ObjectId(driverId) });
-    
-    res.status(200).json({
-      notifications,
-      totalCount,
-      hasMore: offset + limit < totalCount
-    });
+    res.status(200).json(result);
   } catch (ex) {
     console.info("Error getting driver notifications", ex);
     return res.status(400).json({ message: "Error getting driver notifications" });
@@ -1294,15 +1429,10 @@ router.post("/api/delivery/driver/notifications", async (req, res) => {
 
 // Mark notification as read
 router.post("/api/delivery/driver/notifications/read", async (req, res) => {
-  const appName = 'delivery-company';
-  const db = req.app.db[appName];
   try {
     const { notificationId } = req.body;
     
-    await db.notifications.updateOne(
-      { _id: getId(notificationId) },
-      { $set: { isRead: true, readAt: moment().utcOffset(getUTCOffset()).format() } }
-    );
+    await notificationService.markAsRead(notificationId, 'delivery-company', req, 'shoofi-shoofir');
     
     res.status(200).json({ message: "Notification marked as read" });
   } catch (ex) {
@@ -1313,16 +1443,24 @@ router.post("/api/delivery/driver/notifications/read", async (req, res) => {
 
 // Create notification manually (for testing/admin purposes)
 router.post("/api/delivery/notifications/create", async (req, res) => {
-  const appName = req.headers['app-name'];
-  const db = req.app.db[appName];
   try {
-    const { recipientId, title, message, type = 'system', data = {} } = req.body;
+    const { recipientId, title, body, type = 'system', data = {}, channels = { websocket: true, push: true, email: false, sms: false } } = req.body;
     
-    if (!recipientId || !title || !message) {
-      return res.status(400).json({ message: "recipientId, title, and message are required" });
+    if (!recipientId || !title || !body) {
+      return res.status(400).json({ message: "recipientId, title, and body are required" });
     }
     
-    const notification = await createNotification(db, recipientId, title, message, type, data);
+    const notification = await notificationService.sendNotification({
+      recipientId,
+      title,
+      body,
+      type,
+      appName: 'delivery-company',
+      appType: 'shoofi-shoofir',
+      channels,
+      data,
+      req
+    });
     
     res.status(201).json(notification);
   } catch (ex) {
@@ -1333,30 +1471,17 @@ router.post("/api/delivery/notifications/create", async (req, res) => {
 
 // Get all notifications for admin (with pagination)
 router.post("/api/delivery/notifications/admin", async (req, res) => {
-  const appName = req.headers['app-name'];
-  const db = req.app.db[appName];
   try {
     const { limit = 50, offset = 0, recipientId } = req.body;
     
-    let filter = {};
+    const options = { limit, offset };
     if (recipientId) {
-      filter.recipientId = getId(recipientId);
+      options.recipientId = recipientId;
     }
     
-    const notifications = await db.notifications
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .skip(offset)
-      .limit(limit)
-      .toArray();
+    const result = await notificationService.getUserNotifications(recipientId, 'delivery-company', req, options);
     
-    const totalCount = await db.notifications.countDocuments(filter);
-    
-    res.status(200).json({
-      notifications,
-      totalCount,
-      hasMore: offset + limit < totalCount
-    });
+    res.status(200).json(result);
   } catch (ex) {
     console.info("Error getting admin notifications", ex);
     return res.status(400).json({ message: "Error getting admin notifications" });
@@ -1418,9 +1543,23 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
       { $set: { driver: { _id: driver._id, name: driver.name, phone: driver.phone }, status: '2' } }
     );
     
-    const title = "تم تعيين طلب جديد";
-    const message = `لقد تم تعيينك للطلب: ${order.orderId}`;
-    await createNotification(db, newDriverId, title, message, 'order', { orderId: order._id, bookId: order.bookId });
+    // Send notification to new driver
+    try {
+      await notificationService.sendNotification({
+        recipientId: newDriverId,
+        title: "تم تعيين طلب جديد",
+        body: `لقد تم تعيينك للطلب: ${order.orderId}`,
+        type: 'order',
+        appName: 'delivery-company',
+        appType: 'shoofi-shoofir',
+        channels: { websocket: true, push: true, email: false, sms: false },
+        data: { orderId: order._id, bookId: order.bookId },
+        req
+      });
+    } catch (notificationError) {
+      console.error("Failed to send notification to new driver:", notificationError);
+      // Don't fail the reassignment if notification fails
+    }
     
     res.status(200).json({ message: "Order reassigned successfully" });
   } catch (ex) {
@@ -1517,6 +1656,259 @@ router.get("/api/delivery/book/:bookId", async (req, res) => {
   } catch (ex) {
     console.info("Error getting delivery by bookId", ex);
     return res.status(400).json({ message: "Error getting delivery by bookId" });
+  }
+});
+
+// Cancel delivery by store
+router.post("/api/delivery/store/order/cancel", async (req, res) => {
+  const appName = 'delivery-company';
+  const db = req.app.db[appName];
+  try {
+    const { orderId, reason } = req.body;
+    
+    // Update delivery status to cancelled by store
+    await db.bookDelivery.updateOne(
+      { _id: getId(orderId) },
+      { $set: { status: "-2", cancelledAt: new Date(), cancelReason: reason || null, cancelledBy: 'store' } }
+    );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery cancellation by store
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم إلغاء التوصيل من قبل المطعم",
+          body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`,
+          type: 'delivery_cancelled_store',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "-2",
+            cancelReason: reason,
+            cancelledBy: 'store'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for store cancellation:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
+    res.status(200).json({ message: "Delivery cancelled by store" });
+  } catch (ex) {
+    console.info("Error cancelling delivery by store", ex);
+    return res.status(400).json({ message: "Error cancelling delivery by store" });
+  }
+});
+
+// Cancel delivery by admin
+router.post("/api/delivery/admin/order/cancel", async (req, res) => {
+  const appName = 'delivery-company';
+  const db = req.app.db[appName];
+  try {
+    const { orderId, reason } = req.body;
+    
+    // Update delivery status to cancelled by admin
+    await db.bookDelivery.updateOne(
+      { _id: getId(orderId) },
+      { $set: { status: "-3", cancelledAt: new Date(), cancelReason: reason || null, cancelledBy: 'admin' } }
+    );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery cancellation by admin
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        await notificationService.sendNotification({
+          recipientId: deliveryOrder.customerId,
+          title: "تم إلغاء التوصيل من قبل الإدارة",
+          body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`,
+          type: 'delivery_cancelled_admin',
+          appName: deliveryOrder.appName || 'shoofi-app',
+          appType: 'shoofi-app',
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: { 
+            orderId: deliveryOrder._id, 
+            bookId: deliveryOrder.bookId,
+            deliveryStatus: "-3",
+            cancelReason: reason,
+            cancelledBy: 'admin'
+          },
+          req: mockReq
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for admin cancellation:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
+    res.status(200).json({ message: "Delivery cancelled by admin" });
+  } catch (ex) {
+    console.info("Error cancelling delivery by admin", ex);
+    return res.status(400).json({ message: "Error cancelling delivery by admin" });
+  }
+});
+
+// General delivery status update endpoint
+router.post("/api/delivery/order/status/update", async (req, res) => {
+  const appName = 'delivery-company';
+  const db = req.app.db[appName];
+  try {
+    const { orderId, status, reason, updatedBy } = req.body;
+    
+    // Validate status
+    const validStatuses = ["1", "2", "3", "4", "-1", "-2", "-3"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid delivery status" });
+    }
+    
+    // Update delivery status
+    const updateData = { status, updatedAt: new Date() };
+    if (reason) updateData.cancelReason = reason;
+    if (updatedBy) updateData.updatedBy = updatedBy;
+    
+    // Add specific timestamps based on status
+    switch (status) {
+      case "2":
+        updateData.approvedAt = new Date();
+        break;
+      case "3":
+        updateData.startedAt = new Date();
+        break;
+      case "4":
+        updateData.completedAt = new Date();
+        break;
+      case "-1":
+      case "-2":
+      case "-3":
+        updateData.cancelledAt = new Date();
+        break;
+    }
+    
+    await db.bookDelivery.updateOne(
+      { _id: getId(orderId) },
+      { $set: updateData }
+    );
+    
+    // Get the updated delivery order
+    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Send notification to customer about delivery status update
+    if (deliveryOrder && deliveryOrder.customerId) {
+      try {
+        // Create a mock request object for the notification service
+        const mockReq = {
+          app: {
+            db: req.app.db
+          },
+          headers: {
+            'app-type': 'shoofi-app'
+          }
+        };
+        
+        // Determine notification content based on status
+        let notificationTitle = "";
+        let notificationBody = "";
+        let notificationType = "delivery_status_update";
+        
+        switch (status) {
+          case "1":
+            notificationTitle = "في انتظار تأكيد التوصيل";
+            notificationBody = `طلبك رقم #${deliveryOrder.bookId} في انتظار تأكيد التوصيل من قبل السائق.`;
+            break;
+          case "2":
+            notificationTitle = "تم تأكيد التوصيل";
+            notificationBody = `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`;
+            notificationType = "delivery_approved";
+            break;
+          case "3":
+            notificationTitle = "تم استلام طلبك";
+            notificationBody = `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`;
+            notificationType = "delivery_collected";
+            break;
+          case "4":
+            notificationTitle = "تم تسليم طلبك";
+            notificationBody = `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`;
+            notificationType = "delivery_completed";
+            break;
+          case "-1":
+            notificationTitle = "تم إلغاء التوصيل من قبل السائق";
+            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`;
+            notificationType = "delivery_cancelled_driver";
+            break;
+          case "-2":
+            notificationTitle = "تم إلغاء التوصيل من قبل المطعم";
+            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationType = "delivery_cancelled_store";
+            break;
+          case "-3":
+            notificationTitle = "تم إلغاء التوصيل من قبل الإدارة";
+            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationType = "delivery_cancelled_admin";
+            break;
+          default:
+            notificationTitle = "تحديث حالة التوصيل";
+            notificationBody = `تم تحديث حالة توصيل طلبك رقم #${deliveryOrder.bookId}.`;
+        }
+        
+        if (notificationTitle && notificationBody) {
+          await notificationService.sendNotification({
+            recipientId: deliveryOrder.customerId,
+            title: notificationTitle,
+            body: notificationBody,
+            type: notificationType,
+            appName: deliveryOrder.appName || 'shoofi-app',
+            appType: 'shoofi-app',
+            channels: { websocket: true, push: true, email: false, sms: false },
+            data: { 
+              orderId: deliveryOrder._id, 
+              bookId: deliveryOrder.bookId,
+              deliveryStatus: status,
+              cancelReason: reason,
+              updatedBy: updatedBy,
+              driverName: deliveryOrder.driver?.name || 'السائق'
+            },
+            req: mockReq
+          });
+        }
+      } catch (notificationError) {
+        console.error("Failed to send customer notification for delivery status update:", notificationError);
+        // Don't fail the delivery update if notification fails
+      }
+    }
+    
+    res.status(200).json({ message: "Delivery status updated successfully" });
+  } catch (ex) {
+    console.info("Error updating delivery status", ex);
+    return res.status(400).json({ message: "Error updating delivery status" });
   }
 });
 

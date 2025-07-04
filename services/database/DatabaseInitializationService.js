@@ -39,6 +39,7 @@ class DatabaseInitializationService {
     db.creditCards = db.collection('creditCards');
     db.notifications = db.collection('notifications');
     db.storeUsers = db.collection('store-users');
+    db.persistentAlerts = db.collection('persistent-alerts');
 
     return db;
   }

@@ -14,8 +14,8 @@ async function testNotifications() {
     // Test creating a notification
     const testNotification = {
       recipientId: '507f1f77bcf86cd799439011', // Test driver ID
-      title: 'Test Notification',
-      message: 'This is a test notification to verify the system works',
+        title: 'إشعار تجريبي',
+  message: 'هذا إشعار تجريبي للتحقق من عمل النظام',
       type: 'test',
       isRead: false,
       createdAt: new Date().toISOString(),

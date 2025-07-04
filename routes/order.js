@@ -7,6 +7,8 @@ const storeService = require("../utils/store-service");
 const pushNotification = require("../utils/push-notification");
 const invoiceMailService = require("../utils/invoice-mail");
 const imagesService = require("../utils/images-service");
+const notificationService = require("../services/notification/notification-service");
+const persistentAlertsService = require("../utils/persistent-alerts");
 var multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 const turl = require("turl");
@@ -114,7 +116,34 @@ const processCreditCardPayment = async (paymentData, orderDoc, req) => {
   }
 };
 
-// Helper function to send order notifications
+// Helper function to send notifications to store owners
+const sendStoreOwnerNotifications = async (orderDoc, req, appName) => {
+  try {
+    // Get store owners/users who have access to this app
+    const shoofiDB = req.app.db['shoofi'];
+    const storeUsers = await shoofiDB.storeUsers.find({
+      appName: appName,
+    }).toArray();
+
+    if (storeUsers.length === 0) {
+      console.log(`No store users found for app: ${appName}`);
+      return;
+    }
+
+    // Send persistent alert for the new order (this handles all notifications to store managers)
+    try {
+      await persistentAlertsService.sendPersistentAlert(orderDoc, req, appName);
+      console.log(`Sent persistent alerts to ${storeUsers.length} store users for app: ${appName}`);
+    } catch (error) {
+      console.error("Failed to send persistent alert:", error);
+      // Don't fail the entire function if persistent alert fails
+    }
+  } catch (error) {
+    console.error("Failed to send store owner notifications:", error);
+  }
+};
+
+// Helper function to send order notifications to customer
 const sendOrderNotifications = async (orderDoc, req, appName) => {
   const customerDB = getCustomerAppName(req, appName);
   const customer = await customerDB.customers.findOne({
@@ -126,7 +155,9 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
     return;
   }
 
-  const smsContent = smsService.getOrderRecivedContent(
+  // Prepare notification content
+  const notificationTitle = "تم استلام طلبك";
+  const notificationBody = smsService.getOrderRecivedContent(
     customer.fullName,
     orderDoc.total,
     orderDoc.order.receipt_method,
@@ -134,9 +165,41 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
     orderDoc.app_language
   );
 
-  await smsService.sendSMS(customer.phone, smsContent, req);
-  await smsService.sendSMS("0542454362", smsContent, req);
+  // Send notification to customer using notification service
+  try {
+    await notificationService.sendNotification({
+      recipientId: orderDoc.customerId,
+      title: notificationTitle,
+      body: notificationBody,
+      type: 'order',
+      appName,
+      appType: req.headers["app-type"] || 'shoofi-app',
+      channels: {
+        websocket: true,
+        push: true,
+        email: false,
+        sms: true
+      },
+      data: {
+        orderId: orderDoc.orderId,
+        orderStatus: orderDoc.status,
+        receiptMethod: orderDoc.order.receipt_method,
+        total: orderDoc.total
+      },
+      req
+    });
+  } catch (error) {
+    console.error("Failed to send notification to customer:", error);
+  }
 
+  // Send SMS to admin number (keeping existing functionality)
+  try {
+    await smsService.sendSMS("0542454362", notificationBody, req);
+  } catch (error) {
+    console.error("Failed to send SMS to admin:", error);
+  }
+
+  // Fire websocket event for admin (keeping existing functionality)
   websockets.fireWebscoketEvent({
     type: "new order",
     customerIds: [orderDoc.customerId],
@@ -738,7 +801,7 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
         await smsService.sendSMS("0542454362", smsContent, req);
 
         // Send notifications for successful payment
-        await sendOrderNotifications(orderDoc, req, appName);
+        await sendStoreOwnerNotifications(orderDoc, req, appName);
         
         // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
         try {
@@ -918,7 +981,8 @@ router.post(
       );
 
       if (!isCreditCardPay) {
-        await sendOrderNotifications(orderDoc, req, appName);
+        // Send notification to store owners
+        await sendStoreOwnerNotifications(orderDoc, req, appName);
       }
             // Handle credit card payment server-side
             if (isCreditCardPay && parsedBodey.paymentData) {
@@ -943,7 +1007,7 @@ router.post(
                   );
       
                   // Send notifications for successful payment
-                  await sendOrderNotifications(orderDoc, req, appName);
+                  await sendStoreOwnerNotifications(orderDoc, req, appName);
                   
                   // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
                   try {
@@ -1159,13 +1223,8 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     const customer = await customerDB.customers.findOne({
       _id: getId(order.customerId),
     });
-    // if (!customer) {
-    //   res.status(400).json({
-    //     message: "Customer not found",
-    //   });
-    //   return;
-    // }
-    // if (updateobj?.status == "2" && updateobj?.shouldSendSms) {
+    
+    // Send SMS notifications for status 2 (ready)
     if (updateobj?.status == "2") {
       let smsContent = "";
       switch (order.order.receipt_method) {
@@ -1185,19 +1244,114 @@ router.post("/api/order/update", auth.required, async (req, res) => {
             storeData.order_company_number
           );
       }
-      await smsService.sendSMS(customer?.phone, smsContent, req);
-      await smsService.sendSMS("0542454362", smsContent, req);
+      // await smsService.sendSMS(customer?.phone, smsContent, req);
+      // await smsService.sendSMS("0542454362", smsContent, req);
     }
 
-    // if (updateobj?.status == "3") {
-    //   const smsContent = smsService.getOrderDeliveryCompanyContent(
-    //     customer.fullName,
-    //     order.orderId,
-    //     order.app_language,
-    //     order.orderDate
-    //   );
-    //   smsService.sendSMS("0542454362", smsContent, req);
-    // }
+    // Send customer notifications based on status changes
+    if (customer && updateobj?.status) {
+      try {
+        let notificationTitle = "";
+        let notificationBody = "";
+        let notificationType = "order";
+        
+        switch (updateobj.status) {
+          case "1": // IN_PROGRESS
+            notificationTitle = "طلبك قيد التحضير";
+            notificationBody = `طلبك رقم #${order.orderId} قيد التحضير الآن.`;
+            break;
+          case "2": // COMPLETED
+              notificationTitle = "طلبك جاهز للاستلام";
+              notificationBody = `طلبك رقم #${order.orderId} جاهز للاستلام من المطعم.`;
+            break;
+          case "3": // WAITING_FOR_DRIVER
+            notificationTitle = "في انتظار السائق";
+            notificationBody = `طلبك رقم #${order.orderId} جاهز وتم إرساله للسائق.`;
+            break;
+          case "4": // CANCELLED
+            notificationTitle = "تم إلغاء طلبك";
+            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه. إذا كان لديك أي استفسار، يرجى التواصل معنا.`;
+            notificationType = "order_cancelled";
+            break;
+          case "5": // REJECTED
+            notificationTitle = "تم رفض طلبك";
+            notificationBody = `عذراً، تم رفض طلبك رقم #${order.orderId}. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationType = "order_rejected";
+            break;
+          // case "6": // PENDING
+          //   notificationTitle = "تم استلام طلبك";
+          //   notificationBody = `طلبك رقم #${order.orderId} تم استلامه وهو قيد المراجعة.`;
+          //   break;
+          case "7": // CANCELLED_BY_ADMIN
+            notificationTitle = "تم إلغاء طلبك من قبل الإدارة";
+            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationType = "order_cancelled_admin";
+            break;
+          case "8": // CANCELLED_BY_CUSTOMER
+            notificationTitle = "تم إلغاء طلبك";
+            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه بنجاح.`;
+            notificationType = "order_cancelled_customer";
+            break;
+          // case "9": // CANCELLED_BY_DRIVER
+          //   notificationTitle = "تم إلغاء الطلب من قبل السائق";
+          //   notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه من قبل السائق. سيتم إعادة تعيين سائق جديد.`;
+          //   notificationType = "order_cancelled_driver";
+          //   break;
+          // case "10": // PICKED_UP
+          //   notificationTitle = "تم استلام طلبك";
+          //   notificationBody = `طلبك رقم #${order.orderId} تم استلامه من المطعم.`;
+          //   break;
+          // case "11": // PICKED_UP_BY_DRIVER
+          //   notificationTitle = "تم استلام الطلب من قبل السائق";
+          //   notificationBody = `طلبك رقم #${order.orderId} تم استلامه من قبل السائق وهو في الطريق إليك.`;
+          //   break;
+          // case "12": // DELIVERED
+          //   notificationTitle = "تم تسليم طلبك";
+          //   notificationBody = `طلبك رقم #${order.orderId} تم تسليمه بنجاح. نتمنى لك وجبة شهية!`;
+          //   notificationType = "delivery_complete";
+          //   break;
+          default:
+            notificationTitle = "تحديث حالة الطلب";
+            notificationBody = `تم تحديث حالة طلبك رقم #${order.orderId}.`;
+        }
+        
+        if (notificationTitle && notificationBody) {
+          // Determine app type based on app name
+          let appType = "shoofi-app";
+          if (appName.includes("partner")) {
+            appType = "shoofi-partner";
+          } else if (appName.includes("shoofir")) {
+            appType = "shoofi-shoofir";
+          }
+          
+          await notificationService.sendNotification({
+            recipientId: order.customerId,
+            title: notificationTitle,
+            body: notificationBody,
+            type: notificationType,
+            appName: order.appName,
+            appType: appType,
+            channels: {
+              websocket: true,
+              push: true,
+              email: false,
+              sms: false
+            },
+            data: {
+              orderId: order.orderId,
+              orderStatus: updateobj.status,
+              receiptMethod: order.order.receipt_method,
+              total: order.total,
+              customerName: customer.fullName
+            },
+            req: req
+          });
+        }
+      } catch (notificationError) {
+        console.error("Failed to send customer notification:", notificationError);
+        // Don't fail the order update if notification fails
+      }
+    }
 
     return res.status(200).json({ message: "Order successfully updated" });
   } catch (ex) {
@@ -1238,6 +1392,16 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
     );
 
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
+
+    // Clear persistent alert when order is approved (isViewd = true)
+    if (updateobj.isViewd === true) {
+      try {
+        await persistentAlertsService.clearPersistentAlert(order._id, req, appName);
+      } catch (error) {
+        console.error("Failed to clear persistent alert:", error);
+        // Don't fail the entire request if alert clearing fails
+      }
+    }
 
     if (order.order.receipt_method == "DELIVERY") {
       const customerDB = getCustomerAppName(req, appName);
@@ -1289,6 +1453,13 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
       }
     }
+    // Send notification to customer about order status update
+    try {
+      await sendOrderNotifications(order, req, appName);
+    } catch (error) {
+      console.error("Failed to send customer notification:", error);
+    }
+
     websockets.fireWebscoketEvent({
       type: "order viewed updated",
       customerIds: [order.customerId],
