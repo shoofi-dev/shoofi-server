@@ -991,13 +991,31 @@ router.post(
   auth.required,
   async (req, res) => {
     const customerId = req.body.customerId || req.auth.id;
-    const appName = req.headers["app-name"];
+    const appName = req.headers["app-name"];  
     const db = req.app.db[appName];
-    const customerDB = getCustomerAppName(req, appName);
+    const appType = req.headers['app-type'];
 
-    const customer = await customerDB.customers.findOne({
-      _id: getId(customerId),
-    });
+    let customer = null;
+    let customerDB = null;
+    let collection = null;
+    if(appType === 'shoofi-shoofir'){
+      const deliveryDB = req.app.db['delivery-company'];
+      customer = await deliveryDB.customers.findOne({  _id: getId(customerId), });
+      customerDB = deliveryDB;
+      collection = "customers";
+    }else if(appType === 'shoofi-partner'){
+      const shoofiDB = req.app.db['shoofi'];
+      customer = await shoofiDB.storeUsers.findOne({  _id: getId(customerId), });
+      customerDB = shoofiDB;
+      collection = "storeUsers";
+    }else{
+      const shoofiDB = req.app.db['shoofi'];
+      customer = await shoofiDB.customers.findOne({  _id: getId(customerId), });
+      customerDB = shoofiDB;
+      collection = "customers";
+    }
+
+
     if (!customer) {
       res.status(400).json({
         message: "Customer not found",
@@ -1005,7 +1023,7 @@ router.post(
       return;
     }
     try {
-      const updatedCustomer = await customerDB.customers.findOneAndUpdate(
+      const updatedCustomer = await customerDB[collection].findOneAndUpdate(
         { _id: getId(customerId) },
         {
           $set: { notificationToken: req.body.notificationToken },
