@@ -50,6 +50,7 @@ class NotificationService {
    * @param {string} options.appType - App type (shoofi-app, shoofi-shoofir, shoofi-partner)
    * @param {Object} options.channels - Channels to send to { websocket: boolean, push: boolean, email: boolean, sms: boolean }
    * @param {Object} options.req - Express request object
+   * @param {string} options.soundType - Custom sound file name (e.g., 'buffalosound.wav', 'deliverysound.wav')
    */
   async sendNotification(options) {
     const {
@@ -61,7 +62,8 @@ class NotificationService {
       appName,
       appType = req?.headers?.['app-type'] || 'shoofi-app',
       channels = { websocket: true, push: true, email: false, sms: false },
-      req
+      req,
+      soundType = 'buffalosound.wav'
     } = options;
 
     try {
@@ -76,7 +78,7 @@ class NotificationService {
       // Create notification record in database
       const notificationRecord = await this.createNotificationRecord(
         customerDB,
-        recipientId,
+        getId(recipientId),
         title,
         body,
         type,
@@ -91,7 +93,9 @@ class NotificationService {
       }
 
       if (channels.push && user.notificationToken) {
-        promises.push(this.sendPushNotification(user.notificationToken, title, body, data, appName));
+        // Add sound type to data for push notifications
+        const pushData = { ...data, soundType };
+        promises.push(this.sendPushNotification(user.notificationToken, title, body, pushData, appName));
       }
 
       if (channels.email && user.email) {
@@ -126,7 +130,7 @@ class NotificationService {
    */
   async createNotificationRecord(db, recipientId, title, body, type, data) {
     const notification = {
-      recipientId: getId(recipientId),
+      recipientId: String(getId(recipientId)),
       title,
       body,
       type,
@@ -199,13 +203,17 @@ class NotificationService {
    * Send Expo push notification
    */
   async sendExpoPushNotification(token, title, body, data) {
+    // Choose sound based on notification type or use default
+    const soundType = data?.soundType || 'buffalosound.wav';
+    
     const message = {
       to: token,
-      sound: 'default',
+      sound: soundType, // Use custom sound file
       title,
       body,
       data,
-      priority: 'high'
+      priority: 'high',
+      volume: 1.0 // Maximum volume (0.0 to 1.0)
     };
 
     const chunks = this.expo.chunkPushNotifications([message]);
@@ -223,6 +231,9 @@ class NotificationService {
    * Send Firebase push notification
    */
   async sendFirebasePushNotification(token, title, body, data) {
+    // Choose sound based on notification type or use default
+    const soundType = data?.soundType || 'buffalosound.wav';
+    
     const message = {
       notification: {
         title,
@@ -236,13 +247,15 @@ class NotificationService {
       android: {
         priority: 'high',
         notification: {
-          sound: 'default'
+          sound: soundType, // Use custom sound file
+          volume: 1.0 // Maximum volume
         }
       },
       apns: {
         payload: {
           aps: {
-            sound: 'default'
+            sound: soundType, // Use custom sound file
+            volume: 1.0 // Maximum volume
           }
         }
       }
@@ -311,7 +324,7 @@ class NotificationService {
       customerDB = req.app.db['shoofi'];
     }
 
-    const query = { recipientId: getId(userId) };
+    const query = { recipientId: String(getId(userId)) };
     if (unreadOnly) {
       query.isRead = false;
     }
@@ -324,6 +337,39 @@ class NotificationService {
       .toArray();
 
     return notifications;
+  }
+
+  /**
+   * Send order notification with delivery sound
+   */
+  async sendOrderNotification(options) {
+    return this.sendNotification({
+      ...options,
+      soundType: 'deliverysound.wav',
+      type: 'order'
+    });
+  }
+
+  /**
+   * Send urgent notification with buffalo sound
+   */
+  async sendUrgentNotification(options) {
+    return this.sendNotification({
+      ...options,
+      soundType: 'buffalosound.wav',
+      type: 'urgent'
+    });
+  }
+
+  /**
+   * Send system notification with default sound
+   */
+  async sendSystemNotification(options) {
+    return this.sendNotification({
+      ...options,
+      soundType: 'default',
+      type: 'system'
+    });
   }
 
   /**

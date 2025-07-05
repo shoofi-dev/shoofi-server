@@ -72,9 +72,9 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
     
     // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const customerId = deliveryOrder?.order?.customerId;
     // Send notification to customer about delivery approval
-    if (deliveryOrder && deliveryOrder.customerId) {
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -87,7 +87,7 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+          recipientId: customerId,
           title: "تم تأكيد التوصيل",
           body: `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`,
           type: 'delivery_approved',
@@ -132,7 +132,8 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery cancellation
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -145,7 +146,7 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+          recipientId: customerId,
           title: "تم إلغاء التوصيل",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`,
           type: 'delivery_cancelled_driver',
@@ -191,7 +192,8 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery start
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -204,7 +206,7 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+          recipientId: customerId,
           title: "تم استلام طلبك",
           body: `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`,
           type: 'delivery_collected',
@@ -249,7 +251,8 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery completion
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -262,7 +265,7 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+            recipientId: customerId,
           title: "تم تسليم طلبك",
           body: `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`,
           type: 'delivery_completed',
@@ -1676,7 +1679,8 @@ router.post("/api/delivery/store/order/cancel", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery cancellation by store
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -1689,7 +1693,7 @@ router.post("/api/delivery/store/order/cancel", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+          recipientId: customerId,
           title: "تم إلغاء التوصيل من قبل المطعم",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`,
           type: 'delivery_cancelled_store',
@@ -1735,7 +1739,8 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery cancellation by admin
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -1748,7 +1753,7 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
         };
         
         await notificationService.sendNotification({
-          recipientId: deliveryOrder.customerId,
+          recipientId: customerId,
           title: "تم إلغاء التوصيل من قبل الإدارة",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`,
           type: 'delivery_cancelled_admin',
@@ -1822,7 +1827,8 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
     // Send notification to customer about delivery status update
-    if (deliveryOrder && deliveryOrder.customerId) {
+    const customerId = deliveryOrder?.order?.customerId;
+    if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
@@ -1881,7 +1887,7 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
         
         if (notificationTitle && notificationBody) {
           await notificationService.sendNotification({
-            recipientId: deliveryOrder.customerId,
+            recipientId: customerId,
             title: notificationTitle,
             body: notificationBody,
             type: notificationType,

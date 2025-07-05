@@ -128,7 +128,7 @@ if (updateobj.isViewd === true) {
 
 ### New Order Alert
 - **Title**: "طلب جديد يتطلب الموافقة"
-- **Body**: "طلب جديد رقم {orderNumber} من {customerName} بقيمة {orderTotal} ريال"
+- **Body**: "طلب جديد رقم {orderNumber} من {customerName} بقيمة {orderTotal}₪"
 
 ### Reminder Alert
 - **Title**: "تذكير: طلب في انتظار الموافقة"

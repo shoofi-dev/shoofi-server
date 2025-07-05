@@ -20,9 +20,11 @@ pushToClient = async function ( customerId, body, data, req) {
 
     const messages =[{
       to: customer?.notificationToken,
-      sound: 'default',
+      sound: 'buffalosound.wav', // Use your custom sound file
       body,
       data,
+      priority: 'high',
+      volume: 1.0 // Maximum volume
     }];
     
     let chunks = expo.chunkPushNotifications(messages);

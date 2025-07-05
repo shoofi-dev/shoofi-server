@@ -44,7 +44,7 @@ class WebSocketService {
         return;
       }
 
-      const { userId, appName, userType, metadata } = connectionInfo;
+      const { userId, appName, appType, metadata } = connectionInfo;
       
       // Check connection limits
       if (!this.canConnect(userId)) {
@@ -56,28 +56,28 @@ class WebSocketService {
       this.clients.set(userId, {
         connection,
         appName,
-        userType,
+        appType,
         metadata,
         lastPing: Date.now(),
         connectedAt: Date.now()
       });
 
       // Join default room
-      this.joinRoom(userId, `app:${appName}`);
-      if (userType === 'admin') {
-        this.joinRoom(userId, `admin:${appName}`);
-      }
+      this.joinRoom(userId, `${appType}`);
+      // if (userType === 'admin') {
+      //   this.joinRoom(userId, `admin:${appName}`);
+      // }
 
       // Set up connection event handlers
       this.setupConnectionHandlers(userId, connection);
 
-      logger.info(`WebSocket connected: ${userId} (${appName})`);
+      logger.info(`WebSocket connected: ${userId} (${appType})`);
       
       // Send welcome message
       this.sendToUser(userId, {
         type: 'connection_established',
-        data: { userId, appName, userType }
-      }, appName);
+        data: { userId, appType }
+      }, appType);
 
     } catch (error) {
       logger.error('Connection setup failed:', error);
@@ -94,23 +94,25 @@ class WebSocketService {
       const token = url.searchParams.get('token');
       const customerId = url.searchParams.get('customerId');
       const appName = url.searchParams.get('appName');
+      const appType = url.searchParams.get('appType');
+      // const userType = url.searchParams.get('userType');
 
-      if (!token || !customerId || !appName) {
-        logger.warn('Missing required parameters for WebSocket connection');
-        return null;
-      }
+      // if (!token || !customerId || !appName) {
+      //   logger.warn('Missing required parameters for WebSocket connection');
+      //   return null;
+      // }
 
       // Verify JWT token (you should implement proper JWT verification)
       // const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // For now, we'll use a simple validation
-      const userType = customerId.includes('__admin') ? 'admin' : 'user';
-      const cleanUserId = customerId.replace('__admin', '');
+      // const userType = customerId.includes('__admin') ? 'admin' : 'user';
+      // const cleanUserId = customerId.replace('__admin', '');  
 
       return {
-        userId: cleanUserId,
+        userId: customerId,
         appName,
-        userType,
+        appType,
         metadata: {
           userAgent: req.headers['user-agent'],
           ip: req.socket.remoteAddress
@@ -218,9 +220,9 @@ class WebSocketService {
   /**
    * Send message to specific user
    */
-  sendToUser(userId, message, appName) {
+  sendToUser(userId, message, appType) {
     const client = this.clients.get(userId);
-    if (!client || client.appName !== appName) {
+    if (!client || client.appType !== appType) {
       logger.warn(`User ${userId} not found or app mismatch`);
       return false;
     }
@@ -238,10 +240,10 @@ class WebSocketService {
   /**
    * Send message to multiple users
    */
-  sendToUsers(userIds, message, appName) {
+  sendToUsers(userIds, message, appType) {
     const results = [];
     userIds.forEach(userId => {
-      results.push(this.sendToUser(userId, message, appName));
+      results.push(this.sendToUser(userId, message, appType));
     });
     return results;
   }
@@ -249,7 +251,7 @@ class WebSocketService {
   /**
    * Send message to room
    */
-  sendToRoom(roomId, message, appName) {
+  sendToRoom(roomId, message, appType) {
     const room = this.rooms.get(roomId);
     if (!room) {
       logger.warn(`Room ${roomId} not found`);
@@ -259,8 +261,8 @@ class WebSocketService {
     const results = [];
     room.forEach(userId => {
       const client = this.clients.get(userId);
-      if (client && client.appName === appName) {
-        results.push(this.sendToUser(userId, message, appName));
+      if (client && client.appType === appType) {
+        results.push(this.sendToUser(userId, message, appType));
       }
     });
 
@@ -270,11 +272,11 @@ class WebSocketService {
   /**
    * Send message to all users in an app
    */
-  sendToApp(appName, message) {
+  sendToApp(appType, message) {
     const results = [];
     this.clients.forEach((client, userId) => {
-      if (client.appName === appName) {
-        results.push(this.sendToUser(userId, message, appName));
+      if (client.appType === appType) {
+        results.push(this.sendToUser(userId, message, appType));
       }
     });
     return results;
@@ -283,11 +285,11 @@ class WebSocketService {
   /**
    * Send message to all admin users in an app
    */
-  sendToAppAdmins(appName, message) {
+  sendToAppAdmins(appType, message) {
     const results = [];
     this.clients.forEach((client, userId) => {
-      if (client.appName === appName && client.userType === 'admin') {
-        results.push(this.sendToUser(userId, message, appName));
+      if (client.appType === appType && client.appType === 'shoofi-partner') {
+        results.push(this.sendToUser(userId, message, appType));
       }
     });
     return results;
@@ -367,7 +369,7 @@ class WebSocketService {
       stats.connectionsByApp[client.appName] = (stats.connectionsByApp[client.appName] || 0) + 1;
       
       // Count by type
-      stats.connectionsByType[client.userType] = (stats.connectionsByType[client.userType] || 0) + 1;
+      // stats.connectionsByType[client.userType] = (stats.connectionsByType[client.userType] || 0) + 1;
     });
 
     return stats;

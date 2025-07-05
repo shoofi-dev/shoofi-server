@@ -4,6 +4,7 @@ const { getId } = require("../../lib/common");
 const APP_CONSTS = require("../../consts/consts");
 const { assignBestDeliveryDriver } = require("./assignDriver");
 const notificationService = require("../notification/notification-service");
+const { ObjectId } = require("mongodb");
 
 async function bookDelivery({ deliveryData, appDb }) {
   try {
@@ -73,22 +74,22 @@ async function bookDelivery({ deliveryData, appDb }) {
           }
         };
         
-        await notificationService.sendNotification({
-          recipientId: result.driver._id,
-          title: 'تم تعيين طلب جديد',
-          body: `لقد تم تعيينك للطلب: #${insertedOrder.bookId}`,
-          type: 'order',
-          appName: 'delivery-company',
-          appType: 'shoofi-shoofir',
-          channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: insertedOrder._id, 
-            bookId: insertedOrder.bookId, 
-            customerName: deliveryData.fullName,
-            customerPhone: deliveryData.phone 
-          },
-          req: mockReq
-        });
+                  await notificationService.sendNotification({
+            recipientId: String(result.driver._id),
+            title: 'تم تعيين طلب جديد',
+            body: `لقد تم تعيينك للطلب: #${insertedOrder.bookId}`,
+            type: 'order',
+            appName: 'delivery-company',
+            appType: 'shoofi-shoofir',
+            channels: { websocket: true, push: true, email: false, sms: false },
+            data: { 
+              orderId: insertedOrder._id, 
+              bookId: insertedOrder.bookId, 
+              customerName: deliveryData.fullName,
+              customerPhone: deliveryData.phone 
+            },
+            req: mockReq
+          });
       } catch (notificationError) {
         console.error("Failed to send notification to driver:", notificationError);
         // Don't fail the delivery creation if notification fails
@@ -179,7 +180,7 @@ async function updateDelivery({ deliveryData, appDb }) {
           };
           
           await notificationService.sendNotification({
-            recipientId: order.driver._id,
+            recipientId: String(getId(order.driver._id) || order.driver._id),
             title: notificationTitle,
             body: notificationBody,
             type: notificationType,

@@ -66,7 +66,7 @@ class PersistentAlertsService {
         notificationService.sendNotification({
           recipientId: user._id,
           title: "طلب جديد يتطلب الموافقة",
-          body: `طلب جديد رقم ${orderNumber} من ${customerName} بقيمة ${orderTotal} ريال`,
+          body: `طلب جديد رقم ${orderNumber} من ${customerName} بقيمة ${orderTotal}₪`,
           data: {
             type: "new_order_alert",
             orderId: orderId,
@@ -140,29 +140,29 @@ class PersistentAlertsService {
       );
 
       // Send approval notification to store users
-      const storeUsers = alert.storeUsers.filter(user => user.notified);
+      // const storeUsers = alert.storeUsers.filter(user => user.notified);
       
-      const approvalPromises = storeUsers.map(user => 
-        notificationService.sendNotification({
-          recipientId: user.userId,
-          title: "تمت الموافقة على الطلب",
-          body: `تمت الموافقة على الطلب رقم ${alert.orderNumber} من ${alert.customerName}`,
-          data: {
-            type: "order_approved",
-            orderId: orderId,
-            orderNumber: alert.orderNumber,
-            customerName: alert.customerName,
-            alertId: alert._id
-          },
-          type: "order_alert",
-          appName,
-          appType: "shoofi-partner",
-          channels: { websocket: true, push: true, email: false, sms: false },
-          req
-        })
-      );
+      // const approvalPromises = storeUsers.map(user => 
+      //   notificationService.sendNotification({
+      //     recipientId: user.userId,
+      //     title: "تمت الموافقة على الطلب",
+      //     body: `تمت الموافقة على الطلب رقم ${alert.orderNumber} من ${alert.customerName}`,
+      //     data: {
+      //       type: "order_approved",
+      //       orderId: orderId,
+      //       orderNumber: alert.orderNumber,
+      //       customerName: alert.customerName,
+      //       alertId: alert._id
+      //     },
+      //     type: "order_alert",
+      //     appName,
+      //     appType: "shoofi-partner",
+      //     channels: { websocket: true, push: true, email: false, sms: false },
+      //     req
+      //   })
+      // );
 
-      await Promise.allSettled(approvalPromises);
+      // await Promise.allSettled(approvalPromises);
 
       logger.info(`Persistent alert cleared for order ${alert.orderNumber}`);
 

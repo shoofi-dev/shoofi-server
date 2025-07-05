@@ -173,7 +173,7 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
       body: notificationBody,
       type: 'order',
       appName,
-      appType: req.headers["app-type"] || 'shoofi-app',
+      appType:  'shoofi-shopping',
       channels: {
         websocket: true,
         push: true,
@@ -205,6 +205,17 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
     customerIds: [orderDoc.customerId],
     isAdmin: true,
     appName,
+  });
+
+  // Send WebSocket notification to store users to refresh unviewed orders count
+  const websocketService = require('../services/websocket/websocket-service');
+  websocketService.sendToAppAdmins('shoofi-partner', {
+    type: 'unviewed_orders_updated',
+    data: {
+      orderId: orderDoc._id,
+      action: 'new_order',
+      timestamp: new Date().toISOString()
+    }
   });
 };
 
@@ -324,7 +335,7 @@ const getBusinessDayBoundaries = async (targetDate, req, appName) => {
 // Show orders
 router.post(
   "/api/order/admin/orders/:page?",
-
+  auth.required,
   async (req, res, next) => {
     const appName = req.headers["app-name"];
     const db = req.app.db[appName];
@@ -508,7 +519,7 @@ router.get("/api/order/admin/not-viewd", async (req, res, next) => {
   res.status(200).json(finalOrders);
 });
 
-router.get("/api/order/admin/all/not-viewd", async (req, res, next) => {
+router.get("/api/order/admin/all/not-viewd",auth.required, async (req, res, next) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
 
@@ -788,6 +799,17 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
           customerIds: [customerId],
           isAdmin: true,
           appName,
+        });
+
+        // Send WebSocket notification to store users to refresh unviewed orders count
+        const websocketService = require('../services/websocket/websocket-service');
+        websocketService.sendToAppAdmins('shoofi-partner', {
+          type: 'unviewed_orders_updated',
+          data: {
+            orderId: orderDoc._id,
+            action: 'new_order',
+            timestamp: new Date().toISOString()
+          }
         });
 
         const smsContent = smsService.getOrderRecivedContent(
@@ -1225,28 +1247,28 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     });
     
     // Send SMS notifications for status 2 (ready)
-    if (updateobj?.status == "2") {
-      let smsContent = "";
-      switch (order.order.receipt_method) {
-        case "TAKEAWAY":
-          smsContent = smsService.getOrderTakeawayReadyContent(
-            customer?.fullName,
-            order.orderId,
-            order.app_language
-          );
-          break;
-        case "DELIVERY":
-          const storeData = await db.store.findOne({ id: 1 });
-          smsContent = smsService.getOrderDeliveryReadyContent(
-            customer?.fullName,
-            order.orderId,
-            order.app_language,
-            storeData.order_company_number
-          );
-      }
-      // await smsService.sendSMS(customer?.phone, smsContent, req);
-      // await smsService.sendSMS("0542454362", smsContent, req);
-    }
+    // if (updateobj?.status == "2") {
+    //   let smsContent = "";
+    //   switch (order.order.receipt_method) {
+    //     case "TAKEAWAY":
+    //       smsContent = smsService.getOrderTakeawayReadyContent(
+    //         customer?.fullName,
+    //         order.orderId,
+    //         order.app_language
+    //       );
+    //       break;
+    //     case "DELIVERY":
+    //       const storeData = await db.store.findOne({ id: 1 });
+    //       smsContent = smsService.getOrderDeliveryReadyContent(
+    //         customer?.fullName,
+    //         order.orderId,
+    //         order.app_language,
+    //         storeData.order_company_number
+    //       );
+    //   }
+    //   // await smsService.sendSMS(customer?.phone, smsContent, req);
+    //   // await smsService.sendSMS("0542454362", smsContent, req);
+    // }
 
     // Send customer notifications based on status changes
     if (customer && updateobj?.status) {
@@ -1266,7 +1288,7 @@ router.post("/api/order/update", auth.required, async (req, res) => {
             break;
           case "3": // WAITING_FOR_DRIVER
             notificationTitle = "في انتظار السائق";
-            notificationBody = `طلبك رقم #${order.orderId} جاهز وتم إرساله للسائق.`;
+            notificationBody = `طلبك رقم #${order.orderId} جاهز وفي انتظار السائق.`;
             break;
           case "4": // CANCELLED
             notificationTitle = "تم إلغاء طلبك";
@@ -1311,8 +1333,7 @@ router.post("/api/order/update", auth.required, async (req, res) => {
           //   notificationType = "delivery_complete";
           //   break;
           default:
-            notificationTitle = "تحديث حالة الطلب";
-            notificationBody = `تم تحديث حالة طلبك رقم #${order.orderId}.`;
+            break;
         }
         
         if (notificationTitle && notificationBody) {
@@ -1465,6 +1486,17 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
       customerIds: [order.customerId],
       isAdmin: true,
       appName,
+    });
+
+    // Send WebSocket notification to store users to refresh unviewed orders count
+    const websocketService = require('../services/websocket/websocket-service');
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'unviewed_orders_updated',
+      data: {
+        orderId: order._id,
+        action: 'order_viewed',
+        timestamp: new Date().toISOString()
+      }
     });
 
     // pushNotification.pushToClient(order.customerId, "TEEEEEST", req);
