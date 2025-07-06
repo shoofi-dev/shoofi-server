@@ -1481,15 +1481,11 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
       console.error("Failed to send customer notification:", error);
     }
 
-    websockets.fireWebscoketEvent({
-      type: "order viewed updated",
-      customerIds: [order.customerId],
-      isAdmin: true,
-      appName,
-    });
-
-    // Send WebSocket notification to store users to refresh unviewed orders count
+    // Send notification to store users about order viewed update
+    const notificationService = require('../services/notification/notification-service');
     const websocketService = require('../services/websocket/websocket-service');
+    
+    // Send WebSocket notification to store users to refresh unviewed orders count
     websocketService.sendToAppAdmins('shoofi-partner', {
       type: 'unviewed_orders_updated',
       data: {
@@ -1498,6 +1494,24 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         timestamp: new Date().toISOString()
       }
     });
+
+    // Send print notification to all store users (admins)
+    try {
+      const websocketService = require('../services/websocket/websocket-service');
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'print_order',
+        data: {
+          orderId: order.orderId,
+          orderStatus: order.status,
+          receiptMethod: order.order.receipt_method,
+          total: order.total,
+          action: 'print_required',
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error("Failed to send print notification:", error);
+    }
 
     // pushNotification.pushToClient(order.customerId, "TEEEEEST", req);
 
@@ -1781,11 +1795,21 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
       { multi: false }
     );
     if (req.body.status === false) {
-      websockets.fireWebscoketEvent({
-        type: "print not printed",
-        isAdmin: true,
-        appName,
-      });
+      // Send notification to store users about unprinted order
+      const websocketService = require('../services/websocket/websocket-service');
+      
+      try {
+        websocketService.sendToAppAdmins('shoofi-partner', {
+          type: 'print_not_printed',
+          data: {
+            orderId: req.body.orderId,
+            action: 'print_not_printed',
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (error) {
+        console.error("Failed to send print notification:", error);
+      }
     }
     return res.status(200).json({ message: "Order successfully printed" });
   } catch (ex) {

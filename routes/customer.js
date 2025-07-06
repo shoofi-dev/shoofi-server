@@ -201,6 +201,13 @@ router.post("/api/customer/create", async (req, res) => {
     return;
   }
 
+  if(appType === 'shoofi-shoofir' || appType === 'shoofi-partner'){
+    res.status(400).json({
+      message: "الرجاء التواصل مع الدعم الفني للحصول على المساعدة",
+    });
+    return;
+  }
+
   try {
     await customerDB[collection].insertOne(customerObj);
     if (
@@ -780,11 +787,23 @@ router.post("/api/customer/logout", auth.required, async (req, res) => {
 router.post("/api/customer/delete", auth.required, async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
+  const appType = req.headers['app-type'];
   const {
     auth: { id },
   } = req;
-  const customerDB = getCustomerAppName(req, appName);
-  await customerDB.customers.deleteOne({ _id: getId(id) });
+  let customerDB = null;
+  let collection = null;
+  if(appType === 'shoofi-shoofir'){
+    customerDB = req.app.db['delivery-company'];
+    collection = "customers";
+  }else if(appType === 'shoofi-partner'){
+    customerDB = req.app.db['shoofi'];
+    collection = "storeUsers";
+  }else{
+    customerDB = req.app.db['shoofi'];
+    collection = "customers";
+  }
+  await customerDB[collection].deleteOne({ _id: getId(id) });
   res.status(200).json({ data: "blocked success" });
 });
 

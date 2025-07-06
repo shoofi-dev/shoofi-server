@@ -373,6 +373,40 @@ class NotificationService {
   }
 
   /**
+   * Send print notification to store users
+   */
+  async sendPrintNotification(options) {
+    return this.sendNotification({
+      ...options,
+      soundType: 'buffalosound.wav', // Use buffalo sound for print notifications
+      type: 'print_order',
+      channels: {
+        websocket: true,
+        push: false, // Don't send push notifications for print
+        email: false,
+        sms: false
+      }
+    });
+  }
+
+  /**
+   * Send unprinted order notification
+   */
+  async sendUnprintedNotification(options) {
+    return this.sendNotification({
+      ...options,
+      soundType: 'buffalosound.wav',
+      type: 'print_not_printed',
+      channels: {
+        websocket: true,
+        push: false,
+        email: false,
+        sms: false
+      }
+    });
+  }
+
+  /**
    * Utility function for delays
    */
   delay(ms) {
