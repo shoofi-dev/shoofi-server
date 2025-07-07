@@ -7842,3 +7842,20 @@
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-05 18:45:55:4555"}
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-05 18:53:06:536"}
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-05 18:53:45:5345"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6861cb1bffc6f39f4ad6b311 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:20:01:201"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654295ffc6f39f4ad6b383 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:20:01:201"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68698f7eca322abdc5cf3845 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:20:01:201"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68698f7eca322abdc5cf3845 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:30:00:300"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654295ffc6f39f4ad6b383 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:30:00:300"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6861cb1bffc6f39f4ad6b311 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 00:30:00:300"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:33:50:3350"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser not found for notification: 6849f54d0ffebb000dbb8736 in storeUsers collection\u001b[39m","timestamp":"2025-07-06 01:33:50:3350"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654253ffc6f39f4ad6b37f not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:33:50:3350"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:35:51:3551"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654253ffc6f39f4ad6b37f not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:35:51:3551"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 6849f54d0ffebb000dbb8736 not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:43:57:4357"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654253ffc6f39f4ad6b37f not found or app mismatch\u001b[39m","timestamp":"2025-07-06 01:44:14:4414"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 685fc9664591c2000d4269ac not found or app mismatch\u001b[39m","timestamp":"2025-07-07 01:56:29:5629"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-07 02:04:08:48"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for cacao__admin__68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-07 02:04:08:48"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mUser 68654253ffc6f39f4ad6b37f not found or app mismatch\u001b[39m","timestamp":"2025-07-07 02:04:10:410"}

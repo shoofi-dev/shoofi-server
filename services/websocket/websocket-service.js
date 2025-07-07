@@ -285,11 +285,11 @@ class WebSocketService {
   /**
    * Send message to all admin users in an app
    */
-  sendToAppAdmins(appType, message) {
+  sendToAppAdmins(appType, message, appName) {
     const results = [];
     this.clients.forEach((client, userId) => {
-      if (client.appType === appType && client.appType === 'shoofi-partner') {
-        results.push(this.sendToUser(userId, message, appType));
+      if (client.appType === appType && client?.appName === appName) {
+        results.push(this.sendToUser(userId, message, appType, appName));
       }
     });
     return results;

@@ -24,6 +24,7 @@ const { indexOrders } = require("../lib/indexing");
 const moment = require("moment");
 const router = express.Router();
 const deliveryService = require("../services/delivery/book-delivery");
+const websocketService = require('../services/websocket/websocket-service');
 
 // Helper function to process credit card payment
 const processCreditCardPayment = async (paymentData, orderDoc, req) => {
@@ -193,29 +194,29 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
   }
 
   // Send SMS to admin number (keeping existing functionality)
-  try {
-    await smsService.sendSMS("0542454362", notificationBody, req);
-  } catch (error) {
-    console.error("Failed to send SMS to admin:", error);
-  }
+  // try {
+  //   await smsService.sendSMS("0542454362", notificationBody, req);
+  // } catch (error) {
+  //   console.error("Failed to send SMS to admin:", error);
+  // }
 
   // Fire websocket event for admin (keeping existing functionality)
-  websockets.fireWebscoketEvent({
-    type: "new order",
-    customerIds: [orderDoc.customerId],
-    isAdmin: true,
-    appName,
-  });
+  // websockets.fireWebscoketEvent({
+  //   type: "new order",
+  //   customerIds: [orderDoc.customerId],
+  //   isAdmin: true,
+  //   appName,
+  // });
 
   // Send WebSocket notification to store users to refresh unviewed orders count
-  const websocketService = require('../services/websocket/websocket-service');
   websocketService.sendToAppAdmins('shoofi-partner', {
     type: 'unviewed_orders_updated',
     data: {
       orderId: orderDoc._id,
       action: 'new_order',
       timestamp: new Date().toISOString()
-    }
+    },
+    appName: appName
   });
 };
 
@@ -794,33 +795,33 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
             phone: customer.phone,
           },
         };
-        websockets.fireWebscoketEvent({
-          type: "new order",
-          customerIds: [customerId],
-          isAdmin: true,
-          appName,
-        });
+        // websockets.fireWebscoketEvent({
+        //   type: "new order",
+        //   customerIds: [customerId],
+        //   isAdmin: true,
+        //   appName,
+        // });
 
         // Send WebSocket notification to store users to refresh unviewed orders count
-        const websocketService = require('../services/websocket/websocket-service');
         websocketService.sendToAppAdmins('shoofi-partner', {
           type: 'unviewed_orders_updated',
           data: {
             orderId: orderDoc._id,
             action: 'new_order',
             timestamp: new Date().toISOString()
-          }
+          },
+          appName: appName
         });
 
-        const smsContent = smsService.getOrderRecivedContent(
-          customer.fullName,
-          orderDoc.total,
-          orderDoc.order.receipt_method,
-          orderDoc.orderId,
-          orderDoc.app_language
-        );
-        await smsService.sendSMS(customer.phone, smsContent, req);
-        await smsService.sendSMS("0542454362", smsContent, req);
+        // const smsContent = smsService.getOrderRecivedContent(
+        //   customer.fullName,
+        //   orderDoc.total,
+        //   orderDoc.order.receipt_method,
+        //   orderDoc.orderId,
+        //   orderDoc.app_language
+        // );
+        // await smsService.sendSMS(customer.phone, smsContent, req);
+        // await smsService.sendSMS("0542454362", smsContent, req);
 
         // Send notifications for successful payment
         await sendStoreOwnerNotifications(orderDoc, req, appName);
@@ -1453,7 +1454,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           smsDeliveryContent,
           req
         );
-        await smsService.sendSMS("0542454362", smsDeliveryContent, req);
+        // await smsService.sendSMS("0542454362", smsDeliveryContent, req);
       }
       if (shoofiStore.isSendNotificationToDeliveryCompany) {
         const deliveryData = {
@@ -1482,8 +1483,6 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
     }
 
     // Send notification to store users about order viewed update
-    const notificationService = require('../services/notification/notification-service');
-    const websocketService = require('../services/websocket/websocket-service');
     
     // Send WebSocket notification to store users to refresh unviewed orders count
     websocketService.sendToAppAdmins('shoofi-partner', {
@@ -1492,12 +1491,12 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         orderId: order._id,
         action: 'order_viewed',
         timestamp: new Date().toISOString()
-      }
+      },
+      appName: appName
     });
 
     // Send print notification to all store users (admins)
     try {
-      const websocketService = require('../services/websocket/websocket-service');
       websocketService.sendToAppAdmins('shoofi-partner', {
         type: 'print_order',
         data: {
@@ -1507,7 +1506,8 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           total: order.total,
           action: 'print_required',
           timestamp: new Date().toISOString()
-        }
+        },
+        appName: appName
       });
     } catch (error) {
       console.error("Failed to send print notification:", error);
@@ -1796,7 +1796,6 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
     );
     if (req.body.status === false) {
       // Send notification to store users about unprinted order
-      const websocketService = require('../services/websocket/websocket-service');
       
       try {
         websocketService.sendToAppAdmins('shoofi-partner', {
@@ -1805,7 +1804,8 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
             orderId: req.body.orderId,
             action: 'print_not_printed',
             timestamp: new Date().toISOString()
-          }
+          },
+          appName: appName
         });
       } catch (error) {
         console.error("Failed to send print notification:", error);
