@@ -216,8 +216,7 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
       action: 'new_order',
       timestamp: new Date().toISOString()
     },
-    appName: appName
-  });
+  },appName);
 };
 
 const generateQR = async (latitude, longitude) => {
@@ -292,24 +291,62 @@ const getBusinessDayBoundaries = async (targetDate, req, appName) => {
       return d;
     }
     
+    // Helper to convert time string to minutes for comparison
+    function timeToMinutes(timeStr) {
+      const [h, m] = timeStr.split(":").map(Number);
+      return h * 60 + m;
+    }
+    
+    // Helper to get current time in minutes
+    function getCurrentTimeMinutes() {
+      const now = moment().utcOffset(offsetHours);
+      return now.hours() * 60 + now.minutes();
+    }
+    
     let businessStart, businessEnd;
-    const currentHour = moment().utcOffset(offsetHours).hour();
-    const midnight = 0;
+    
+    // Debug logging
+    console.log('=== Business Day Boundaries Debug ===');
+    console.log('Target date:', targetDate);
+    console.log('Target day:', dayName);
+    console.log('Today hours:', todayHours);
+    console.log('Yesterday hours:', yesterdayHours);
+    console.log('Current time minutes:', getCurrentTimeMinutes());
+    console.log('Today start minutes:', todayHours ? timeToMinutes(todayHours.start) : 'N/A');
+    console.log('Today end minutes:', todayHours ? timeToMinutes(todayHours.end) : 'N/A');
+    console.log('Yesterday start minutes:', yesterdayHours ? timeToMinutes(yesterdayHours.start) : 'N/A');
+    console.log('Yesterday end minutes:', yesterdayHours ? timeToMinutes(yesterdayHours.end) : 'N/A');
+    
+    // Check if yesterday had overnight hours and we're still within that business day
+    if (yesterdayHours && yesterdayHours.isOpen && timeToMinutes(yesterdayHours.end) < timeToMinutes(yesterdayHours.start)) {
+      const currentTimeMinutes = getCurrentTimeMinutes();
+      const yesterdayEndMinutes = timeToMinutes(yesterdayHours.end);
+      
+      // If current time is before yesterday's end time (overnight), use yesterday's business day
+      if (currentTimeMinutes < yesterdayEndMinutes) {
+        console.log('Using yesterday overnight hours logic - still within yesterday business day');
+        businessStart = parseTime(yesterdayHours.start, targetDay.clone().subtract(1, 'day'));
+        businessEnd = parseTime(yesterdayHours.end, targetDay);
+        console.log('Final businessStart:', businessStart.format());
+        console.log('Final businessEnd:', businessEnd.format());
+        console.log('=== End Debug ===');
+        return { start: businessStart, end: businessEnd };
+      }
+    }
     
     // Check if today has overnight hours (end < start)
-    if (todayHours && todayHours.isOpen && todayHours.end < todayHours.start && currentHour > midnight) {
-      // Today has overnight hours, so business day starts from yesterday's start time
-      businessStart = parseTime(todayHours.start, targetDay.clone().subtract(1, 'day'));
-      businessEnd = parseTime(todayHours.end, targetDay);
-    } else if (yesterdayHours && yesterdayHours.isOpen && yesterdayHours.end < yesterdayHours.start) {
-      // Yesterday had overnight hours that extend into today
-      businessStart = parseTime(yesterdayHours.start, targetDay.clone().subtract(1, 'day'));
-      businessEnd = parseTime(yesterdayHours.end, targetDay);
+    if (todayHours && todayHours.isOpen && timeToMinutes(todayHours.end) < timeToMinutes(todayHours.start)) {
+      console.log('Using today overnight hours logic');
+      // Today has overnight hours, so business day starts today and ends tomorrow
+      businessStart = parseTime(todayHours.start, targetDay);
+      businessEnd = parseTime(todayHours.end, targetDay.clone().add(1, 'day'));
     } else if (todayHours && todayHours.isOpen) {
+      console.log('Using normal today hours logic');
       // Normal same-day hours
       businessStart = parseTime(todayHours.start, targetDay);
       businessEnd = parseTime(todayHours.end, targetDay);
     } else {
+      console.log('Using fallback day boundaries');
       // Store is closed today, use simple day boundaries
       businessStart = moment(targetDate).utcOffset(offsetHours);
       businessStart.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
@@ -317,6 +354,10 @@ const getBusinessDayBoundaries = async (targetDate, req, appName) => {
       businessEnd = moment(targetDate).utcOffset(offsetHours);
       businessEnd.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
     }
+    
+    console.log('Final businessStart:', businessStart.format());
+    console.log('Final businessEnd:', businessEnd.format());
+    console.log('=== End Debug ===');
     
     return { start: businessStart, end: businessEnd };
   } catch (error) {
@@ -810,8 +851,7 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
             action: 'new_order',
             timestamp: new Date().toISOString()
           },
-          appName: appName
-        });
+        },appName);
 
         // const smsContent = smsService.getOrderRecivedContent(
         //   customer.fullName,
@@ -1234,13 +1274,13 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     );
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
     const customerId = order?.customerId;
-    websockets.fireWebscoketEvent({
-      type: "order status updated",
-      data: updateobj,
-      customerIds: [customerId],
-      isAdmin: true,
-      appName,
-    });
+    // websockets.fireWebscoketEvent({
+    //   type: "order status updated",
+    //   data: updateobj,
+    //   customerIds: [customerId],
+    //   isAdmin: true,
+    //   appName,
+    // });
 
     const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({
@@ -1492,8 +1532,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         action: 'order_viewed',
         timestamp: new Date().toISOString()
       },
-      appName: appName
-    });
+    },appName);
 
     // Send print notification to all store users (admins)
     try {
@@ -1507,8 +1546,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           action: 'print_required',
           timestamp: new Date().toISOString()
         },
-        appName: appName
-      });
+      },appName);
     } catch (error) {
       console.error("Failed to send print notification:", error);
     }
@@ -1805,8 +1843,7 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
             action: 'print_not_printed',
             timestamp: new Date().toISOString()
           },
-          appName: appName
-        });
+        },appName);
       } catch (error) {
         console.error("Failed to send print notification:", error);
       }

@@ -3,34 +3,121 @@ const { getId } = require("../../lib/common");
 const { getCustomerAppName } = require("../../utils/app-name-helper");
 const logger = require("../../utils/logger");
 const jwt = require('jsonwebtoken');
+const Redis = require('ioredis');
+
+// Helper to parse REDIS_URL connection string
+function parseRedisUrl(redisUrl) {
+  try {
+    const url = new URL(redisUrl);
+    return {
+      host: url.hostname,
+      port: url.port ? parseInt(url.port, 10) : 6379,
+      username: url.username || undefined,
+      password: url.password || undefined,
+      tls: url.protocol === 'rediss:' ? {} : undefined
+    };
+  } catch (e) {
+    return {};
+  }
+}
 
 class WebSocketService {
   constructor() {
-    this.clients = new Map(); // userId -> { connection, appName, lastPing, metadata }
+    this.clients = new Map(); // userId -> { connection, appName, appType, lastPing, metadata }
     this.rooms = new Map(); // roomId -> Set of userIds
     this.heartbeatInterval = 30000; // 30 seconds
     this.connectionTimeout = 60000; // 1 minute
     this.maxConnectionsPerUser = 3;
+    this.redis = null;
+    this.serverId = `server_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   /**
-   * Initialize WebSocket server
+   * Initialize WebSocket server with Redis
    */
-  init(server) {
-    this.wsServer = new WebSocketServer({ 
-      server,
-      clientTracking: false // We'll handle tracking ourselves
-    });
+  async init(server) {
+    try {
+      // Initialize Redis connection
+      let redisOptions = {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: process.env.REDIS_PORT || 6379,
+        password: process.env.REDIS_PASSWORD,
+        retryDelayOnFailover: 100,
+        maxRetriesPerRequest: 3,
+        lazyConnect: true,
+        connectTimeout: 10000, // 10s connection timeout
+        commandTimeout: 5000,  // 5s command timeout
+        keepAlive: 30000,      // 30s keep-alive for persistent connections
+        enableOfflineQueue: false, // Better for real-time operations
+        reconnectOnError: (err) => {
+          // Handle READONLY errors (Redis failover scenarios)
+          const targetError = 'READONLY';
+          if (err.message.includes(targetError)) {
+            return true;
+          }
+          return false;
+        }
+      };
+      if (process.env.REDIS_URL) {
+        redisOptions = { ...redisOptions, ...parseRedisUrl(process.env.REDIS_URL) };
+      }
+      this.redis = new Redis(redisOptions);
 
-    this.wsServer.on("connection", this.handleConnection.bind(this));
-    
-    // Start heartbeat
-    this.startHeartbeat();
-    
-    // Start connection cleanup
-    this.startConnectionCleanup();
-    
-    logger.info('WebSocket server initialized');
+      this.redis.on('error', (error) => {
+        logger.error('Redis connection error:', error);
+      });
+
+      this.redis.on('connect', () => {
+        console.log('✅ Redis connected for WebSocket service')
+        logger.info('✅ Redis connected for WebSocket service');
+      });
+
+      this.redis.on('ready', () => {
+        console.log('✅ Redis ready for WebSocket service');
+        logger.info('✅ Redis ready for WebSocket service');
+      });
+
+      // Try to connect to Redis, but don't fail if it's not available
+      try {
+        await this.redis.connect();
+        logger.info('Redis connected successfully');
+      } catch (redisError) {
+        logger.warn('Redis connection failed, running in local-only mode:', redisError.message);
+        logger.warn('Cross-server communication and message queuing will be disabled');
+        this.redis = null; // Set to null to indicate Redis is not available
+      }
+
+      this.wsServer = new WebSocketServer({ 
+        server,
+        clientTracking: false // We'll handle tracking ourselves
+      });
+
+      // this.wsServer.on("connection", this.handleConnection.bind(this));
+      this.wsServer.on('connection', (ws, req) => {
+        this.handleConnection.bind(this)(ws, req);
+        ws.on('close', (code, reason) => {
+          console.log(`WebSocket closed: code=${code}, reason=${reason}`);
+        });
+        ws.on('error', (err) => {
+          console.log('WebSocket error:', err);
+        });
+      });
+      // Start heartbeat
+      this.startHeartbeat();
+      
+      // Start connection cleanup
+      this.startConnectionCleanup();
+      
+      // Start Redis message listener only if Redis is available
+      if (this.redis) {
+        this.startRedisMessageListener();
+      }
+      
+      logger.info(`WebSocket server initialized with ID: ${this.serverId}`);
+    } catch (error) {
+      logger.error('Failed to initialize WebSocket service:', error);
+      throw error;
+    }
   }
 
   /**
@@ -47,36 +134,52 @@ class WebSocketService {
       const { userId, appName, appType, metadata } = connectionInfo;
       
       // Check connection limits
-      if (!this.canConnect(userId)) {
+      if (!await this.canConnect(userId)) {
         connection.close(1008, 'Too many connections');
         return;
       }
 
-      // Store connection
+      // Store connection locally
       this.clients.set(userId, {
         connection,
         appName,
         appType,
         metadata,
         lastPing: Date.now(),
-        connectedAt: Date.now()
+        connectedAt: Date.now(),
+        serverId: this.serverId
       });
 
+      // Store connection in Redis for cross-server communication (if available)
+      if (this.redis) {
+        try {
+          await this.redis.hset(`ws:connections:${userId}`, {
+            appName,
+            appType,
+            serverId: this.serverId,
+            connectedAt: Date.now(),
+            lastPing: Date.now()
+          });
+
+          // Set expiration for connection data
+          await this.redis.expire(`ws:connections:${userId}`, 300); // 5 minutes
+        } catch (redisError) {
+          logger.warn(`Failed to store connection in Redis for ${userId}:`, redisError.message);
+        }
+      }
+
       // Join default room
-      this.joinRoom(userId, `${appType}`);
-      // if (userType === 'admin') {
-      //   this.joinRoom(userId, `admin:${appName}`);
-      // }
+      await this.joinRoom(userId, `${appType}`);
 
       // Set up connection event handlers
       this.setupConnectionHandlers(userId, connection);
 
-      logger.info(`WebSocket connected: ${userId} (${appType})`);
+      logger.info(`WebSocket connected: ${userId} (${appType}) on server ${this.serverId}`);
       
       // Send welcome message
       this.sendToUser(userId, {
         type: 'connection_established',
-        data: { userId, appType }
+        data: { userId, appType, serverId: this.serverId }
       }, appType);
 
     } catch (error) {
@@ -95,19 +198,23 @@ class WebSocketService {
       const customerId = url.searchParams.get('customerId');
       const appName = url.searchParams.get('appName');
       const appType = url.searchParams.get('appType');
-      // const userType = url.searchParams.get('userType');
 
-      // if (!token || !customerId || !appName) {
-      //   logger.warn('Missing required parameters for WebSocket connection');
+      if (!token || !customerId || !appName || !appType) {
+        logger.warn('Missing required parameters for WebSocket connection');
+        return null;
+      }
+
+      // Verify JWT token
+      // try {
+      //   const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      //   if (decoded.customerId !== customerId) {
+      //     logger.warn('Token customerId mismatch');
+      //     return null;
+      //   }
+      // } catch (jwtError) {
+      //   logger.warn('JWT verification failed:', jwtError.message);
       //   return null;
       // }
-
-      // Verify JWT token (you should implement proper JWT verification)
-      // const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      
-      // For now, we'll use a simple validation
-      // const userType = customerId.includes('__admin') ? 'admin' : 'user';
-      // const cleanUserId = customerId.replace('__admin', '');  
 
       return {
         userId: customerId,
@@ -128,11 +235,31 @@ class WebSocketService {
   /**
    * Check if user can establish new connection
    */
-  canConnect(userId) {
-    const existingConnections = Array.from(this.clients.keys())
-      .filter(key => key === userId).length;
-    
-    return existingConnections < this.maxConnectionsPerUser;
+  async canConnect(userId) {
+    try {
+      // Check local connections
+      const localConnections = Array.from(this.clients.keys())
+        .filter(key => key === userId).length;
+      
+      // Check Redis for connections on other servers (if available)
+      if (this.redis) {
+        try {
+          const redisConnections = await this.redis.hgetall(`ws:connections:${userId}`);
+          const totalConnections = localConnections + (redisConnections ? 1 : 0);
+          return totalConnections < this.maxConnectionsPerUser;
+        } catch (redisError) {
+          logger.warn(`Failed to check Redis connections for ${userId}:`, redisError.message);
+          // Fall back to local-only check
+          return localConnections < this.maxConnectionsPerUser;
+        }
+      }
+      
+      // If Redis is not available, only check local connections
+      return localConnections < this.maxConnectionsPerUser;
+    } catch (error) {
+      logger.error('Error checking connection limits:', error);
+      return false;
+    }
   }
 
   /**
@@ -161,6 +288,12 @@ class WebSocketService {
       const client = this.clients.get(userId);
       if (client) {
         client.lastPing = Date.now();
+        // Update Redis (if available)
+        if (this.redis) {
+          this.redis.hset(`ws:connections:${userId}`, 'lastPing', Date.now()).catch(err => {
+            logger.error('Failed to update Redis ping time:', err);
+          });
+        }
       }
     });
   }
@@ -176,7 +309,7 @@ class WebSocketService {
 
     switch (message.type) {
       case 'ping':
-        this.sendToUser(userId, { type: 'pong', data: { timestamp: Date.now() } }, client.appName);
+        this.sendToUser(userId, { type: 'pong', data: { timestamp: Date.now() } }, client.appType);
         break;
       
       case 'join_room':
@@ -199,7 +332,7 @@ class WebSocketService {
   /**
    * Handle WebSocket disconnection
    */
-  handleDisconnection(userId, code, reason) {
+  async handleDisconnection(userId, code, reason) {
     const client = this.clients.get(userId);
     if (!client) return;
 
@@ -211,8 +344,17 @@ class WebSocketService {
       }
     });
 
-    // Remove client
+    // Remove client locally
     this.clients.delete(userId);
+
+    // Remove from Redis (if available)
+    if (this.redis) {
+      try {
+        await this.redis.del(`ws:connections:${userId}`);
+      } catch (error) {
+        logger.error('Failed to remove connection from Redis:', error);
+      }
+    }
 
     logger.info(`WebSocket disconnected: ${userId} (code: ${code}, reason: ${reason})`);
   }
@@ -220,38 +362,118 @@ class WebSocketService {
   /**
    * Send message to specific user
    */
-  sendToUser(userId, message, appType) {
+  async sendToUser(userId, message, appType) {
     const client = this.clients.get(userId);
-    if (!client || client.appType !== appType) {
-      logger.warn(`User ${userId} not found or app mismatch`);
-      return false;
+    
+    // Check if user is connected to this server
+    if (client && client.appType === appType) {
+      try {
+        const messageStr = JSON.stringify(message);
+        console.log("WEBSOCKET_messageStr",messageStr)
+        client.connection.send(messageStr);
+        return { success: true, serverId: this.serverId };
+      } catch (error) {
+        logger.error(`Failed to send message to ${userId}:`, error);
+        return { success: false, error: error.message, serverId: this.serverId };
+      }
+    }
+
+    // Check if user is connected to another server (if Redis is available)
+    if (this.redis) {
+      try {
+        const redisConnection = await this.redis.hgetall(`ws:connections:${userId}`);
+        if (redisConnection && redisConnection.appType === appType) {
+          // Publish message to Redis for other servers
+          await this.redis.publish('websocket:message', JSON.stringify({
+            userId,
+            message,
+            appType,
+            targetServerId: redisConnection.serverId,
+            sourceServerId: this.serverId
+          }));
+          return { success: true, serverId: redisConnection.serverId };
+        }
+      } catch (error) {
+        logger.error('Failed to check Redis for user connection:', error);
+      }
+    }
+
+    // User not found - queue message for later delivery (if Redis is available)
+    if (this.redis) {
+      await this.queueMessage(userId, message, appType);
+    }
+    return { success: false, error: 'User not connected', queued: this.redis ? true : false };
+  }
+
+  /**
+   * Queue message for offline users
+   */
+  async queueMessage(userId, message, appType) {
+    if (!this.redis) {
+      logger.debug(`Cannot queue message for ${userId} - Redis not available`);
+      return;
     }
 
     try {
-      const messageStr = JSON.stringify(message);
-      client.connection.send(messageStr);
-      return true;
+      const messageData = {
+        userId,
+        message,
+        appType,
+        timestamp: Date.now(),
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+      };
+      
+      await this.redis.lpush(`ws:queue:${userId}`, JSON.stringify(messageData));
+      await this.redis.expire(`ws:queue:${userId}`, 7 * 24 * 60 * 60); // 7 days
+      
+      logger.debug(`Message queued for user ${userId}`);
     } catch (error) {
-      logger.error(`Failed to send message to ${userId}:`, error);
-      return false;
+      logger.error('Failed to queue message:', error);
+    }
+  }
+
+  /**
+   * Send queued messages to user when they connect
+   */
+  async sendQueuedMessages(userId) {
+    if (!this.redis) {
+      logger.debug(`Cannot send queued messages for ${userId} - Redis not available`);
+      return;
+    }
+
+    try {
+      const queuedMessages = await this.redis.lrange(`ws:queue:${userId}`, 0, -1);
+      if (queuedMessages.length > 0) {
+        for (const messageStr of queuedMessages) {
+          const messageData = JSON.parse(messageStr);
+          if (messageData.expiresAt > Date.now()) {
+            await this.sendToUser(userId, messageData.message, messageData.appType);
+          }
+        }
+        // Clear queue after sending
+        await this.redis.del(`ws:queue:${userId}`);
+        logger.info(`Sent ${queuedMessages.length} queued messages to ${userId}`);
+      }
+    } catch (error) {
+      logger.error('Failed to send queued messages:', error);
     }
   }
 
   /**
    * Send message to multiple users
    */
-  sendToUsers(userIds, message, appType) {
+  async sendToUsers(userIds, message, appType) {
     const results = [];
-    userIds.forEach(userId => {
-      results.push(this.sendToUser(userId, message, appType));
-    });
+    for (const userId of userIds) {
+      results.push(await this.sendToUser(userId, message, appType));
+    }
     return results;
   }
 
   /**
    * Send message to room
    */
-  sendToRoom(roomId, message, appType) {
+  async sendToRoom(roomId, message, appType) {
     const room = this.rooms.get(roomId);
     if (!room) {
       logger.warn(`Room ${roomId} not found`);
@@ -259,12 +481,12 @@ class WebSocketService {
     }
 
     const results = [];
-    room.forEach(userId => {
+    for (const userId of room) {
       const client = this.clients.get(userId);
       if (client && client.appType === appType) {
-        results.push(this.sendToUser(userId, message, appType));
+        results.push(await this.sendToUser(userId, message, appType));
       }
-    });
+    }
 
     return results;
   }
@@ -272,33 +494,33 @@ class WebSocketService {
   /**
    * Send message to all users in an app
    */
-  sendToApp(appType, message) {
+  async sendToApp(appType, message) {
     const results = [];
-    this.clients.forEach((client, userId) => {
+    for (const [userId, client] of this.clients) {
       if (client.appType === appType) {
-        results.push(this.sendToUser(userId, message, appType));
+        results.push(await this.sendToUser(userId, message, appType));
       }
-    });
+    }
     return results;
   }
 
   /**
    * Send message to all admin users in an app
    */
-  sendToAppAdmins(appType, message, appName) {
+  async sendToAppAdmins(appType, message, appName) {
     const results = [];
-    this.clients.forEach((client, userId) => {
+    for (const [userId, client] of this.clients) {
       if (client.appType === appType && client?.appName === appName) {
-        results.push(this.sendToUser(userId, message, appType, appName));
+        results.push(await this.sendToUser(userId, message, appType));
       }
-    });
+    }
     return results;
   }
 
   /**
    * Join a room
    */
-  joinRoom(userId, roomId) {
+  async joinRoom(userId, roomId) {
     if (!this.rooms.has(roomId)) {
       this.rooms.set(roomId, new Set());
     }
@@ -318,6 +540,44 @@ class WebSocketService {
       }
       logger.debug(`User ${userId} left room ${roomId}`);
     }
+  }
+
+  /**
+   * Start Redis message listener for cross-server communication
+   */
+  startRedisMessageListener() {
+    let subscriberOptions = {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: process.env.REDIS_PORT || 6379,
+      password: process.env.REDIS_PASSWORD
+    };
+    if (process.env.REDIS_URL) {
+      subscriberOptions = { ...subscriberOptions, ...parseRedisUrl(process.env.REDIS_URL) };
+    }
+    const subscriber = new Redis(subscriberOptions);
+
+    subscriber.subscribe('websocket:message', (err) => {
+      if (err) {
+        logger.error('Failed to subscribe to Redis channel:', err);
+      } else {
+        logger.info('Subscribed to Redis websocket:message channel');
+      }
+    });
+
+    subscriber.on('message', (channel, message) => {
+      try {
+        const data = JSON.parse(message);
+        if (data.targetServerId === this.serverId) {
+          const client = this.clients.get(data.userId);
+          if (client && client.connection.readyState === client.connection.OPEN) {
+            const messageStr = JSON.stringify(data.message);
+            client.connection.send(messageStr);
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to handle Redis message:', error);
+      }
+    });
   }
 
   /**
@@ -342,26 +602,27 @@ class WebSocketService {
    * Start connection cleanup
    */
   startConnectionCleanup() {
-    setInterval(() => {
+    setInterval(async () => {
       const now = Date.now();
-      this.clients.forEach((client, userId) => {
+      for (const [userId, client] of this.clients) {
         if (now - client.lastPing > this.connectionTimeout) {
           logger.warn(`Connection timeout for ${userId}`);
           this.handleDisconnection(userId, 1000, 'Connection timeout');
         }
-      });
+      }
     }, this.heartbeatInterval);
   }
 
   /**
    * Get connection statistics
    */
-  getStats() {
+  async getStats() {
     const stats = {
       totalConnections: this.clients.size,
       totalRooms: this.rooms.size,
       connectionsByApp: {},
-      connectionsByType: {}
+      connectionsByType: {},
+      serverId: this.serverId
     };
 
     this.clients.forEach((client, userId) => {
@@ -369,8 +630,37 @@ class WebSocketService {
       stats.connectionsByApp[client.appName] = (stats.connectionsByApp[client.appName] || 0) + 1;
       
       // Count by type
-      // stats.connectionsByType[client.userType] = (stats.connectionsByType[client.userType] || 0) + 1;
+      stats.connectionsByType[client.appType] = (stats.connectionsByType[client.appType] || 0) + 1;
     });
+
+    // Get Redis stats (if available)
+    if (this.redis) {
+      try {
+        const redisConnections = await this.redis.keys('ws:connections:*');
+        stats.totalRedisConnections = redisConnections.length;
+        
+        const queuedMessages = await this.redis.keys('ws:queue:*');
+        stats.totalQueuedMessages = queuedMessages.length;
+
+        // Get memory usage info
+        const memoryInfo = await this.redis.info('memory');
+        const usedMemory = memoryInfo.match(/used_memory_human:(\S+)/)?.[1] || 'unknown';
+        stats.redisMemoryUsage = usedMemory;
+
+        // Get total keys count
+        const totalKeys = await this.redis.dbsize();
+        stats.totalRedisKeys = totalKeys;
+      } catch (error) {
+        logger.error('Failed to get Redis stats:', error);
+        stats.redisError = error.message;
+      }
+    } else {
+      stats.redisStatus = 'not_available';
+      stats.totalRedisConnections = 0;
+      stats.totalQueuedMessages = 0;
+      stats.redisMemoryUsage = 'N/A';
+      stats.totalRedisKeys = 0;
+    }
 
     return stats;
   }
@@ -378,19 +668,42 @@ class WebSocketService {
   /**
    * Broadcast message to all connected clients
    */
-  broadcast(message) {
+  async broadcast(message) {
     const results = [];
-    this.clients.forEach((client, userId) => {
+    for (const [userId, client] of this.clients) {
       try {
         const messageStr = JSON.stringify(message);
         client.connection.send(messageStr);
-        results.push({ userId, success: true });
+        results.push({ userId, success: true, serverId: this.serverId });
       } catch (error) {
         logger.error(`Failed to broadcast to ${userId}:`, error);
-        results.push({ userId, success: false, error: error.message });
+        results.push({ userId, success: false, error: error.message, serverId: this.serverId });
       }
-    });
+    }
     return results;
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  async shutdown() {
+    logger.info('Shutting down WebSocket service...');
+    
+    // Close all connections
+    for (const [userId, client] of this.clients) {
+      try {
+        client.connection.close(1000, 'Server shutdown');
+      } catch (error) {
+        logger.error(`Error closing connection for ${userId}:`, error);
+      }
+    }
+    
+    // Close Redis connection
+    if (this.redis) {
+      await this.redis.quit();
+    }
+    
+    logger.info('WebSocket service shutdown complete');
   }
 }
 

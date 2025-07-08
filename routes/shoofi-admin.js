@@ -12,6 +12,7 @@ const { getDb } = require("../lib/db");
 const { MongoClient } = require("mongodb");
 const DatabaseInitializationService = require('../services/database/DatabaseInitializationService');
 const adsRouter = require("./ads");
+const websocketService = require('../services/websocket/websocket-service');
 
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -622,6 +623,35 @@ router.delete("/api/shoofiAdmin/category/:id", async (req, res) => {
     res.status(200).json({ message: 'Category deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Failed to delete category', error: err.message });
+  }
+});
+
+// Add WebSocket monitoring endpoints
+router.get('/admin/websocket/stats', async (req, res) => {
+  try {
+      const stats = await websocketService.getStats();
+      res.status(200).json(stats);
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/admin/websocket/connections', async (req, res) => {
+  try {
+      const connections = [];
+      for (const [userId, client] of websocketService.clients) {
+          connections.push({
+              userId,
+              appName: client.appName,
+              appType: client.appType,
+              connectedAt: new Date(client.connectedAt).toISOString(),
+              lastPing: new Date(client.lastPing).toISOString(),
+              serverId: client.serverId
+          });
+      }
+      res.status(200).json(connections);
+  } catch (error) {
+      res.status(500).json({ error: error.message });
   }
 });
 
