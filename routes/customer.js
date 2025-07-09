@@ -1302,4 +1302,141 @@ router.get('/api/customer/:customerId', async (req, res) => {
   }
 });
 
+// Store Users Management Routes
+router.get('/api/customer/store-users/:appName', async (req, res) => {
+  const shoofiDB = req.app.db['shoofi'];
+  
+  try {
+    const users = await shoofiDB.storeUsers.find({
+      appName: req.params.appName
+    }).toArray();
+    
+    res.status(200).json({
+      data: users
+    });
+  } catch (error) {
+    console.error('Error fetching store users:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.get('/api/customer/store-users/:appName/:userId', async (req, res) => {
+  const shoofiDB = req.app.db['shoofi'];
+  
+  try {
+    const user = await shoofiDB.storeUsers.findOne({
+      _id: getId(req.params.userId),
+      appName: req.params.appName
+    });
+    
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    
+    res.status(200).json({
+      data: user
+    });
+  } catch (error) {
+    console.error('Error fetching store user:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post('/api/customer/store-users/:appName', async (req, res) => {
+  const shoofiDB = req.app.db['shoofi'];
+  
+  try {
+    // Check if user already exists
+    const existingUser = await shoofiDB.storeUsers.findOne({
+      phone: req.body.phone,
+      appName: req.params.appName
+    });
+    
+    if (existingUser) {
+      res.status(400).json({ message: "User with this phone number already exists" });
+      return;
+    }
+    
+    const userData = {
+      phone: req.body.phone,
+      fullName: req.body.fullName,
+      isAdmin: req.body.isAdmin || false,
+      roles: req.body.roles || [],
+      appName: req.params.appName,
+      created: new Date(),
+      orders: []
+    };
+    
+    const result = await shoofiDB.storeUsers.insertOne(userData);
+    
+    res.status(201).json({
+      message: "User created successfully",
+      data: { ...userData, _id: result.insertedId }
+    });
+  } catch (error) {
+    console.error('Error creating store user:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.put('/api/customer/store-users/:appName/:userId', async (req, res) => {
+  const shoofiDB = req.app.db['shoofi'];
+  
+  try {
+    const updateData = {
+      fullName: req.body.fullName,
+      isAdmin: req.body.isAdmin || false,
+      roles: req.body.roles || []
+    };
+    
+    const result = await shoofiDB.storeUsers.findOneAndUpdate(
+      {
+        _id: getId(req.params.userId),
+        appName: req.params.appName
+      },
+      {
+        $set: updateData
+      },
+      { returnOriginal: false }
+    );
+    
+    if (!result.value) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    
+    res.status(200).json({
+      message: "User updated successfully",
+      data: result.value
+    });
+  } catch (error) {
+    console.error('Error updating store user:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.delete('/api/customer/store-users/:appName/:userId', async (req, res) => {
+  const shoofiDB = req.app.db['shoofi'];
+  
+  try {
+    const result = await shoofiDB.storeUsers.deleteOne({
+      _id: getId(req.params.userId),
+      appName: req.params.appName
+    });
+    
+    if (result.deletedCount === 0) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    
+    res.status(200).json({
+      message: "User deleted successfully"
+    });
+  } catch (error) {
+    console.error('Error deleting store user:', error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 module.exports = router;
