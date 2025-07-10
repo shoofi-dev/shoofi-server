@@ -1,6 +1,6 @@
 const { getId } = require("../../lib/common");
 
-const ACTIVE_ORDER_STATUSES = ["0", "1", "2"];
+const ACTIVE_ORDER_STATUSES = ["1", "2", "3"];
 
 async function findAllMatchingDrivers({ appDb, location }) {
   const deliveryDB = appDb['delivery-company'];
@@ -33,7 +33,7 @@ async function findAllMatchingDrivers({ appDb, location }) {
   const driverOrderCounts = await Promise.all(
     allDrivers.map(async (driver) => {
       const count = await deliveryDB.bookDelivery.countDocuments({
-        "driver._id": driver._id.toString(),
+        "driver._id": driver._id,
         status: { $in: ACTIVE_ORDER_STATUSES }
       });
       return { ...driver, activeOrderCount: count };
@@ -53,7 +53,19 @@ async function assignBestDeliveryDriver({ appDb, location }) {
     return { success: false, reason: "No drivers found for this location." };
   }
 
-  const best = allDrivers[0];
+  // Check if all drivers have the same activeOrderCount
+  const firstDriverCount = allDrivers[0].activeOrderCount;
+  const allSameCount = allDrivers.every(driver => driver.activeOrderCount === firstDriverCount);
+  
+  let best;
+  if (allSameCount && allDrivers.length > 1) {
+    // Randomly select a driver when all have the same count
+    const randomIndex = Math.floor(Math.random() * allDrivers.length);
+    best = allDrivers[randomIndex];
+  } else {
+    // Use the first driver (already sorted by activeOrderCount)
+    best = allDrivers[0];
+  }
   const area = await appDb['delivery-company'].areas.findOne({
     geometry: {
       $geoIntersects: {
