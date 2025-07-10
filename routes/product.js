@@ -372,33 +372,341 @@ router.post("/api/admin/product/update/order", async (req, res) => {
   const categoryId = req.body.categoryId;
   const subCategoryId = req.body.subCategoryId;
   const productsList = req.body.productsList;
-  let countDocuments = null;
-  if (subCategoryId) {
-    countDocuments = await db.products.countDocuments({
-      categoryId: categoryId.toString(),
-      subCategoryId: subCategoryId.toString(),
-    });
-  } else {
-    countDocuments = await db.products.countDocuments({
-      categoryId: categoryId.toString(),
-    });
-  }
-
+  
   try {
-    for (i = 1; i <= productsList.length; i++) {
-      await db.products.updateOne(
-        { _id: getId(productsList[i - 1]._id) },
-        { $set: { order: countDocuments - i } },
-        { multi: false }
-      );
+    // Validate input
+    if (!Array.isArray(productsList) || productsList.length === 0) {
+      return res.status(400).json({ message: "Invalid products list" });
     }
 
+    // Use bulk operations for better performance
+    const bulkOps = productsList.map((product, index) => ({
+      updateOne: {
+        filter: { _id: getId(product._id) },
+        update: { $set: { order: index } }
+      }
+    }));
+
+    await db.products.bulkWrite(bulkOps);
+
+    // Clear menu cache to reflect changes
+    const menuCache = require('../utils/menu-cache');
+    await menuCache.clearStore(appName);
+
+    // Update search index
     indexProducts(req).then(() => {
-      res.status(200).json({ message: "Product successfully ordered" });
+      res.status(200).json({ message: "Product order updated successfully" });
     });
   } catch (e) {
-    console.log(e);
-    res.status(200).json({ message: e });
+    console.error('Error updating product order:', e);
+    res.status(500).json({ message: "Failed to update product order", error: e.message });
+  }
+});
+
+// New endpoint for updating product order per category
+router.post("/api/admin/product/update/order-per-category", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const { categoryId, productsOrder } = req.body;
+  
+  try {
+    // Validate input
+    if (!categoryId || !Array.isArray(productsOrder)) {
+      return res.status(400).json({ message: "Invalid input: categoryId and productsOrder array required" });
+    }
+
+    // Update each product's order for the specific category
+    const bulkOps = productsOrder.map((item, index) => ({
+      updateOne: {
+        filter: { 
+          _id: getId(item.productId),
+          supportedCategoryIds: { $in: [categoryId.toString()] }
+        },
+        update: { 
+          $set: { 
+            [`categoryOrders.${categoryId}`]: index,
+            order: index // Keep legacy order field for backward compatibility
+          }
+        }
+      }
+    }));
+
+    const result = await db.products.bulkWrite(bulkOps);
+
+    // Clear menu cache
+    const menuCache = require('../utils/menu-cache');
+    await menuCache.clearStore(appName);
+
+    // Update search index
+    indexProducts(req).then(() => {
+      res.status(200).json({ 
+        message: "Product order updated successfully per category",
+        updatedCount: result.modifiedCount
+      });
+    });
+  } catch (e) {
+    console.error('Error updating product order per category:', e);
+    res.status(500).json({ message: "Failed to update product order per category", error: e.message });
+  }
+});
+
+// New endpoint for getting products with their order per category
+router.get("/api/admin/product/order/:categoryId", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const categoryId = req.params.categoryId;
+  
+  try {
+    const products = await db.products
+      .find({ 
+        supportedCategoryIds: { $in: [categoryId] },
+        isHidden: { $ne: true }
+      })
+      .project({
+        _id: 1,
+        nameAR: 1,
+        nameHE: 1,
+        img: 1,
+        order: 1,
+        categoryOrders: 1,
+        isInStore: 1,
+        supportedCategoryIds: 1,
+        price: 1,
+        descriptionAR: 1,
+        descriptionHE: 1
+      })
+      .toArray();
+
+    // Sort products by their order in the specific category
+    const sortedProducts = products.sort((a, b) => {
+      const orderA = a.categoryOrders?.[categoryId] ?? a.order ?? 999999;
+      const orderB = b.categoryOrders?.[categoryId] ?? b.order ?? 999999;
+      return orderA - orderB;
+    });
+
+    res.status(200).json({
+      categoryId,
+      products: sortedProducts.map((product, index) => ({
+        ...product,
+        displayOrder: index + 1,
+        categoryOrder: product.categoryOrders?.[categoryId] ?? product.order ?? index
+      }))
+    });
+  } catch (e) {
+    console.error('Error fetching products order:', e);
+    res.status(500).json({ message: "Failed to fetch products order", error: e.message });
+  }
+});
+
+// New endpoint for getting all products with their orders across all categories
+router.get("/api/admin/product/orders", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  
+  try {
+    const products = await db.products
+      .find({ isHidden: { $ne: true } })
+      .project({
+        _id: 1,
+        nameAR: 1,
+        nameHE: 1,
+        img: 1,
+        order: 1,
+        categoryOrders: 1,
+        isInStore: 1,
+        supportedCategoryIds: 1,
+        price: 1
+      })
+      .toArray();
+
+    // Group products by category
+    const productsByCategory = {};
+    
+    products.forEach(product => {
+      product.supportedCategoryIds.forEach(catId => {
+        if (!productsByCategory[catId]) {
+          productsByCategory[catId] = [];
+        }
+        
+        const categoryOrder = product.categoryOrders?.[catId] ?? product.order ?? 999999;
+        productsByCategory[catId].push({
+          ...product,
+          categoryOrder
+        });
+      });
+    });
+
+    // Sort products within each category
+    Object.keys(productsByCategory).forEach(catId => {
+      productsByCategory[catId].sort((a, b) => a.categoryOrder - b.categoryOrder);
+    });
+
+    res.status(200).json({
+      productsByCategory
+    });
+  } catch (e) {
+    console.error('Error fetching all products orders:', e);
+    res.status(500).json({ message: "Failed to fetch all products orders", error: e.message });
+  }
+});
+
+// New endpoint for bulk reordering products across multiple categories
+router.post("/api/admin/product/bulk-reorder", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const { categoryOrders } = req.body; // Array of { categoryId, productsOrder }
+  
+  try {
+    if (!Array.isArray(categoryOrders)) {
+      return res.status(400).json({ message: "Invalid input: categoryOrders array required" });
+    }
+
+    const allBulkOps = [];
+    
+    for (const categoryOrder of categoryOrders) {
+      const { categoryId, productsOrder } = categoryOrder;
+      
+      if (!categoryId || !Array.isArray(productsOrder)) {
+        continue;
+      }
+
+      const bulkOps = productsOrder.map((item, index) => ({
+        updateOne: {
+          filter: { 
+            _id: getId(item.productId),
+            supportedCategoryIds: { $in: [categoryId.toString()] }
+          },
+          update: { 
+            $set: { 
+              [`categoryOrders.${categoryId}`]: index,
+              order: index // Keep legacy order field for backward compatibility
+            }
+          }
+        }
+      }));
+
+      allBulkOps.push(...bulkOps);
+    }
+
+    if (allBulkOps.length > 0) {
+      const result = await db.products.bulkWrite(allBulkOps);
+      
+      // Clear menu cache
+      const menuCache = require('../utils/menu-cache');
+      await menuCache.clearStore(appName);
+
+      // Update search index
+      indexProducts(req).then(() => {
+        res.status(200).json({ 
+          message: "Bulk product reordering completed successfully",
+          updatedCount: result.modifiedCount
+        });
+      });
+    } else {
+      res.status(200).json({ message: "No products to update" });
+    }
+  } catch (e) {
+    console.error('Error bulk reordering products:', e);
+    res.status(500).json({ message: "Failed to bulk reorder products", error: e.message });
+  }
+});
+
+// New endpoint for resetting product order in a category
+router.post("/api/admin/product/reset-order/:categoryId", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const categoryId = req.params.categoryId;
+  
+  try {
+    // Get all products in the category, sorted by creation date
+    const products = await db.products
+      .find({ 
+        supportedCategoryIds: { $in: [categoryId] },
+        isHidden: { $ne: true }
+      })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    // Reset order based on creation date
+    const bulkOps = products.map((product, index) => ({
+      updateOne: {
+        filter: { _id: product._id },
+        update: { 
+          $set: { 
+            [`categoryOrders.${categoryId}`]: index,
+            order: index // Keep legacy order field for backward compatibility
+          }
+        }
+      }
+    }));
+
+    if (bulkOps.length > 0) {
+      await db.products.bulkWrite(bulkOps);
+      
+      // Clear menu cache
+      const menuCache = require('../utils/menu-cache');
+      await menuCache.clearStore(appName);
+
+      // Update search index
+      indexProducts(req).then(() => {
+        res.status(200).json({ 
+          message: "Product order reset successfully",
+          resetCount: products.length
+        });
+      });
+    } else {
+      res.status(200).json({ message: "No products found in category" });
+    }
+  } catch (e) {
+    console.error('Error resetting product order:', e);
+    res.status(500).json({ message: "Failed to reset product order", error: e.message });
+  }
+});
+
+// New endpoint for migrating existing products to use categoryOrders
+router.post("/api/admin/product/migrate-orders", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  
+  try {
+    // Get all products
+    const products = await db.products.find({}).toArray();
+    
+    const bulkOps = [];
+    
+    products.forEach(product => {
+      if (product.supportedCategoryIds && product.supportedCategoryIds.length > 0) {
+        // Initialize categoryOrders if it doesn't exist
+        const categoryOrders = product.categoryOrders || {};
+        
+        // Set order for each category the product belongs to
+        product.supportedCategoryIds.forEach(catId => {
+          if (categoryOrders[catId] === undefined) {
+            categoryOrders[catId] = product.order || 0;
+          }
+        });
+        
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: product._id },
+            update: { $set: { categoryOrders } }
+          }
+        });
+      }
+    });
+
+    if (bulkOps.length > 0) {
+      const result = await db.products.bulkWrite(bulkOps);
+      res.status(200).json({ 
+        message: "Product orders migrated successfully",
+        updatedCount: result.modifiedCount
+      });
+    } else {
+      res.status(200).json({ message: "No products to migrate" });
+    }
+  } catch (e) {
+    console.error('Error migrating product orders:', e);
+    res.status(500).json({ message: "Failed to migrate product orders", error: e.message });
   }
 });
 

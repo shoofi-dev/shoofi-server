@@ -31,12 +31,16 @@ router.get("/api/menu", async (req, res, next) => {
       throw new Error(`Database '${dbName}' not available. Available databases: ${Object.keys(req.app.db || {}).join(', ')}`);
     }
     
-    // Build aggregation pipeline
-    const aggregationPipeline = [
+    // Check if categoryOrders field exists in any product
+    const sampleProduct = await db.collection('products').findOne({});
+    const hasCategoryOrders = sampleProduct && sampleProduct.categoryOrders;
+    
+    // Build aggregation pipeline based on whether categoryOrders exists
+    let aggregationPipeline = [
       // Match only non-hidden categories
       { $match: { isHidden: { $ne: true } } },
       
-      // Sort categories by order
+      // Sort by order
       { $sort: { order: 1 } },
       
       // Lookup products for each category
@@ -55,8 +59,6 @@ router.get("/api/menu", async (req, res, next) => {
                 }
               }
             },
-            // Sort products by order (legacy field)
-            { $sort: { order: 1 } },
             // Project only needed fields
             {
               $project: {
@@ -97,28 +99,46 @@ router.get("/api/menu", async (req, res, next) => {
       }
     ];
 
+    // If categoryOrders exists, add sorting logic
+    if (hasCategoryOrders) {
+      // Insert sorting logic before the projection in the lookup pipeline
+      const lookupStage = aggregationPipeline.find(stage => stage.$lookup);
+      const productsPipeline = lookupStage.$lookup.pipeline;
+      
+      // Insert sorting after the match stage
+      const matchIndex = productsPipeline.findIndex(stage => stage.$match);
+      if (matchIndex !== -1) {
+        productsPipeline.splice(matchIndex + 1, 0, {
+          $addFields: {
+            categoryOrder: {
+              $ifNull: [
+                { $arrayElemAt: [{ $objectToArray: "$categoryOrders" }, 0] },
+                { k: "$$categoryId", v: "$order" }
+              ]
+            }
+          }
+        });
+        productsPipeline.splice(matchIndex + 2, 0, {
+          $sort: { "categoryOrder.v": 1 }
+        });
+      }
+    } else {
+      // Use simple order sorting if categoryOrders doesn't exist
+      const lookupStage = aggregationPipeline.find(stage => stage.$lookup);
+      const productsPipeline = lookupStage.$lookup.pipeline;
+      
+      const matchIndex = productsPipeline.findIndex(stage => stage.$match);
+      if (matchIndex !== -1) {
+        productsPipeline.splice(matchIndex + 1, 0, {
+          $sort: { order: 1 }
+        });
+      }
+    }
+
     const menuAggregation = await db.collection('categories').aggregate(aggregationPipeline).toArray();
 
-    // Post-process to sort products by categoryOrders if available
-    const processedMenu = menuAggregation.map(category => {
-      if (category.products && category.products.length > 0) {
-        // Sort products by categoryOrders if available, otherwise by order
-        const sortedProducts = category.products.sort((a, b) => {
-          const orderA = a.categoryOrders?.[category._id] ?? a.order ?? 999999;
-          const orderB = b.categoryOrders?.[category._id] ?? b.order ?? 999999;
-          return orderA - orderB;
-        });
-        
-        return {
-          ...category,
-          products: sortedProducts
-        };
-      }
-      return category;
-    });
-
     // Extract products for images list
-    const allProducts = processedMenu.reduce((acc, category) => {
+    const allProducts = menuAggregation.reduce((acc, category) => {
       return acc.concat(category.products || []);
     }, []);
 
@@ -132,7 +152,7 @@ router.get("/api/menu", async (req, res, next) => {
     const grouped = _.groupBy(allProducts, 'categoryId');
 
     const menuData = {
-      menu: processedMenu,
+      menu: menuAggregation,
       productsImagesList,
       categoryImages: grouped
     };
@@ -186,117 +206,4 @@ router.get("/api/menu/cache-stats", async (req, res, next) => {
   }
 });
 
-// Route to refresh menu cache
-router.post("/api/menu/refresh", async (req, res, next) => {
-  try {
-    await menuCache.clear();
-    // Trigger a new menu generation
-    const storeId = req.headers['app-name'] || req.query.storeId || 'default';
-    const dbName = req.headers['app-name'] || req.headers['db-name'] || req.query.dbName || 'shoofi';
-    
-    // This will regenerate the cache
-    const db = req.app.db[dbName];
-    
-    if (!db) {
-      throw new Error(`Database '${dbName}' not available`);
-    }
-    
-    const menuAggregation = await db.collection('categories').aggregate([
-      { $match: { isHidden: { $ne: true } } },
-      { $sort: { order: 1 } },
-      {
-        $lookup: {
-          from: 'products',
-          let: { categoryId: { $toString: '$_id' } },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $in: ['$$categoryId', '$supportedCategoryIds'] },
-                    { $ne: ['$isHidden', true] }
-                  ]
-                }
-              }
-            },
-            { $sort: { order: 1 } },
-            {
-              $project: {
-                _id: 1,
-                nameAR: 1,
-                nameHE: 1,
-                descriptionAR: 1,
-                descriptionHE: 1,
-                price: 1,
-                img: 1,
-                order: 1,
-                categoryOrders: 1,
-                isInStore: 1,
-                count: 1,
-                supportedCategoryIds: 1,
-                categoryId: 1
-              }
-            }
-          ],
-          as: 'products'
-        }
-      },
-      {
-        $project: {
-          _id: 1,
-          nameAR: 1,
-          nameHE: 1,
-          descriptionAR: 1,
-          descriptionHE: 1,
-          order: 1,
-          img: 1,
-          products: 1
-        }
-      }
-    ]).toArray();
-
-    // Post-process to sort products by categoryOrders if available
-    const processedMenu = menuAggregation.map(category => {
-      if (category.products && category.products.length > 0) {
-        // Sort products by categoryOrders if available, otherwise by order
-        const sortedProducts = category.products.sort((a, b) => {
-          const orderA = a.categoryOrders?.[category._id] ?? a.order ?? 999999;
-          const orderB = b.categoryOrders?.[category._id] ?? b.order ?? 999999;
-          return orderA - orderB;
-        });
-        
-        return {
-          ...category,
-          products: sortedProducts
-        };
-      }
-      return category;
-    });
-
-    const allProducts = processedMenu.reduce((acc, category) => {
-      return acc.concat(category.products || []);
-    }, []);
-
-    const productsImagesList = allProducts
-      .filter(product => product.img && product.img.length > 0)
-      .map(product => product.img[0]?.uri)
-      .filter(Boolean);
-
-    const grouped = _.groupBy(allProducts, 'categoryId');
-
-    const menuData = {
-      menu: processedMenu,
-      productsImagesList,
-      categoryImages: grouped
-    };
-
-    await menuCache.set(storeId, menuData);
-
-    res.status(200).json({ message: 'Menu cache refreshed successfully', data: menuData });
-  } catch (error) {
-    console.error('Error refreshing menu cache:', error);
-    res.status(500).json({ error: 'Failed to refresh cache', details: error.message });
-  }
-});
-
-module.exports = router;
+module.exports = router; 
