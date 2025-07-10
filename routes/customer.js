@@ -19,6 +19,7 @@ const rateLimit = require("express-rate-limit");
 const { validateJson } = require("../lib/schema");
 const { restrict } = require("../lib/auth");
 const customerAddressController = require('../controllers/customerAddressController');
+const { isTestAuth, isTestPhone } = require("../config/test-phones");
 
 const apiLimiter = rateLimit({
   windowMs: 300000, // 5 minutes
@@ -82,17 +83,7 @@ router.post("/api/customer/validateAuthCode", async (req, res) => {
 
   if (
     customer.authCode == customerObj.authCode ||
-    // (customerObj.phone === "0542454362" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "0528602121" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "0586000060" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "0532206314" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "0544280085" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567891" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567892" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567893" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567894" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567895" && customerObj.authCode === "1234") ||
-    (customerObj.phone === "1234567899" && customerObj.authCode === "1234")
+    isTestAuth(customerObj.phone, customerObj.authCode)
   ) {
     const customerNewUpdate = {
       ...customer,
@@ -176,19 +167,7 @@ router.post("/api/customer/create", async (req, res) => {
       },
       { multi: false, returnOriginal: false }
     );
-    if (
-      // customer.phone !== "0542454362" &&
-      customer.phone !== "0528602121" &&
-      customer.phone !== "0586000060" &&
-      customer.phone !== "0532206314" &&
-      customer.phone !== "0544280085" &&
-      customer.phone !== "1234567891" &&
-      customer.phone !== "1234567892" &&
-      customer.phone !== "1234567893" &&
-      customer.phone !== "1234567894" &&
-      customer.phone !== "1234567895" &&
-      customer.phone !== "1234567899"
-    ) {
+    if (!isTestPhone(customer.phone)) {
       const smsContent = smsService.getVerifyCodeContent(
         random4DigitsCode,
         req.body?.language
@@ -210,19 +189,7 @@ router.post("/api/customer/create", async (req, res) => {
 
   try {
     await customerDB[collection].insertOne(customerObj);
-    if (
-      // customerObj.phone !== "0542454362" &&
-      customerObj.phone !== "0528602121" &&
-      customerObj.phone !== "0586000060" &&
-      customerObj.phone !== "0532206314" &&
-      customerObj.phone !== "0544280085" &&
-      customerObj.phone !== "1234567891" &&
-      customerObj.phone !== "1234567892" &&
-      customerObj.phone !== "1234567893" &&
-      customerObj.phone !== "1234567894" &&
-      customerObj.phone !== "1234567895" &&
-      customerObj.phone !== "1234567899"
-    ) {
+    if (!isTestPhone(customerObj.phone)) {
       const smsContent = smsService.getVerifyCodeContent(
         random4DigitsCode,
         req.body?.language

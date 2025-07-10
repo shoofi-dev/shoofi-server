@@ -16292,3 +16292,58 @@
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 17:33:39:3339"}
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 17:33:49:3349"}
 {"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 17:34:53:3453"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 18:38:30:3830"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 18:52:37:5237"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 18:59:10:5910"}
+{"code":"ETIMEDOUT","errorno":"ETIMEDOUT","level":"\u001b[31merror\u001b[39m","message":"\u001b[31mRedis connection error: connect ETIMEDOUT\u001b[39m","stack":"Error: connect ETIMEDOUT\n    at TLSSocket.<anonymous> (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Redis.js:170:41)\n    at Object.onceWrapper (node:events:627:28)\n    at TLSSocket.emit (node:events:513:28)\n    at TLSSocket.Socket._onTimeout (node:net:526:8)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","syscall":"connect","timestamp":"2025-07-10 19:22:59:2259"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 19:27:57:2757"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 19:28:59:2859"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 19:41:16:4116"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cron job started\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cleanup cron job started\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mNotification system initialized\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mRedis connected successfully\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket server initialized with ID: server_1752166972465_g4fv5uz3i\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSubscribed to Redis websocket:message channel\u001b[39m","timestamp":"2025-07-10 20:02:55:255"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:07:57:757"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:07:58:758"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:13:00:130"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:13:00:130"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 20:15:11:1511"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:18:02:182"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:18:02:182"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:20:00:200"}
+{"code":"ETIMEDOUT","errorno":"ETIMEDOUT","level":"\u001b[31merror\u001b[39m","message":"\u001b[31mRedis connection error: connect ETIMEDOUT\u001b[39m","stack":"Error: connect ETIMEDOUT\n    at TLSSocket.<anonymous> (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Redis.js:170:41)\n    at Object.onceWrapper (node:events:627:28)\n    at TLSSocket.emit (node:events:513:28)\n    at TLSSocket.Socket._onTimeout (node:net:526:8)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","syscall":"connect","timestamp":"2025-07-10 20:23:12:2312"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:23:14:2314"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:23:14:2314"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:28:15:2815"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:28:15:2815"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:33:16:3316"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:33:16:3316"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cron job started\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cleanup cron job started\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mNotification system initialized\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mRedis connected successfully\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket server initialized with ID: server_1752168931754_58zwrpzxs\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSubscribed to Redis websocket:message channel\u001b[39m","timestamp":"2025-07-10 20:35:35:3535"}
