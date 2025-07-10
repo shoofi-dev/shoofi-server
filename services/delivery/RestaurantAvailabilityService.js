@@ -1,5 +1,6 @@
 const turf = require('@turf/turf');
 const { getId } = require("../../lib/common");
+const storeService = require("../../utils/store-service");
 
 /**
  * Find cities that are within a specified distance from a point
@@ -86,8 +87,23 @@ class RestaurantAvailabilityService {
     const validStores = verifiedStores.filter(store => store !== null);
     console.log(`After database verification: ${validStores.length} valid stores out of ${availableStores.length} total`);
 
-    // For each valid store, find delivery companies that can deliver to the customer
+    // For each valid store, find delivery companies that can deliver to the customer and check if store is open
     const results = await Promise.all(validStores.map(async store => {
+      // Get store data to check opening hours
+      let isOpen = false;
+      try {
+        const storeDB = generalDB[store.appName];
+        if (storeDB) {
+          const storeData = await storeDB.store.findOne({ id: 1 });
+          if (storeData && storeData.openHours) {
+            const storeStatus = storeService.isStoreOpenNow(storeData.openHours);
+            isOpen = storeStatus.isOpen && !storeData.isStoreClose;
+          }
+        }
+      } catch (error) {
+        console.error(`Error checking store opening hours for ${store.appName}:`, error.message);
+      }
+
       // Find delivery companies that support the store's cities
       const supportedCitiesIdObj = store.supportedCities.map(city => getId(city));
       const deliveryCompanies = await db.store.find({
@@ -115,7 +131,10 @@ class RestaurantAvailabilityService {
         });
 
       return {
-        store,
+        store: {
+          ...store,
+          isOpen
+        },
         deliveryCompanies: availableDeliveryCompanies
       };
     }));

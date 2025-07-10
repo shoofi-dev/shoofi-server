@@ -1281,6 +1281,13 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     //   isAdmin: true,
     //   appName,
     // });
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'order_status_updated',
+      data: updateobj,
+      customerIds: [customerId],
+      isAdmin: true,
+      appName,
+    },appName);
 
     const customerDB = getCustomerAppName(req, appName);
     const customer = await customerDB.customers.findOne({

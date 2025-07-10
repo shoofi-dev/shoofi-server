@@ -62,10 +62,12 @@ router.post("/api/store/get-by-name", async (req, res, next) => {
   const db = req.app.db[appName];
 
   const store = await db.store.findOne({ id: 1 });
-  const isStoreOpen = storeService.isStoreOpenNow(store.openHours) && !store.isStoreClose;
+  const storeStatus = storeService.isStoreOpenNow(store.openHours);
+  const isStoreOpen = storeStatus.isOpen && !store.isStoreClose;
 
   res.status(200).json({
-    isOpen: isStoreOpen
+    isOpen: isStoreOpen,
+    workingHours: storeStatus.workingHours
   });
 });
 
@@ -88,7 +90,8 @@ router.post("/api/store", async (req, res, next) => {
 
   stores.data = await Promise.all(
     stores.data.map(async (store) => {
-      const isStoreOpen = storeService.isStoreOpenNow(store.openHours) && !store.isStoreClose;
+      const storeStatus = storeService.isStoreOpenNow(store.openHours);
+      const isStoreOpen = storeStatus.isOpen && !store.isStoreClose;
       let isDeliveryOpen = store.delivery_support;
       // if (store.delivery_support && store.isSendNotificationToDeliveryCompany) {
       //   const isCompanyOpen = await storeService.isDeliveryCompanyOpen(req);
@@ -98,6 +101,7 @@ router.post("/api/store", async (req, res, next) => {
       return {
         ...store,
         isOpen: isStoreOpen,
+        workingHours: storeStatus.workingHours,
         isDeliveryOpen,
         delivery_support: isDeliveryOpen
       };

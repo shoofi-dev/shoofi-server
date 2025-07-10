@@ -183,11 +183,12 @@ const isDeliveryCompanyOpen = async (req) => {
  * openHours: {
  *   sunday: { isOpen, start, end }, ...
  * }
+ * Returns: { isOpen: boolean, workingHours: { start: string, end: string } }
  */
 function isStoreOpenNow(openHours) {
   const offsetHours = getUTCOffset();
 
-  if (!openHours) return false;
+  if (!openHours) return { isOpen: false, workingHours: null };
   const now = moment().utcOffset(offsetHours);
   const days = [
     "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
@@ -204,42 +205,76 @@ function isStoreOpenNow(openHours) {
     return d;
   }
 
-  // 1. Check today's config (normal case)
+  // Helper to convert time string to minutes for comparison
+  function timeToMinutes(timeStr) {
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  // Helper to get current time in minutes
+  function getCurrentTimeMinutes() {
+    const now = moment().utcOffset(offsetHours);
+    return now.hours() * 60 + now.minutes();
+  }
+
+  // Get the previous day
+  const yesterdayIdx = (todayIdx + 6) % 7;
+  const yesterday = days[yesterdayIdx];
+  const yesterdayHours = openHours[yesterday];
+
+  // Check if yesterday had overnight hours and we're still within that business day
+  if (yesterdayHours && yesterdayHours.isOpen && timeToMinutes(yesterdayHours.end) < timeToMinutes(yesterdayHours.start)) {
+    const currentTimeMinutes = getCurrentTimeMinutes();
+    const yesterdayEndMinutes = timeToMinutes(yesterdayHours.end);
+    
+    // If current time is before yesterday's end time (overnight), we're still within yesterday's business day
+    if (currentTimeMinutes < yesterdayEndMinutes) {
+      return { 
+        isOpen: true, 
+        workingHours: { 
+          start: yesterdayHours.start, 
+          end: yesterdayHours.end 
+        } 
+      };
+    }
+  }
+
+  // Check today's hours
   if (todayHours && todayHours.isOpen) {
     const start = parseTime(todayHours.start, now);
     const end = parseTime(todayHours.end, now);
 
-    if (end > start) {
-      // Normal same-day hours
-      if (now >= start && now <= end) return true;
-    } else {
+    if (timeToMinutes(todayHours.end) < timeToMinutes(todayHours.start)) {
       // Overnight hours (e.g., 17:00-03:00)
-      if (now >= start) return true;
-      // We'll check yesterday's config below for the after-midnight part
-    }
-  }
-
-  // 2. Check yesterday's config for overnight shift
-  const yesterdayIdx = (todayIdx + 6) % 7;
-  const yesterday = days[yesterdayIdx];
-  const yesterdayHours = openHours[yesterday];
-  if (yesterdayHours && yesterdayHours.isOpen) {
-    const yStart = parseTime(yesterdayHours.start, now);
-    const yEnd = parseTime(yesterdayHours.end, now);
-    if (yEnd < yStart) {
-      // Overnight shift from yesterday
-      // yEnd is today, so set its date to today
-      yEnd.add(1, 'day');
-      if (now <= yEnd) {
-        // Only if now is after midnight and before yEnd
-        const midnight = moment(now).utcOffset(offsetHours);
-        midnight.hours(0).minutes(0).seconds(0).milliseconds(0);
-        if (now >= midnight && now <= yEnd) return true;
+      // Business day starts today and ends tomorrow
+      end.add(1, 'day');
+      if (now >= start && now <= end) {
+        return { 
+          isOpen: true, 
+          workingHours: { 
+            start: todayHours.start, 
+            end: todayHours.end 
+          } 
+        };
+      }
+    } else {
+      // Normal same-day hours
+      if (now >= start && now <= end) {
+        return { 
+          isOpen: true, 
+          workingHours: { 
+            start: todayHours.start, 
+            end: todayHours.end 
+          } 
+        };
       }
     }
   }
 
-  return false;
+  return { isOpen: false, workingHours: { 
+    start: todayHours.start, 
+    end: todayHours.end 
+  }  };
 }
 
 const storeService = {
