@@ -3,7 +3,7 @@ const { restrict, checkAccess } = require("../lib/auth");
 const { getId, cleanHtml } = require("../lib/common");
 var multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
-const websockets = require("../utils/websockets");
+const websocketService = require("../services/websocket/websocket-service");
 
 var {
   S3Client,
@@ -269,7 +269,10 @@ router.post(
     try {
       const newDoc = await db.products.insertOne(doc);
       const newId = newDoc.insertedId;
-      websockets.fireWebscoketEvent({ appName });
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'product_updated',
+        data: { action: 'created', productId: newId }
+      }, appName);
       indexProducts(req).then(() => {
         res.status(200).json({
           message: "New product successfully created",
@@ -334,7 +337,10 @@ router.post(
         { $set: productDoc },
         {}
       );
-      websockets.fireWebscoketEvent({ appName });
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'product_updated',
+        data: { action: 'updated', productId: req.body.productId }
+      }, appName);
 
       // Update the index
       indexProducts(req).then(() => {
@@ -360,7 +366,10 @@ router.post(
       { $set: { activeTastes: req.body.activeTastes } },
       { multi: false }
     );
-    websockets.fireWebscoketEvent({ type: "update active tastes", appName });
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'active_tastes_updated', productId: req.body.id }
+    }, appName);
 
     res.status(200).json({ message: "Product successfully updated", appName });
   }
@@ -392,6 +401,12 @@ router.post("/api/admin/product/update/order", async (req, res) => {
     // Clear menu cache to reflect changes
     const menuCache = require('../utils/menu-cache');
     await menuCache.clearStore(appName);
+
+    // Send WebSocket notification
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'order_updated' }
+    }, appName);
 
     // Update search index
     indexProducts(req).then(() => {
@@ -436,6 +451,12 @@ router.post("/api/admin/product/update/order-per-category", async (req, res) => 
     // Clear menu cache
     const menuCache = require('../utils/menu-cache');
     await menuCache.clearStore(appName);
+
+    // Send WebSocket notification
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'order_updated_per_category', categoryId }
+    }, appName);
 
     // Update search index
     indexProducts(req).then(() => {
@@ -595,6 +616,12 @@ router.post("/api/admin/product/bulk-reorder", async (req, res) => {
       const menuCache = require('../utils/menu-cache');
       await menuCache.clearStore(appName);
 
+      // Send WebSocket notification
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'product_updated',
+        data: { action: 'bulk_order_updated' }
+      }, appName);
+
       // Update search index
       indexProducts(req).then(() => {
         res.status(200).json({ 
@@ -647,6 +674,12 @@ router.post("/api/admin/product/reset-order/:categoryId", async (req, res) => {
       const menuCache = require('../utils/menu-cache');
       await menuCache.clearStore(appName);
 
+      // Send WebSocket notification
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'product_updated',
+        data: { action: 'order_reset', categoryId }
+      }, appName);
+
       // Update search index
       indexProducts(req).then(() => {
         res.status(200).json({ 
@@ -697,6 +730,13 @@ router.post("/api/admin/product/migrate-orders", async (req, res) => {
 
     if (bulkOps.length > 0) {
       const result = await db.products.bulkWrite(bulkOps);
+      
+      // Send WebSocket notification
+      websocketService.sendToAppAdmins('shoofi-partner', {
+        type: 'product_updated',
+        data: { action: 'orders_migrated' }
+      }, appName);
+      
       res.status(200).json({ 
         message: "Product orders migrated successfully",
         updatedCount: result.modifiedCount
@@ -726,7 +766,10 @@ router.post("/api/admin/product/delete", async (req, res) => {
       await deleteImages(product.img, req);
     });
     await db.products.deleteMany({ _id: { $in: objectIdsList } }, {});
-    websockets.fireWebscoketEvent({ appName });
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'deleted', productIds: req.body.productsIdsList }
+    }, appName);
     indexProducts(req).then(() => {
       res
         .status(200)
@@ -763,12 +806,37 @@ router.post("/api/admin/product/update/isInStore", async (req, res) => {
       { $set: { isInStore: req.body.isInStore } },
       { multi: false }
     );
-    websockets.fireWebscoketEvent({ type: "product updated", appName });
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'isInStore_updated', productId: req.body.productId, isInStore: req.body.isInStore }
+    }, appName);
 
     res.status(200).json({ message: "isInStore state updated" });
   } catch (ex) {
     console.error(colors.red(`Failed to update the isInStore state: ${ex}`));
     res.status(400).json({ message: "isInStore state not updated" });
+  }
+});
+
+router.post("/api/admin/product/update/isHidden", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+
+  try {
+    await db.products.updateOne(
+      { _id: getId(req.body.productId) },
+      { $set: { isHidden: req.body.isHidden } },
+      { multi: false }
+    );
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'isHidden_updated', productId: req.body.productId, isHidden: req.body.isHidden }
+    }, appName);
+
+    res.status(200).json({ message: "isHidden state updated" });
+  } catch (ex) {
+    console.error(colors.red(`Failed to update the isHidden state: ${ex}`));
+    res.status(400).json({ message: "isHidden state not updated" });
   }
 });
 
@@ -778,15 +846,18 @@ router.post(
     const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     try {
-      await db.products.updateMany(
-        {
-          supportedCategoryIds: { $in: [req.body.categoryId?.toString()] },
-        },
-        { $set: { isInStore: req.body.isInStore } }
-      );
-      websockets.fireWebscoketEvent({ type: "product updated", appName });
+          await db.products.updateMany(
+      {
+        supportedCategoryIds: { $in: [req.body.categoryId?.toString()] },
+      },
+      { $set: { isInStore: req.body.isInStore } }
+    );
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'product_updated',
+      data: { action: 'isInStore_updated_byCategory', categoryId: req.body.categoryId, isInStore: req.body.isInStore }
+    }, appName);
 
-      res.status(200).json({ message: "isInStore state updated byCategory" });
+    res.status(200).json({ message: "isInStore state updated byCategory" });
     } catch (ex) {
       console.error(
         colors.red(`Failed to update the isInStore state: ${ex} byCategory`)

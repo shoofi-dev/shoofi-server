@@ -15,12 +15,19 @@ router.get("/api/menu", async (req, res, next) => {
     // Determine the database name - this should match your store's appName
     const dbName = req.headers['app-name'] || req.headers['db-name'] || req.query.dbName || 'shoofi';
     
-    // Check cache first
-    const cachedMenu = await menuCache.get(storeId);
-    if (cachedMenu) {
-      console.timeEnd('menuQueryTime');
-      console.log('Menu served from cache');
-      return res.status(200).json(cachedMenu);
+    // Get app type to determine if we should show hidden products
+    const appType = req.headers['app-type'] || 'shoofi-app';
+    const shouldShowHiddenProducts = appType === 'shoofi-partner' || appType === 'shoofi-admin';
+    const isAdminApp = appType === 'shoofi-partner' || appType === 'shoofi-admin';
+    
+    // Check cache first (only for non-admin apps)
+    if (!isAdminApp) {
+      const cachedMenu = await menuCache.get(storeId);
+      if (cachedMenu) {
+        console.timeEnd('menuQueryTime');
+        console.log('Menu served from cache');
+        return res.status(200).json(cachedMenu);
+      }
     }
 
     // Use aggregation pipeline for better performance
@@ -33,8 +40,8 @@ router.get("/api/menu", async (req, res, next) => {
     
     // Build aggregation pipeline
     const aggregationPipeline = [
-      // Match only non-hidden categories
-      { $match: { isHidden: { $ne: true } } },
+      // Match only non-hidden categories (unless it's shoofi-partner)
+      ...(shouldShowHiddenProducts ? [] : [{ $match: { isHidden: { $ne: true } } }]),
       
       // Sort categories by order
       { $sort: { order: 1 } },
@@ -50,7 +57,7 @@ router.get("/api/menu", async (req, res, next) => {
                 $expr: {
                   $and: [
                     { $in: ['$$categoryId', '$supportedCategoryIds'] },
-                    { $ne: ['$isHidden', true] } // Only non-hidden products
+                    ...(shouldShowHiddenProducts ? [] : [{ $ne: ['$isHidden', true] }]) // Only non-hidden products (unless it's shoofi-partner)
                   ]
                 }
               }
@@ -137,11 +144,13 @@ router.get("/api/menu", async (req, res, next) => {
       categoryImages: grouped
     };
 
-    // Cache the result
-    await menuCache.set(storeId, menuData);
+    // Cache the result (only for non-admin apps)
+    if (!isAdminApp) {
+      await menuCache.set(storeId, menuData);
+    }
 
     console.timeEnd('menuQueryTime');
-    console.log(`Menu generated for store: ${storeId}`);
+    console.log(`Menu generated for store: ${storeId}${isAdminApp ? ' (admin app - no cache)' : ''}`);
 
     res.status(200).json(menuData);
 
@@ -193,6 +202,9 @@ router.post("/api/menu/refresh", async (req, res, next) => {
     // Trigger a new menu generation
     const storeId = req.headers['app-name'] || req.query.storeId || 'default';
     const dbName = req.headers['app-name'] || req.headers['db-name'] || req.query.dbName || 'shoofi';
+    const appType = req.headers['app-type'] || 'shoofi-app';
+    const shouldShowHiddenProducts = appType === 'shoofi-partner' || appType === 'shoofi-admin';
+    const isAdminApp = appType === 'shoofi-partner' || appType === 'shoofi-admin';
     
     // This will regenerate the cache
     const db = req.app.db[dbName];
@@ -201,8 +213,9 @@ router.post("/api/menu/refresh", async (req, res, next) => {
       throw new Error(`Database '${dbName}' not available`);
     }
     
-    const menuAggregation = await db.collection('categories').aggregate([
-      { $match: { isHidden: { $ne: true } } },
+    const aggregationPipeline = [
+      // Match only non-hidden categories (unless it's shoofi-partner)
+      ...(shouldShowHiddenProducts ? [] : [{ $match: { isHidden: { $ne: true } } }]),
       { $sort: { order: 1 } },
       {
         $lookup: {
@@ -214,7 +227,7 @@ router.post("/api/menu/refresh", async (req, res, next) => {
                 $expr: {
                   $and: [
                     { $in: ['$$categoryId', '$supportedCategoryIds'] },
-                    { $ne: ['$isHidden', true] }
+                    ...(shouldShowHiddenProducts ? [] : [{ $ne: ['$isHidden', true] }]) // Only non-hidden products (unless it's shoofi-partner)
                   ]
                 }
               }
@@ -234,7 +247,9 @@ router.post("/api/menu/refresh", async (req, res, next) => {
                 isInStore: 1,
                 count: 1,
                 supportedCategoryIds: 1,
-                categoryId: 1
+                categoryId: 1,
+                extras: 1,
+                isHidden: 1,
               }
             }
           ],
@@ -253,7 +268,9 @@ router.post("/api/menu/refresh", async (req, res, next) => {
           products: 1
         }
       }
-    ]).toArray();
+    ];
+    
+    const menuAggregation = await db.collection('categories').aggregate(aggregationPipeline).toArray();
 
     // Post-process to sort products by categoryOrders if available
     const processedMenu = menuAggregation.map(category => {
@@ -290,9 +307,15 @@ router.post("/api/menu/refresh", async (req, res, next) => {
       categoryImages: grouped
     };
 
-    await menuCache.set(storeId, menuData);
+    // Cache the result (only for non-admin apps)
+    if (!isAdminApp) {
+      await menuCache.set(storeId, menuData);
+    }
 
-    res.status(200).json({ message: 'Menu cache refreshed successfully', data: menuData });
+    res.status(200).json({ 
+      message: `Menu cache refreshed successfully${isAdminApp ? ' (admin app - no cache)' : ''}`, 
+      data: menuData 
+    });
   } catch (error) {
     console.error('Error refreshing menu cache:', error);
     res.status(500).json({ error: 'Failed to refresh cache', details: error.message });
