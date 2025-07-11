@@ -210,7 +210,7 @@ router.post("/api/payments/driver/summary", async (req, res) => {
     }, 0);
     
     const totalDeliveryFees = deliveries.reduce((sum, delivery) => 
-      sum + (Number(delivery.price) || 0), 0
+      sum + (Number(delivery.order.shippingPrice) || 0), 0
     );
     
     const totalCommission = totalDeliveryFees - totalEarnings;
@@ -227,8 +227,8 @@ router.post("/api/payments/driver/summary", async (req, res) => {
           earnings: 0
         };
       }
-      const deliveryFee = delivery.price || 0;
-      const commission = calculateCommission(deliveryFee, 0.20);
+      const deliveryFee = delivery.order.shippingPrice || 0;
+      const commission = calculateCommission(deliveryFee, 0);
       const earnings = deliveryFee - commission;
       
       acc[date].deliveries += 1;
@@ -301,7 +301,7 @@ router.post("/api/payments/driver/details", async (req, res) => {
     
     // Add payment calculations to each delivery
     const deliveriesWithPayments = deliveries.map(delivery => {
-      const deliveryFee = delivery.price || 0;
+      const deliveryFee = delivery.order.shippingPrice || 0;
       const commission = calculateCommission(deliveryFee, 0.20);
       const earnings = deliveryFee - commission;
       

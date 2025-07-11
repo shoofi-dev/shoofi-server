@@ -1263,6 +1263,7 @@ router.post(
 router.post("/api/order/update", auth.required, async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
+  const offsetHours = getUTCOffset();
   try {
     const updateobj = req.body.updateData;
     await db.orders.updateOne(
@@ -1328,24 +1329,24 @@ router.post("/api/order/update", auth.required, async (req, res) => {
         switch (updateobj.status) {
           case "1": // IN_PROGRESS
             notificationTitle = "طلبك قيد التحضير";
-            notificationBody = `طلبك رقم #${order.orderId} قيد التحضير الآن.`;
+            notificationBody = `طلبك قيد التحضير الآن.`;
             break;
           case "2": // COMPLETED
               notificationTitle = "طلبك جاهز للاستلام";
-              notificationBody = `طلبك رقم #${order.orderId} جاهز للاستلام من المطعم.`;
+              notificationBody = `طلبك جاهز للاستلام من المطعم.`;
             break;
           case "3": // WAITING_FOR_DRIVER
             notificationTitle = "في انتظار السائق";
-            notificationBody = `طلبك رقم #${order.orderId} جاهز وفي انتظار السائق.`;
+            notificationBody = `طلبك جاهز وفي انتظار السائق.`;
             break;
           case "4": // CANCELLED
             notificationTitle = "تم إلغاء طلبك";
-            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه. إذا كان لديك أي استفسار، يرجى التواصل معنا.`;
+            notificationBody = `طلبك تم إلغاؤه. إذا كان لديك أي استفسار، يرجى التواصل معنا.`;
             notificationType = "order_cancelled";
             break;
           case "5": // REJECTED
             notificationTitle = "تم رفض طلبك";
-            notificationBody = `عذراً، تم رفض طلبك رقم #${order.orderId}. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationBody = `عذراً، تم رفض طلبك. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "order_rejected";
             break;
           // case "6": // PENDING
@@ -1354,12 +1355,12 @@ router.post("/api/order/update", auth.required, async (req, res) => {
           //   break;
           case "7": // CANCELLED_BY_ADMIN
             notificationTitle = "تم إلغاء طلبك من قبل الإدارة";
-            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationBody = `طلبك تم إلغاؤه من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "order_cancelled_admin";
             break;
           case "8": // CANCELLED_BY_CUSTOMER
             notificationTitle = "تم إلغاء طلبك";
-            notificationBody = `طلبك رقم #${order.orderId} تم إلغاؤه بنجاح.`;
+            notificationBody = `طلبك تم إلغاؤه بنجاح.`;
             notificationType = "order_cancelled_customer";
             break;
           // case "9": // CANCELLED_BY_DRIVER
@@ -1419,6 +1420,59 @@ router.post("/api/order/update", auth.required, async (req, res) => {
       } catch (notificationError) {
         console.error("Failed to send customer notification:", notificationError);
         // Don't fail the order update if notification fails
+      }
+    }
+
+    // Send driver notification when order is ready for pickup (status = "3")
+    if (updateobj?.status === "3" && order.order.receipt_method === "DELIVERY") {
+      try {
+        // Find the delivery record for this order
+        const deliveryDB = req.app.db["delivery-company"];
+        const deliveryRecord = await deliveryDB.bookDelivery.findOne({
+          bookId: order.orderId
+        });
+
+        if (deliveryRecord && deliveryRecord.driver?._id) {
+          // Update delivery record to mark it as ready for pickup
+          await deliveryDB.bookDelivery.updateOne(
+            { bookId: order.orderId },
+            { 
+              $set: { 
+                isReadyForPickup: true,
+                readyForPickupAt: moment().utcOffset(offsetHours).format()
+              }
+            }
+          );
+
+          // Send notification to the assigned driver
+          await notificationService.sendNotification({
+            recipientId: String(deliveryRecord.driver._id),
+            title: "طلب جاهز للاستلام",
+            body: `طلب رقم #${order.orderId} جاهز للاستلام من المطعم.`,
+            type: "order_ready_pickup",
+            appName: "delivery-company",
+            appType: "shoofi-shoofir",
+            channels: {
+              websocket: true,
+              push: true,
+              email: false,
+              sms: false
+            },
+            data: {
+              orderId: order._id,
+              bookId: order.orderId,
+              orderStatus: updateobj.status,
+              customerName: customer?.fullName || "العميل",
+              customerPhone: customer?.phone || "",
+              storeName: order.storeName || "المطعم",
+              isReadyForPickup: true
+            },
+            req: req
+          });
+        }
+      } catch (driverNotificationError) {
+        console.error("Failed to send driver notification:", driverNotificationError);
+        // Don't fail the order update if driver notification fails
       }
     }
 

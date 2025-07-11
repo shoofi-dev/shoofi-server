@@ -16347,3 +16347,444 @@
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mRedis connected successfully\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket server initialized with ID: server_1752168931754_58zwrpzxs\u001b[39m","timestamp":"2025-07-10 20:35:34:3534"}
 {"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSubscribed to Redis websocket:message channel\u001b[39m","timestamp":"2025-07-10 20:35:35:3535"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cron job started\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts cleanup cron job started\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mNotification system initialized\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mRedis connected successfully\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket server initialized with ID: server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSubscribed to Redis websocket:message channel\u001b[39m","timestamp":"2025-07-10 20:37:35:3735"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:42:40:4240"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:42:40:4240"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:47:40:4740"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:47:40:4740"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:52:41:5241"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:52:41:5241"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 20:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 20:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 20:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:57:41:5741"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 20:57:41:5741"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:00:00:00"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 21:02:20:220"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:02:41:241"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:02:42:242"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:07:42:742"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:07:43:743"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:10:00:100"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 21:12:00:120"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:12:43:1243"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:12:43:1243"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:17:44:1744"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:17:44:1744"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:22:44:2244"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:22:44:2244"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 21:22:53:2253"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 21:24:05:245"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:27:50:2750"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:27:50:2750"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:32:53:3253"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:32:53:3253"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:37:55:3755"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:37:55:3755"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:40:00:400"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 21:42:19:4219"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:43:00:430"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:43:00:430"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:48:05:485"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:48:05:485"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:53:05:535"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:53:05:535"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 21:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 21:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 21:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:58:07:587"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 21:58:07:587"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:03:11:311"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:03:11:311"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:08:11:811"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:08:11:811"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:10:00:100"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:13:11:1311"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:13:11:1311"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:15:00:150"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:18:13:1813"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:18:13:1813"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:20:00:200"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:23:13:2313"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:23:13:2313"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:25:00:250"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:28:13:2813"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:28:13:2813"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 22:29:20:2920"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:30:00:300"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:33:14:3314"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:33:14:3314"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 22:34:33:3433"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:35:00:350"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:38:14:3814"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:38:14:3814"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:40:00:400"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:40:00:400"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 22:40:59:4059"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis connected for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:43:15:4315"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32m✅ Redis ready for WebSocket service\u001b[39m","timestamp":"2025-07-10 22:43:15:4315"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:45:00:450"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:45:00:450"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 6830fd0bef1718effb5b8f3e joined room shoofi-shopping\u001b[39m","timestamp":"2025-07-10 22:45:04:454"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 6830fd0bef1718effb5b8f3e (shoofi-shopping) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:45:04:454"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686e486aae35651f33ca9629\u001b[39m","timestamp":"2025-07-10 22:45:12:4512"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 68657025ffc6f39f4ad6b389\u001b[39m","timestamp":"2025-07-10 22:45:12:4512"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686013eaffc6f39f4ad6b2aa\u001b[39m","timestamp":"2025-07-10 22:45:12:4512"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686e4889ae35651f33ca962a\u001b[39m","timestamp":"2025-07-10 22:45:12:4512"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alert sent for order 7830-781877-2321 to 4 store users\u001b[39m","timestamp":"2025-07-10 22:45:12:4512"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:45:29:4529","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:45:54:4554","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:46:19:4619","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:46:44:4644","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:47:09:479","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:47:34:4734","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:47:59:4759","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:48:24:4824","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:48:49:4849","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:49:14:4914","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:49:39:4939","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:50:00:500"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686013eaffc6f39f4ad6b2aa\u001b[39m","timestamp":"2025-07-10 22:50:00:500"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 68657025ffc6f39f4ad6b389\u001b[39m","timestamp":"2025-07-10 22:50:00:500"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686e486aae35651f33ca9629\u001b[39m","timestamp":"2025-07-10 22:50:00:500"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 686e4889ae35651f33ca962a\u001b[39m","timestamp":"2025-07-10 22:50:00:500"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mReminder sent for order 7830-781877-2321 (reminder #1)\u001b[39m","timestamp":"2025-07-10 22:50:01:501"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:50:01:501"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:50:01:501"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:50:04:504","type":"ping"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:50:29:5029","type":"ping"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:50:29:5029"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:50:29:5029"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:50:31:5031"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:50:31:5031"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:50:31:5031"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 22:50:35:5035"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 22:50:40:5040"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alert cleared for order 7830-781877-2321\u001b[39m","timestamp":"2025-07-10 22:50:43:5043"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSMS notification would be sent to 0528602121: تم استلام طلبك\u001b[39m","timestamp":"2025-07-10 22:50:43:5043"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mMessage queued for user 6830fd0bef1718effb5b8f3e\u001b[39m","timestamp":"2025-07-10 22:50:43:5043"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:50:54:5054","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:51:10:5110"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:51:13:5113"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:51:13:5113"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:51:19:5119","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:51:38:5138"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:51:40:5140"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:51:40:5140"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:51:44:5144","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:52:06:526"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:52:08:528"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:52:08:528"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:52:09:529","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:52:16:5216"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:52:25:5225"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:52:25:5225"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:52:25:5225"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:52:25:5225"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:52:34:5234","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:52:53:5253"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:52:56:5256"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:52:56:5256"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:52:59:5259","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:53:22:5322"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:53:24:5324","type":"ping"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:53:24:5324"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:53:24:5324"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:53:49:5349","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:53:49:5349"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:53:51:5351"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:53:51:5351"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:54:14:5414","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:54:16:5416"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:54:18:5418"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:54:18:5418"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:54:39:5439","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:54:43:5443"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:54:46:5446"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:54:46:5446"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 22:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 22:55:00:550"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 22:55:00:550"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:55:04:554","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:55:11:5511"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:55:13:5513"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:55:13:5513"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:55:29:5529","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:55:39:5539"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:55:41:5541"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:55:41:5541"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:55:54:5554","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:56:06:566"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:56:08:568"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:56:08:568"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:56:19:5619","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:56:33:5633"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:56:36:5636"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:56:36:5636"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:56:44:5644","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:57:03:573"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:57:05:575"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:57:05:575"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:57:09:579","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:57:30:5730"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:57:32:5732"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:57:32:5732"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:57:34:5734","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:57:57:5757"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:57:59:5759","type":"ping"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:57:59:5759"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:57:59:5759"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:58:24:5824","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:58:25:5825"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:58:27:5827"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:58:27:5827"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:58:49:5849","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:58:52:5852"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:58:54:5854"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:58:54:5854"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:59:14:5914","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:59:19:5919"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:59:20:5920"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:59:20:5920"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 22:59:39:5939","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 22:59:46:5946"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 22:59:48:5948"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 22:59:48:5948"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 23:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 23:00:00:00"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 23:00:00:00"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:00:04:04","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:00:13:013"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:00:16:016"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:00:16:016"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:00:29:029","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:00:41:041"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:00:43:043"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:00:43:043"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:00:54:054","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:01:08:18"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:01:10:110"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:01:10:110"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:01:19:119","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:01:35:135"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:01:37:137"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:01:37:137"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:01:44:144","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:02:03:23"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:02:05:25"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:02:05:25"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:02:09:29","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:02:30:230"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:02:33:233"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:02:33:233"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:02:34:234","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:02:58:258"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:02:59:259","type":"ping"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:02:59:259"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:02:59:259"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:03:24:324","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:03:24:324"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:03:26:326"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:03:26:326"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:03:49:349","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:03:51:351"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:03:53:353"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:03:53:353"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:04:14:414","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:04:18:418"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:04:20:420"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:04:20:420"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:04:39:439","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:04:45:445"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:04:47:447"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:04:47:447"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mStarting persistent alerts reminder cron job\u001b[39m","timestamp":"2025-07-10 23:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mSent reminders for persistent alerts\u001b[39m","timestamp":"2025-07-10 23:05:00:50"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mPersistent alerts reminder cron job completed\u001b[39m","timestamp":"2025-07-10 23:05:00:50"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:05:04:54","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:05:12:512"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:05:13:513"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:05:13:513"}
+{"data":{"timestamp":1752176456512},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:05:29:529","type":"ping"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1000, reason: )\u001b[39m","timestamp":"2025-07-10 23:05:39:539"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 686013eaffc6f39f4ad6b2aa joined room shoofi-partner\u001b[39m","timestamp":"2025-07-10 23:05:41:541"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 686013eaffc6f39f4ad6b2aa (shoofi-partner) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:05:41:541"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 686013eaffc6f39f4ad6b2aa (code: 1006, reason: )\u001b[39m","timestamp":"2025-07-10 23:05:42:542"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket disconnected: 6830fd0bef1718effb5b8f3e (code: 1000, reason: Manual disconnect)\u001b[39m","timestamp":"2025-07-10 23:05:44:544"}
+{"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mUser 6830fd0bef1718effb5b8f3e joined room shoofi-shopping\u001b[39m","timestamp":"2025-07-10 23:06:08:68"}
+{"level":"\u001b[32minfo\u001b[39m","message":"\u001b[32mWebSocket connected: 6830fd0bef1718effb5b8f3e (shoofi-shopping) on server server_1752169053042_gjdsukhpj\u001b[39m","timestamp":"2025-07-10 23:06:08:68"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:06:19:619"}
+{"data":{"timestamp":1752177967936},"level":"\u001b[37mdebug\u001b[39m","message":"\u001b[37mReceived message from 6830fd0bef1718effb5b8f3e:\u001b[39m","timestamp":"2025-07-10 23:06:33:633","type":"ping"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:07:49:749"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:08:10:810"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:14:18:1418"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:15:00:150"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:15:05:155"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to remove connection from Redis: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:15:44:1544"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to check Redis for user connection: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:15:44:1544"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to queue message: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:15:51:1551"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mFailed to check Redis connections for 68654295ffc6f39f4ad6b383:\u001b[39m","timestamp":"2025-07-10 23:15:51:1551"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mFailed to check Redis connections for 6849f54d0ffebb000dbb8736:\u001b[39m","timestamp":"2025-07-10 23:15:51:1551"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mFailed to store connection in Redis for 68654295ffc6f39f4ad6b383:\u001b[39m","timestamp":"2025-07-10 23:15:59:1559"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mFailed to store connection in Redis for 6849f54d0ffebb000dbb8736:\u001b[39m","timestamp":"2025-07-10 23:15:59:1559"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-10 23:17:18:1718"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 6849f54d0ffebb000dbb8736\u001b[39m","timestamp":"2025-07-10 23:17:18:1718"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to remove connection from Redis: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:21:50:2150"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to remove connection from Redis: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:21:50:2150"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:24:09:249"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:24:27:2427"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to queue message: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:26:18:2618"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 6849f54d0ffebb000dbb8736\u001b[39m","timestamp":"2025-07-10 23:26:18:2618"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-10 23:26:18:2618"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:26:49:2649"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:27:07:277"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to queue message: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:28:31:2831"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 6849f54d0ffebb000dbb8736\u001b[39m","timestamp":"2025-07-10 23:28:31:2831"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:30:46:3046"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to check Redis for user connection: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:31:51:3151"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to update Redis ping time: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:31:51:3151"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to remove connection from Redis: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:31:51:3151"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:32:24:3224"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:33:47:3347"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-10 23:34:14:3414"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to queue message: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-10 23:34:48:3448"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 6849f54d0ffebb000dbb8736\u001b[39m","timestamp":"2025-07-11 00:01:16:116"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 00:11:46:1146"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 00:11:49:1149"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 00:20:22:2022"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 00:58:08:588"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 00:58:24:5824"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 6849f54d0ffebb000dbb8736\u001b[39m","timestamp":"2025-07-11 01:12:03:123"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:14:19:1419"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:18:16:1816"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:37:33:3733"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:39:14:3914"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:40:23:4023"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:42:20:4220"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 01:55:27:5527"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:02:17:217"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:02:44:244"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:14:03:143"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:14:20:1420"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:16:59:1659"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:20:01:201"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:21:44:2144"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:23:18:2318"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:27:21:2721"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:28:25:2825"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:30:31:3031"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:34:10:3410"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:34:20:3420"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:34:22:3422"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:34:35:3435"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:34:39:3439"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:35:06:356"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:37:54:3754"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:39:44:3944"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:39:54:3954"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 02:45:47:4547"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:19:26:1926"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:19:46:1946"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:22:59:2259"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:23:27:2327"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:25:19:2519"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:25:32:2532"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:29:49:2949"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:30:09:309"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:31:58:3158"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:32:32:3232"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:39:54:3954"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:40:19:4019"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:57:16:5716"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:57:50:5750"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:02:582"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:07:587"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:12:5812"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:17:5817"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:22:5822"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:27:5827"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:33:5833"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:38:5838"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:43:5843"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:48:5848"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:53:5853"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:58:58:5858"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:59:03:593"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:59:52:5952"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 03:59:58:5958"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 04:00:03:03"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 04:00:08:08"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 04:00:13:013"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 04:00:18:018"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mMissing required parameters for WebSocket connection\u001b[39m","timestamp":"2025-07-11 04:00:23:023"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-11 04:09:19:919"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654295ffc6f39f4ad6b383\u001b[39m","timestamp":"2025-07-11 04:18:23:1823"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to remove connection from Redis: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-11 04:31:08:318"}
+{"level":"\u001b[31merror\u001b[39m","message":"\u001b[31mFailed to update Redis ping time: Command timed out\u001b[39m","stack":"Error: Command timed out\n    at Timeout._onTimeout (/Users/sariq/project/shoofi/shoofi-server/node_modules/ioredis/built/Command.js:192:33)\n    at listOnTimeout (node:internal/timers:559:17)\n    at processTimers (node:internal/timers:502:7)","timestamp":"2025-07-11 04:31:08:318"}
+{"level":"\u001b[33mwarn\u001b[39m","message":"\u001b[33mConnection timeout for 68654253ffc6f39f4ad6b37f\u001b[39m","timestamp":"2025-07-11 04:32:00:320"}

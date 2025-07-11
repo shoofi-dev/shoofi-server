@@ -1229,7 +1229,7 @@ router.post("/api/delivery/driver/earnings", async (req, res) => {
     
     // Group by date
     const earningsByDate = deliveredOrders.reduce((acc, order) => {
-      const date = moment(order.created).format('YYYY-MM-DD');
+      const date = moment(order.created).utcOffset(offsetHours).format('YYYY-MM-DD');
       if (!acc[date]) {
         acc[date] = {
           date,
@@ -1238,7 +1238,7 @@ router.post("/api/delivery/driver/earnings", async (req, res) => {
         };
       }
       acc[date].orders += 1;
-      acc[date].earnings += (order.price || 0);
+      acc[date].earnings += (order.order.shippingPrice || 0);
       return acc;
     }, {});
     
