@@ -4,6 +4,7 @@ const { getId } = require("../../lib/common");
 const APP_CONSTS = require("../../consts/consts");
 const { assignBestDeliveryDriver } = require("./assignDriver");
 const notificationService = require("../notification/notification-service");
+const centralizedFlowMonitor = require("../monitoring/centralized-flow-monitor");
 const { ObjectId } = require("mongodb");
 
 async function bookDelivery({ deliveryData, appDb }) {
@@ -26,6 +27,28 @@ async function bookDelivery({ deliveryData, appDb }) {
     
 
     if (!result.success) {
+      // Track delivery assignment failure centrally
+      await centralizedFlowMonitor.trackOrderFlowEvent({
+        orderId: deliveryData.bookId,
+        orderNumber: deliveryData.bookId,
+        sourceApp: 'delivery-company',
+        eventType: 'delivery_assignment_failed',
+        status: 'failed',
+        actor: 'Delivery System',
+        actorId: 'delivery_system',
+        actorType: 'system',
+        metadata: {
+          bookId: deliveryData.bookId,
+          customerInfo: {
+            name: deliveryData.fullName,
+            phone: deliveryData.phone,
+            location: deliveryData.customerLocation
+          },
+          error: "No available driver found for this location",
+          appName: deliveryData.appName
+        }
+      });
+      
       // TODO: handle error - no driver found
       return {
         success: false,
@@ -61,6 +84,46 @@ async function bookDelivery({ deliveryData, appDb }) {
 
       const bookDeliveryResult = await db.bookDelivery.insertOne(bookingData);
       const insertedOrder = { ...bookingData, _id: bookDeliveryResult.insertedId };
+
+      // Track delivery assignment centrally
+      await centralizedFlowMonitor.trackOrderFlowEvent({
+        orderId: deliveryData.bookId,
+        orderNumber: deliveryData.bookId,
+        sourceApp: 'delivery-company',
+        eventType: 'delivery_assigned',
+        status: '1',
+        actor: 'Delivery System',
+        actorId: 'delivery_system',
+        actorType: 'system',
+        metadata: {
+          deliveryId: insertedOrder._id,
+          bookId: insertedOrder.bookId,
+          assignedCompany: {
+            id: result.company._id,
+            name: result.company.storeName,
+            location: result.company.location
+          },
+          assignedDriver: {
+            id: result.driver._id,
+            name: result.driver.fullName,
+            phone: result.driver.phone,
+            activeOrderCount: result.activeOrderCount
+          },
+          deliveryArea: {
+            id: result.area._id,
+            name: result.area.name,
+            maxETA: result.area.maxETA
+          },
+          customerInfo: {
+            name: deliveryData.fullName,
+            phone: deliveryData.phone,
+            location: deliveryData.customerLocation
+          },
+          pickupTime: pickupTime,
+          expectedDeliveryAt: insertedOrder.expectedDeliveryAt,
+          appName: deliveryData.appName
+        }
+      });
 
       // Send notification to driver using new notification service
       try {
@@ -137,6 +200,38 @@ async function updateDelivery({ deliveryData, appDb }) {
     { $set: updateData },
     { multi: false }
   );
+
+  // Track delivery status update centrally
+  await centralizedFlowMonitor.trackOrderFlowEvent({
+    orderId: order.bookId,
+    orderNumber: order.bookId,
+    sourceApp: 'delivery-company',
+    eventType: 'delivery_status_update',
+    status: updateData.status,
+    actor: 'Driver',
+    actorId: order.driver?._id || 'driver',
+    actorType: 'driver',
+    metadata: {
+      deliveryId: order._id,
+      bookId: order.bookId,
+      previousStatus: order.status,
+      newStatus: updateData.status,
+      driverInfo: {
+        id: order.driver?._id,
+        name: order.driver?.fullName,
+        phone: order.driver?.phone
+      },
+      companyInfo: {
+        id: order.company?._id,
+        name: order.company?.storeName
+      },
+      customerInfo: {
+        name: order.fullName,
+        phone: order.phone
+      },
+      statusChange: `${order.status} → ${updateData.status}`
+    }
+  });
 
   // Send notifications for driver using new notification service
   if (isPushEmploye && order?.driver?._id) {

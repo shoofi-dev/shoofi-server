@@ -25,7 +25,12 @@ const moment = require("moment");
 const router = express.Router();
 const deliveryService = require("../services/delivery/book-delivery");
 const websocketService = require('../services/websocket/websocket-service');
-
+const generateUniqueOrderId = () => {
+  const timestamp = Date.now();
+  const randomKey = Math.random().toString(36).substring(2, 8);
+  const orderid = require("order-id")(`${timestamp}-${randomKey}`);
+  return orderid.generate();
+};
 // Helper function to process credit card payment
 const processCreditCardPayment = async (paymentData, orderDoc, req) => {
   const shoofiDB = req.app.db["shoofi"];
@@ -948,7 +953,7 @@ router.post(
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
 
-    const generatedOrderId = orderid.generate();
+    const generatedOrderId = generateUniqueOrderId();
     let imagesList = [];
     if (req.files && req.files.length > 0) {
       imagesList = await imagesService.uploadImage(req.files, req, "orders");
@@ -1047,6 +1052,25 @@ router.post(
         // Send notification to store owners
         await sendStoreOwnerNotifications(orderDoc, req, appName);
       }
+
+      // Track order creation centrally
+      await centralizedFlowMonitor.trackOrderFlowEvent({
+        orderId: orderId,
+        orderNumber: orderDoc.orderId,
+        sourceApp: appName,
+        eventType: 'order_created',
+        status: orderDoc.status,
+        actor: customer?.fullName || 'Customer',
+        actorId: customerId,
+        actorType: 'customer',
+        metadata: {
+          receiptMethod: orderDoc.order.receipt_method,
+          total: orderDoc.total,
+          itemsCount: orderDoc.order.items?.length || 0,
+          paymentMethod: orderDoc.order.payment_method,
+          isCreditCardPay
+        }
+      });
             // Handle credit card payment server-side
             if (isCreditCardPay && parsedBodey.paymentData) {
               try {
@@ -1071,6 +1095,24 @@ router.post(
       
                   // Send notifications for successful payment
                   await sendStoreOwnerNotifications(orderDoc, req, appName);
+                  
+                  // Track successful payment centrally
+                  await centralizedFlowMonitor.trackOrderFlowEvent({
+                    orderId: orderId,
+                    orderNumber: orderDoc.orderId,
+                    sourceApp: appName,
+                    eventType: 'payment_success',
+                    status: '6',
+                    actor: 'Payment System',
+                    actorId: 'payment_system',
+                    actorType: 'system',
+                    metadata: {
+                      paymentMethod: 'CREDITCARD',
+                      referenceNumber: paymentResult.paymentData.ReferenceNumber,
+                      receiptMethod: orderDoc.order.receipt_method,
+                      total: orderDoc.total
+                    }
+                  });
                   
                   // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
                   try {
@@ -1119,6 +1161,24 @@ router.post(
                   });
                   return;
                 } else {
+                  // Track payment failure centrally
+                  await centralizedFlowMonitor.trackOrderFlowEvent({
+                    orderId: orderId,
+                    orderNumber: orderDoc.orderId,
+                    sourceApp: appName,
+                    eventType: 'payment_failed',
+                    status: '0',
+                    actor: 'Payment System',
+                    actorId: 'payment_system',
+                    actorType: 'system',
+                    metadata: {
+                      paymentMethod: 'CREDITCARD',
+                      error: paymentResult.error,
+                      receiptMethod: orderDoc.order.receipt_method,
+                      total: orderDoc.total
+                    }
+                  });
+                  
                   // Payment failed - keep order in pending status
                   res.status(200).json({
                     message: "Order created but payment failed",
@@ -1130,6 +1190,25 @@ router.post(
                 }
               } catch (paymentError) {
                 console.error("Payment processing error:", paymentError);
+                
+                // Track payment processing error centrally
+                await centralizedFlowMonitor.trackOrderFlowEvent({
+                  orderId: orderId,
+                  orderNumber: orderDoc.orderId,
+                  sourceApp: appName,
+                  eventType: 'payment_error',
+                  status: '0',
+                  actor: 'Payment System',
+                  actorId: 'payment_system',
+                  actorType: 'system',
+                  metadata: {
+                    paymentMethod: 'CREDITCARD',
+                    error: paymentError.message,
+                    receiptMethod: orderDoc.order.receipt_method,
+                    total: orderDoc.total
+                  }
+                });
+                
                 // Keep order in pending status if payment processing fails
                 res.status(200).json({
                   message: "Order created but payment processing failed",
@@ -1260,21 +1339,50 @@ router.post(
   }
 );
 
+const centralizedFlowMonitor = require('../services/monitoring/centralized-flow-monitor');
+
 router.post("/api/order/update", auth.required, async (req, res) => {
   const appName = req.headers["app-name"];
   const db = req.app.db[appName];
   const offsetHours = getUTCOffset();
+  
   try {
     const updateobj = req.body.updateData;
+    const orderId = req.body.orderId;
+    
+    // Get current order state
+    const currentOrder = await db.orders.findOne({ _id: getId(orderId) });
+    const oldStatus = currentOrder?.status;
+    
+    // Update order
     await db.orders.updateOne(
       {
-        _id: getId(req.body.orderId),
+        _id: getId(orderId),
       },
       { $set: updateobj },
       { multi: false }
     );
-    const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
+    
+    const order = await db.orders.findOne({ _id: getId(orderId) });
     const customerId = order?.customerId;
+
+    // Track order status change centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: order.orderId,
+      sourceApp: appName,
+      eventType: 'status_change',
+      status: updateobj.status,
+      actor: req.user?.fullName || 'System',
+      actorId: req.user?._id || 'system',
+      actorType: req.user?.role || 'system',
+      metadata: {
+        previousStatus: oldStatus,
+        statusChange: `${oldStatus} → ${updateobj.status}`,
+        updateReason: updateobj.updateReason,
+        receiptMethod: order.order.receipt_method
+      }
+    });
     // websockets.fireWebscoketEvent({
     //   type: "order status updated",
     //   data: updateobj,
@@ -1516,6 +1624,27 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
 
     const order = await db.orders.findOne({ _id: getId(req.body.orderId) });
 
+    // Track order viewed/approved centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: req.body.orderId,
+      orderNumber: order.orderId,
+      sourceApp: appName,
+      eventType: 'order_viewed',
+      status: updateData.status || order.status,
+      actor: req.user?.fullName || 'Store Admin',
+      actorId: req.user?._id || 'store_admin',
+      actorType: 'store_admin',
+      metadata: {
+        isViewd: updateobj.isViewd,
+        isViewdAdminAll: updateobj.isViewdAdminAll,
+        readyMinutes: updateobj.readyMinutes,
+        isOrderLaterSupport: updateobj.isOrderLaterSupport,
+        receiptMethod: order.order.receipt_method,
+        previousStatus: order.status,
+        newStatus: updateData.status
+      }
+    });
+
     // Clear persistent alert when order is approved (isViewd = true)
     if (updateobj.isViewd === true) {
       try {
@@ -1574,6 +1703,26 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
         };
 
         deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
+        
+        // Track delivery booking centrally
+        await centralizedFlowMonitor.trackOrderFlowEvent({
+          orderId: req.body.orderId,
+          orderNumber: order.orderId,
+          sourceApp: appName,
+          eventType: 'delivery_booked',
+          status: updateData.status || order.status,
+          actor: 'Store Admin',
+          actorId: 'store_admin',
+          actorType: 'store_admin',
+          metadata: {
+            deliveryMethod: 'external_company',
+            readyMinutes: updateobj.readyMinutes,
+            customerPhone: customer.phone,
+            customerName: customer.fullName,
+            storeName: storeData.storeName,
+            receiptMethod: order.order.receipt_method
+          }
+        });
       }
     }
     // Send notification to customer about order status update

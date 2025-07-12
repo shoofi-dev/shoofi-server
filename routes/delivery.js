@@ -11,6 +11,7 @@ const { ObjectId } = require("mongodb");
 const deliveryService = require("../services/delivery/book-delivery");
 const { findAllMatchingDrivers } = require("../services/delivery/assignDriver");
 const notificationService = require("../services/notification/notification-service");
+const centralizedFlowMonitor = require("../services/monitoring/centralized-flow-monitor");
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -73,6 +74,38 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
     // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     const customerId = deliveryOrder?.order?.customerId;
+    
+    // Track delivery approval centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: deliveryOrder.bookId,
+      sourceApp: 'delivery-company',
+      eventType: 'delivery_approved_by_driver',
+      status: '2',
+      actor: deliveryOrder.driver?.fullName || 'Driver',
+      actorId: driverId,
+      actorType: 'driver',
+      metadata: {
+        deliveryId: orderId,
+        bookId: deliveryOrder.bookId,
+        driverInfo: {
+          id: driverId,
+          name: deliveryOrder.driver?.fullName,
+          phone: deliveryOrder.driver?.phone
+        },
+        companyInfo: {
+          id: deliveryOrder.company?._id,
+          name: deliveryOrder.company?.storeName
+        },
+        customerInfo: {
+          name: deliveryOrder.fullName,
+          phone: deliveryOrder.phone
+        },
+        approvedAt: new Date().toISOString(),
+        action: 'driver_accepted_delivery'
+      }
+    });
+    
     // Send notification to customer about delivery approval
     if (deliveryOrder && customerId) {
       try {
@@ -130,6 +163,37 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
     
     // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Track delivery cancellation centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: deliveryOrder.bookId,
+      sourceApp: 'delivery-company',
+      eventType: 'delivery_cancelled_by_driver',
+      status: '-1',
+      actor: deliveryOrder.driver?.fullName || 'Driver',
+      actorId: driverId,
+      actorType: 'driver',
+      metadata: {
+        deliveryId: orderId,
+        bookId: deliveryOrder.bookId,
+        cancelReason: reason,
+        driverInfo: {
+          id: driverId,
+          name: deliveryOrder.driver?.fullName,
+          phone: deliveryOrder.driver?.phone
+        },
+        companyInfo: {
+          id: deliveryOrder.company?._id,
+          name: deliveryOrder.company?.storeName
+        },
+        customerInfo: {
+          name: deliveryOrder.fullName,
+          phone: deliveryOrder.phone
+        },
+        cancelledAt: new Date().toISOString()
+      }
+    });
     
     // Send notification to customer about delivery cancellation
     const customerId = deliveryOrder?.order?.customerId;
@@ -191,6 +255,37 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
     // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
     
+    // Track delivery start centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: deliveryOrder.bookId,
+      sourceApp: 'delivery-company',
+      eventType: 'delivery_started_by_driver',
+      status: '3',
+      actor: deliveryOrder.driver?.fullName || 'Driver',
+      actorId: driverId,
+      actorType: 'driver',
+      metadata: {
+        deliveryId: orderId,
+        bookId: deliveryOrder.bookId,
+        driverInfo: {
+          id: driverId,
+          name: deliveryOrder.driver?.fullName,
+          phone: deliveryOrder.driver?.phone
+        },
+        companyInfo: {
+          id: deliveryOrder.company?._id,
+          name: deliveryOrder.company?.storeName
+        },
+        customerInfo: {
+          name: deliveryOrder.fullName,
+          phone: deliveryOrder.phone
+        },
+        startedAt: new Date().toISOString(),
+        action: 'collected_from_restaurant'
+      }
+    });
+    
     // Send notification to customer about delivery start
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -249,6 +344,37 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
     
     // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    
+    // Track delivery completion centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: deliveryOrder.bookId,
+      sourceApp: 'delivery-company',
+      eventType: 'delivery_completed_by_driver',
+      status: '4',
+      actor: deliveryOrder.driver?.fullName || 'Driver',
+      actorId: driverId,
+      actorType: 'driver',
+      metadata: {
+        deliveryId: orderId,
+        bookId: deliveryOrder.bookId,
+        driverInfo: {
+          id: driverId,
+          name: deliveryOrder.driver?.fullName,
+          phone: deliveryOrder.driver?.phone
+        },
+        companyInfo: {
+          id: deliveryOrder.company?._id,
+          name: deliveryOrder.company?.storeName
+        },
+        customerInfo: {
+          name: deliveryOrder.fullName,
+          phone: deliveryOrder.phone
+        },
+        completedAt: new Date().toISOString(),
+        action: 'delivered_to_customer'
+      }
+    });
     
     // Send notification to customer about delivery completion
     const customerId = deliveryOrder?.order?.customerId;
@@ -1782,10 +1908,12 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
   }
 });
 
+
 // General delivery status update endpoint
 router.post("/api/delivery/order/status/update", async (req, res) => {
   const appName = 'delivery-company';
   const db = req.app.db[appName];
+  
   try {
     const { orderId, status, reason, updatedBy } = req.body;
     
@@ -1794,6 +1922,10 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid delivery status" });
     }
+    
+    // Get current delivery state
+    const currentDelivery = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    const oldStatus = currentDelivery?.status;
     
     // Update delivery status
     const updateData = { status, updatedAt: new Date() };
@@ -1823,8 +1955,26 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
       { $set: updateData }
     );
     
-    // Get the updated delivery order
     const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+
+    // Track delivery status change centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: deliveryOrder._id,
+      orderNumber: deliveryOrder.bookId,
+      sourceApp: 'delivery-company',
+      eventType: 'delivery_status_change',
+      status: status,
+      actor: updatedBy || 'System',
+      actorId: updatedBy || 'system',
+      actorType: 'driver',
+      metadata: {
+        previousStatus: oldStatus,
+        statusChange: `${oldStatus} → ${status}`,
+        reason: reason,
+        driverId: deliveryOrder.driver?._id,
+        driverName: deliveryOrder.driver?.name
+      }
+    });
     
     // Send notification to customer about delivery status update
     const customerId = deliveryOrder?.order?.customerId;

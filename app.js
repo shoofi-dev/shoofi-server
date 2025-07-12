@@ -141,6 +141,10 @@ app.use("/", couponRoutes);
 app.use("/", creditCardRoutes);
 app.use("/", payments);
 
+// Add order monitoring routes
+const orderMonitoringRoutes = require('./routes/admin/order-monitoring');
+app.use("/", orderMonitoringRoutes);
+
 // Payment route(s)
 // _.forEach(config.paymentGateway, (gateway) => {
 //     app.use(`/${gateway}`, require(`./lib/payments/${gateway}`));
@@ -227,6 +231,9 @@ initDb(async (err, db) => {
   app.db = db;
   app.config = config;
   app.port = app.get("port");
+  
+  // Set global app for services that need database access
+  global.app = app;
 
 
 cron.schedule("0 0 * * *", function () {

@@ -3,6 +3,7 @@ const firebaseAdmin = require('firebase-admin');
 const { getId } = require("../../lib/common");
 const { getCustomerAppName } = require("../../utils/app-name-helper");
 const websocketService = require("../../services/websocket/websocket-service");
+const centralizedFlowMonitor = require("../monitoring/centralized-flow-monitor");
 const logger = require("../../utils/logger");
 
 // Helper function to get customer based on app type (same logic as customer.js)
@@ -67,6 +68,20 @@ class NotificationService {
     } = options;
 
     try {
+      // Track notification attempt
+      if (data?.orderId || data?.orderNumber) {
+        await centralizedFlowMonitor.trackNotificationEvent(
+          data.orderId,
+          data.orderNumber || data.bookId,
+          appName,
+          'attempt',
+          recipientId,
+          appType,
+          'pending',
+          { title, body, type, channels }
+        );
+      }
+
       // Get user details using app type logic
       const { customer: user, customerDB, collection } = await getCustomerByAppType(req, recipientId, appType);
 
@@ -87,40 +102,140 @@ class NotificationService {
 
       // Send to different channels
       const promises = [];
+      const results = {};
 
       if (channels.websocket) {
-        promises.push(this.sendWebSocketNotification(recipientId, title, body, data, type, appName));
+        try {
+          const wsResult = await this.sendWebSocketNotification(recipientId, title, body, data, type, appName);
+          results.websocket = 'sent';
+          
+          // Track WebSocket success
+          if (data?.orderId || data?.orderNumber) {
+            await centralizedFlowMonitor.trackWebSocketEvent(
+              data.orderId,
+              data.orderNumber || data.bookId,
+              appName,
+              'sent',
+              recipientId,
+              appType,
+              'success',
+              { type, data }
+            );
+          }
+        } catch (error) {
+          results.websocket = 'failed';
+          logger.error('WebSocket notification failed:', error);
+          
+          // Track WebSocket failure
+          if (data?.orderId || data?.orderNumber) {
+            await centralizedFlowMonitor.trackWebSocketEvent(
+              data.orderId,
+              data.orderNumber || data.bookId,
+              appName,
+              'failed',
+              recipientId,
+              appType,
+              'failed',
+              { type, data, error: error.message }
+            );
+          }
+        }
       }
 
       if (channels.push && user.notificationToken) {
-        // Add sound type to data for push notifications
-        const pushData = { ...data, soundType };
-        promises.push(this.sendPushNotification(user.notificationToken, title, body, pushData, appName));
+        try {
+          // Add sound type to data for push notifications
+          const pushData = { ...data, soundType };
+          const pushResult = await this.sendPushNotification(user.notificationToken, title, body, pushData, appName);
+          results.push = 'sent';
+          
+          // Track push notification success
+          if (data?.orderId || data?.orderNumber) {
+            await centralizedFlowMonitor.trackNotificationEvent(
+              data.orderId,
+              data.orderNumber || data.bookId,
+              appName,
+              'push_sent',
+              recipientId,
+              appType,
+              'success',
+              { title, body, type }
+            );
+          }
+        } catch (error) {
+          results.push = 'failed';
+          logger.error('Push notification failed:', error);
+          
+          // Track push notification failure
+          if (data?.orderId || data?.orderNumber) {
+            await centralizedFlowMonitor.trackNotificationEvent(
+              data.orderId,
+              data.orderNumber || data.bookId,
+              appName,
+              'push_failed',
+              recipientId,
+              appType,
+              'failed',
+              { title, body, type, error: error.message }
+            );
+          }
+        }
       }
 
       if (channels.email && user.email) {
-        promises.push(this.sendEmailNotification(user.email, title, body, data));
+        try {
+          await this.sendEmailNotification(user.email, title, body, data);
+          results.email = 'sent';
+        } catch (error) {
+          results.email = 'failed';
+          logger.error('Email notification failed:', error);
+        }
       }
 
       if (channels.sms && user.phone) {
-        promises.push(this.sendSMSNotification(user.phone, title, body));
+        try {
+          await this.sendSMSNotification(user.phone, title, body);
+          results.sms = 'sent';
+        } catch (error) {
+          results.sms = 'failed';
+          logger.error('SMS notification failed:', error);
+        }
       }
 
-      // Execute all notification promises
-      const results = await Promise.allSettled(promises);
-      
-      // Log results
-      results.forEach((result, index) => {
-        const channelNames = ['websocket', 'push', 'email', 'sms'];
-        if (result.status === 'rejected') {
-          logger.error(`Failed to send ${channelNames[index]} notification:`, result.reason);
-        }
-      });
+      // Track overall notification result
+      if (data?.orderId || data?.orderNumber) {
+        const overallStatus = Object.values(results).every(r => r === 'sent') ? 'success' : 'partial';
+        await centralizedFlowMonitor.trackNotificationEvent(
+          data.orderId,
+          data.orderNumber || data.bookId,
+          appName,
+          'complete',
+          recipientId,
+          appType,
+          overallStatus,
+          { results }
+        );
+      }
 
-      return notificationRecord;
+      return { ...notificationRecord, results };
 
     } catch (error) {
       logger.error('Error sending notification:', error);
+      
+      // Track notification error
+      if (data?.orderId || data?.orderNumber) {
+        await centralizedFlowMonitor.trackNotificationEvent(
+          data.orderId,
+          data.orderNumber || data.bookId,
+          appName,
+          'error',
+          recipientId,
+          appType,
+          'failed',
+          { title, body, type, error: error.message }
+        );
+      }
+      
       throw error;
     }
   }
