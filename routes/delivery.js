@@ -12,6 +12,7 @@ const deliveryService = require("../services/delivery/book-delivery");
 const { findAllMatchingDrivers } = require("../services/delivery/assignDriver");
 const notificationService = require("../services/notification/notification-service");
 const centralizedFlowMonitor = require("../services/monitoring/centralized-flow-monitor");
+const { DELIVERY_STATUS } = require("../consts/consts");
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -29,118 +30,123 @@ const getUTCOffset = () => {
   return israelOffsetMinutes;
 };
 
-
-
 router.post("/api/delivery/book", async (req, res) => {
-  const appName = req.headers['app-name'];
+  const appName = req.headers["app-name"];
   const db = req.app.db[appName];
   try {
     const deliveryData = req.body.deliveryData;
-    
+
     // Use the delivery service
-    const result = await deliveryService.bookDelivery({ 
-      deliveryData: { ...deliveryData, appName }, 
-      appDb: req.app.db 
+    const result = await deliveryService.bookDelivery({
+      deliveryData: { ...deliveryData, appName },
+      appDb: req.app.db,
     });
-    
+
     if (result.success) {
-      return res.status(200).json({ 
+      return res.status(200).json({
         message: "order custom delivery booked successfully",
         deliveryId: result.deliveryId,
-        bookId: result.bookId
+        bookId: result.bookId,
       });
     } else {
       return res.status(400).json({ message: result.message });
     }
   } catch (ex) {
     console.info("Error order custom delivery booked", ex);
-    return res.status(400).json({ message: "order custom delivery booked failed" });
+    return res
+      .status(400)
+      .json({ message: "order custom delivery booked failed" });
   }
 });
 
 // Approve order
 router.post("/api/delivery/driver/order/approve", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
-    
+
     // Update delivery status to approved
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
-      { $set: { status: "2", approvedAt: new Date() } }
+      { $set: { status: DELIVERY_STATUS.APPROVED, approvedAt: new Date() } }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
     const customerId = deliveryOrder?.order?.customerId;
-    
+
     // Track delivery approval centrally
     await centralizedFlowMonitor.trackOrderFlowEvent({
       orderId: orderId,
       orderNumber: deliveryOrder.bookId,
-      sourceApp: 'delivery-company',
-      eventType: 'delivery_approved_by_driver',
-      status: '2',
-      actor: deliveryOrder.driver?.fullName || 'Driver',
+      sourceApp: "delivery-company",
+      eventType: "delivery_approved_by_driver",
+      status: DELIVERY_STATUS.APPROVED,
+      actor: deliveryOrder.driver?.fullName || "Driver",
       actorId: driverId,
-      actorType: 'driver',
+      actorType: "driver",
       metadata: {
         deliveryId: orderId,
         bookId: deliveryOrder.bookId,
         driverInfo: {
           id: driverId,
           name: deliveryOrder.driver?.fullName,
-          phone: deliveryOrder.driver?.phone
+          phone: deliveryOrder.driver?.phone,
         },
         companyInfo: {
           id: deliveryOrder.company?._id,
-          name: deliveryOrder.company?.storeName
+          name: deliveryOrder.company?.storeName,
         },
         customerInfo: {
           name: deliveryOrder.fullName,
-          phone: deliveryOrder.phone
+          phone: deliveryOrder.phone,
         },
         approvedAt: new Date().toISOString(),
-        action: 'driver_accepted_delivery'
-      }
+        action: "driver_accepted_delivery",
+      },
     });
-    
+
     // Send notification to customer about delivery approval
     if (deliveryOrder && customerId) {
       try {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم تأكيد التوصيل",
           body: `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`,
-          type: 'delivery_approved',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_approved",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "2",
-            driverName: deliveryOrder.driver?.name || 'السائق'
+            deliveryStatus: DELIVERY_STATUS.APPROVED,
+            driverName: deliveryOrder.driver?.name || "السائق",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for delivery approval:", notificationError);
+        console.error(
+          "Failed to send customer notification for delivery approval:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Order approved" });
   } catch (ex) {
     console.info("Error approving order", ex);
@@ -150,30 +156,38 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
 
 // Cancel order
 router.post("/api/delivery/driver/order/cancel", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, driverId, reason } = req.body;
-    
+
     // Update delivery status to cancelled by driver
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
-      { $set: { status: "-1", cancelledAt: new Date(), cancelReason: reason || null } }
+      {
+        $set: {
+          status: DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+          cancelledAt: new Date(),
+          cancelReason: reason || null,
+        },
+      }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
+
     // Track delivery cancellation centrally
     await centralizedFlowMonitor.trackOrderFlowEvent({
       orderId: orderId,
       orderNumber: deliveryOrder.bookId,
-      sourceApp: 'delivery-company',
-      eventType: 'delivery_cancelled_by_driver',
-      status: '-1',
-      actor: deliveryOrder.driver?.fullName || 'Driver',
+      sourceApp: "delivery-company",
+      eventType: "delivery_cancelled_by_driver",
+      status: DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+      actor: deliveryOrder.driver?.fullName || "Driver",
       actorId: driverId,
-      actorType: 'driver',
+      actorType: "driver",
       metadata: {
         deliveryId: orderId,
         bookId: deliveryOrder.bookId,
@@ -181,20 +195,20 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
         driverInfo: {
           id: driverId,
           name: deliveryOrder.driver?.fullName,
-          phone: deliveryOrder.driver?.phone
+          phone: deliveryOrder.driver?.phone,
         },
         companyInfo: {
           id: deliveryOrder.company?._id,
-          name: deliveryOrder.company?.storeName
+          name: deliveryOrder.company?.storeName,
         },
         customerInfo: {
           name: deliveryOrder.fullName,
-          phone: deliveryOrder.phone
+          phone: deliveryOrder.phone,
         },
-        cancelledAt: new Date().toISOString()
-      }
+        cancelledAt: new Date().toISOString(),
+      },
     });
-    
+
     // Send notification to customer about delivery cancellation
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -202,36 +216,39 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم إلغاء التوصيل",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`,
-          type: 'delivery_cancelled_driver',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_cancelled_driver",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "-1",
+            deliveryStatus: DELIVERY_STATUS.CANCELLED_BY_DRIVER,
             cancelReason: reason,
-            driverName: deliveryOrder.driver?.name || 'السائق'
+            driverName: deliveryOrder.driver?.name || "السائق",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for delivery cancellation:", notificationError);
+        console.error(
+          "Failed to send customer notification for delivery cancellation:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Order cancelled" });
   } catch (ex) {
     console.info("Error cancelling order", ex);
@@ -241,51 +258,58 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
 
 // Start order (collected from restaurant)
 router.post("/api/delivery/driver/order/start", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
-    
+
     // Update delivery status to collected from restaurant
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
-      { $set: { status: "3", startedAt: new Date() } }
+      {
+        $set: {
+          status: DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT,
+          startedAt: new Date(),
+        },
+      }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
+
     // Track delivery start centrally
     await centralizedFlowMonitor.trackOrderFlowEvent({
       orderId: orderId,
       orderNumber: deliveryOrder.bookId,
-      sourceApp: 'delivery-company',
-      eventType: 'delivery_started_by_driver',
-      status: '3',
-      actor: deliveryOrder.driver?.fullName || 'Driver',
+      sourceApp: "delivery-company",
+      eventType: "delivery_started_by_driver",
+      status: DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT,
+      actor: deliveryOrder.driver?.fullName || "Driver",
       actorId: driverId,
-      actorType: 'driver',
+      actorType: "driver",
       metadata: {
         deliveryId: orderId,
         bookId: deliveryOrder.bookId,
         driverInfo: {
           id: driverId,
           name: deliveryOrder.driver?.fullName,
-          phone: deliveryOrder.driver?.phone
+          phone: deliveryOrder.driver?.phone,
         },
         companyInfo: {
           id: deliveryOrder.company?._id,
-          name: deliveryOrder.company?.storeName
+          name: deliveryOrder.company?.storeName,
         },
         customerInfo: {
           name: deliveryOrder.fullName,
-          phone: deliveryOrder.phone
+          phone: deliveryOrder.phone,
         },
         startedAt: new Date().toISOString(),
-        action: 'collected_from_restaurant'
-      }
+        action: "collected_from_restaurant",
+      },
     });
-    
+
     // Send notification to customer about delivery start
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -293,35 +317,38 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم استلام طلبك",
           body: `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`,
-          type: 'delivery_collected',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_collected",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "3",
-            driverName: deliveryOrder.driver?.name || 'السائق'
+            deliveryStatus: DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT,
+            driverName: deliveryOrder.driver?.name || "السائق",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for delivery start:", notificationError);
+        console.error(
+          "Failed to send customer notification for delivery start:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Order started" });
   } catch (ex) {
     console.info("Error starting order", ex);
@@ -331,51 +358,53 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
 
 // Complete order (delivered)
 router.post("/api/delivery/driver/order/complete", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, driverId } = req.body;
-    
+
     // Update delivery status to delivered
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), "driver._id": ObjectId(driverId) },
-      { $set: { status: "4", completedAt: new Date() } }
+      { $set: { status: DELIVERY_STATUS.DELIVERED, completedAt: new Date() } }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
+
     // Track delivery completion centrally
     await centralizedFlowMonitor.trackOrderFlowEvent({
       orderId: orderId,
       orderNumber: deliveryOrder.bookId,
-      sourceApp: 'delivery-company',
-      eventType: 'delivery_completed_by_driver',
-      status: '4',
-      actor: deliveryOrder.driver?.fullName || 'Driver',
+      sourceApp: "delivery-company",
+      eventType: "delivery_completed_by_driver",
+      status: DELIVERY_STATUS.DELIVERED,
+      actor: deliveryOrder.driver?.fullName || "Driver",
       actorId: driverId,
-      actorType: 'driver',
+      actorType: "driver",
       metadata: {
         deliveryId: orderId,
         bookId: deliveryOrder.bookId,
         driverInfo: {
           id: driverId,
           name: deliveryOrder.driver?.fullName,
-          phone: deliveryOrder.driver?.phone
+          phone: deliveryOrder.driver?.phone,
         },
         companyInfo: {
           id: deliveryOrder.company?._id,
-          name: deliveryOrder.company?.storeName
+          name: deliveryOrder.company?.storeName,
         },
         customerInfo: {
           name: deliveryOrder.fullName,
-          phone: deliveryOrder.phone
+          phone: deliveryOrder.phone,
         },
         completedAt: new Date().toISOString(),
-        action: 'delivered_to_customer'
-      }
+        action: "delivered_to_customer",
+      },
     });
-    
+
     // Send notification to customer about delivery completion
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -383,35 +412,38 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
-            recipientId: customerId,
+          recipientId: customerId,
           title: "تم تسليم طلبك",
           body: `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`,
-          type: 'delivery_completed',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_completed",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "4",
-            driverName: deliveryOrder.driver?.name || 'السائق'
+            deliveryStatus: DELIVERY_STATUS.DELIVERED,
+            driverName: deliveryOrder.driver?.name || "السائق",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for delivery completion:", notificationError);
+        console.error(
+          "Failed to send customer notification for delivery completion:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Order completed" });
   } catch (ex) {
     console.info("Error completing order", ex);
@@ -420,12 +452,11 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
 });
 
 router.post("/api/delivery/create-customer", async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
   try {
     const customerData = req.body.customerData;
     const offsetHours = getUTCOffset();
-
 
     await db.customers.insertOne({
       ...customerData,
@@ -445,15 +476,15 @@ router.post("/api/delivery/create-customer", async (req, res) => {
 });
 
 router.post("/api/delivery/employe-list", async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
-    const companyId = req.body.companyId;
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const companyId = req.body.companyId;
   try {
-    const employesList = await db.customers.find({role:'employe', companyId: (companyId)}).toArray();
+    const employesList = await db.customers
+      .find({ role: "employe", companyId: companyId })
+      .toArray();
     // websockets.fireWebscoketEvent("order delivery booked");
-    return res
-      .status(200)
-      .json(employesList);
+    return res.status(200).json(employesList);
   } catch (ex) {
     console.info("Error order custom delivery booked", ex);
     return res
@@ -463,70 +494,71 @@ router.post("/api/delivery/employe-list", async (req, res) => {
 });
 
 router.post("/api/delivery/employe-payments", async (req, res) => {
-  const appName = req.headers['app-name'];
-    const db = req.app.db[appName];
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
 
-    var start = moment().subtract(7, 'days').utcOffset(120);
-    start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
-  
-    var end = moment().utcOffset(120);
-    end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
-    const filterBy = {
-      created: { $gte: start.format(), $lt: end.format() },
-      status: { $ne: "0" },
-    };
+  var start = moment().subtract(7, "days").utcOffset(120);
+  start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+  var end = moment().utcOffset(120);
+  end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+  const filterBy = {
+    created: { $gte: start.format(), $lt: end.format() },
+    status: { $ne: DELIVERY_STATUS.DELIVERED },
+  };
   try {
-    const employePayments =  await db.bookDelivery.aggregate([
-      {
-        $match: filterBy  // Filter records based on date range
-      },
-      {
-        $project: {
-          driverId: "$driver._id",  // Include the delivery man (driver._id)
-          created: 1,   // Keep the created field as is
-          // Convert 'created' string to Date type, add the UTC offset and format as 'YYYY-MM-DD'
-          date: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: {
-                $add: [
-                  { $dateFromString: { dateString: "$created" } }, // Convert the created string to Date
-                  120 * 60 * 1000 // Add UTC+120 milliseconds to adjust time
-                ]
-              }
-            }
-          }
-        }
-      },
-      {
-        $group: {
-          _id: { assignee: "$driverId", date: "$date" },  // Group by driver and formatted date
-          orderCount: { $sum: 1 }  // Count the number of orders per day per delivery man
-        }
-      },
-      {
-        $group: {
-          _id: "$_id.assignee",  // Group by driver
-          dailyOrders: {  // Create an array of daily order counts
-            $push: { date: "$_id.date", orderCount: "$orderCount" }
-          }
-        }
-      },
-      {
-        $project: {
-          assignee: "$_id",  // Include driver's ID
-          dailyOrders: 1     // Include the daily orders array
-        }
-      },
-      {
-        $sort: { "assignee": 1 }  // Sort by driver
-      }
-    ]).toArray()
-    
+    const employePayments = await db.bookDelivery
+      .aggregate([
+        {
+          $match: filterBy, // Filter records based on date range
+        },
+        {
+          $project: {
+            driverId: "$driver._id", // Include the delivery man (driver._id)
+            created: 1, // Keep the created field as is
+            // Convert 'created' string to Date type, add the UTC offset and format as 'YYYY-MM-DD'
+            date: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: {
+                  $add: [
+                    { $dateFromString: { dateString: "$created" } }, // Convert the created string to Date
+                    120 * 60 * 1000, // Add UTC+120 milliseconds to adjust time
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $group: {
+            _id: { assignee: "$driverId", date: "$date" }, // Group by driver and formatted date
+            orderCount: { $sum: 1 }, // Count the number of orders per day per delivery man
+          },
+        },
+        {
+          $group: {
+            _id: "$_id.assignee", // Group by driver
+            dailyOrders: {
+              // Create an array of daily order counts
+              $push: { date: "$_id.date", orderCount: "$orderCount" },
+            },
+          },
+        },
+        {
+          $project: {
+            assignee: "$_id", // Include driver's ID
+            dailyOrders: 1, // Include the daily orders array
+          },
+        },
+        {
+          $sort: { assignee: 1 }, // Sort by driver
+        },
+      ])
+      .toArray();
+
     // websockets.fireWebscoketEvent("order delivery booked");
-    return res
-      .status(200)
-      .json(employePayments);
+    return res.status(200).json(employePayments);
   } catch (ex) {
     console.info("Error order custom delivery booked", ex);
     return res
@@ -535,10 +567,9 @@ router.post("/api/delivery/employe-payments", async (req, res) => {
   }
 });
 
-
 router.post("/api/delivery/list", async (req, res) => {
-  const appName = 'delivery-company';
-    const db = req.app.db[appName];
+  const appName = "delivery-company";
+  const db = req.app.db[appName];
   try {
     const customerId = req.body.customerId;
     const isAllWeek = req.body.isAllWeek;
@@ -551,19 +582,20 @@ router.post("/api/delivery/list", async (req, res) => {
       });
       return;
     }
-    
-    const statusList = req.body.statusList || ["1", "2", "3","-1"];
+
+    const statusList = req.body.statusList || [
+      DELIVERY_STATUS.WAITING_FOR_APPROVE,
+      DELIVERY_STATUS.APPROVED,
+      DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT,
+      DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+    ];
     const offsetHours = getUTCOffset();
-    
 
-    let startOfToday = moment()
-      .utcOffset(offsetHours)
-      .startOf("day")
-      
+    let startOfToday = moment().utcOffset(offsetHours).startOf("day");
 
-      if(isAllWeek){
-        startOfToday.subtract(7, "d");
-      }
+    if (isAllWeek) {
+      startOfToday.subtract(7, "d");
+    }
 
     // Get the end of today in UTC
     const endOfToday = moment().utcOffset(offsetHours).endOf("day").add(3, "h");
@@ -591,19 +623,23 @@ router.post("/api/delivery/list", async (req, res) => {
     }
 
     // Filter by employee/driver assignments
-    if(customer.role === "employe" || customer.role === "driver" || customer.role === "admin"){
+    if (
+      customer.role === "employe" ||
+      customer.role === "driver" ||
+      customer.role === "admin"
+    ) {
       filterBy = {
         ...filterBy,
         "driver._id": ObjectId(customerId),
-        status: { $ne: "1" },
+        status: { $ne: DELIVERY_STATUS.WAITING_FOR_APPROVE },
       };
     }
 
     // Filter by store if customer is a store
-    if(customer.role === "store"){
+    if (customer.role === "store") {
       filterBy = {
         ...filterBy,
-        storeId: String(getId(customer._id))
+        storeId: String(getId(customer._id)),
       };
     }
 
@@ -619,15 +655,15 @@ router.post("/api/delivery/list", async (req, res) => {
 });
 
 router.post("/api/delivery/update", async (req, res) => {
-  const appName = req.headers['app-name'];
+  const appName = req.headers["app-name"];
   const db = req.app.db[appName];
   try {
     let updateData = req.body;
-    
+
     // Use the delivery service for updates
-    await deliveryService.updateDelivery({ 
-      deliveryData: updateData, 
-      appDb: req.app.db 
+    await deliveryService.updateDelivery({
+      deliveryData: updateData,
+      appDb: req.app.db,
     });
 
     return res
@@ -641,22 +677,30 @@ router.post("/api/delivery/update", async (req, res) => {
   }
 });
 
-
 // --- Area Management ---
 
 // List all areas
-router.get('/api/delivery/areas', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.get("/api/delivery/areas", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const areas = await db.areas.find().toArray();
   res.json(areas);
 });
 
 // Add area
-router.post('/api/delivery/area/add', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/area/add", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { name, geometry, cityId, minETA, maxETA, price } = req.body;
-  if (!name || !geometry || !cityId) return res.status(400).json({ message: 'Name, geometry and cityId required' });
-  const area = { name, geometry, cityId, createdAt: new Date(), updatedAt: new Date() };
+  if (!name || !geometry || !cityId)
+    return res
+      .status(400)
+      .json({ message: "Name, geometry and cityId required" });
+  const area = {
+    name,
+    geometry,
+    cityId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   if (minETA !== undefined) area.minETA = minETA;
   if (maxETA !== undefined) area.maxETA = maxETA;
   if (price !== undefined) area.price = price;
@@ -665,8 +709,8 @@ router.post('/api/delivery/area/add', async (req, res) => {
 });
 
 // Update area
-router.post('/api/delivery/area/update/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/area/update/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   const { name, geometry, cityId, minETA, maxETA, price } = req.body;
   const updateObj = { name, geometry, cityId, updatedAt: new Date() };
@@ -674,168 +718,217 @@ router.post('/api/delivery/area/update/:id', async (req, res) => {
   if (maxETA !== undefined) updateObj.maxETA = maxETA;
   if (price !== undefined) updateObj.price = price;
   await db.areas.updateOne({ _id: getId(id) }, { $set: updateObj });
-  res.json({ message: 'Area updated' });
+  res.json({ message: "Area updated" });
 });
 
 // Delete area
-router.delete('/api/delivery/area/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.delete("/api/delivery/area/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   await db.areas.deleteOne({ _id: getId(id) });
-  res.json({ message: 'Area deleted' });
+  res.json({ message: "Area deleted" });
 });
 
 // Get single area by ID
-router.get('/api/delivery/area/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.get("/api/delivery/area/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   const area = await db.areas.findOne({ _id: getId(id) });
-  if (!area) return res.status(404).json({ message: 'Area not found' });
+  if (!area) return res.status(404).json({ message: "Area not found" });
   res.json(area);
 });
 
 // --- Company Supported Areas ---
 
 // List supported areas/prices for a company
-router.get('/api/delivery/company/:companyId/areas', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.get("/api/delivery/company/:companyId/areas", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { companyId } = req.params;
   const company = await db.store.findOne({ _id: getId(companyId) });
   res.json(company?.supportedAreas || []);
 });
 
 // Add area/price to company
-router.post('/api/delivery/company/:companyId/area/add', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/company/:companyId/area/add", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { companyId } = req.params;
   const { areaId, price, minOrder, eta } = req.body;
-  if (!areaId || price == null) return res.status(400).json({ message: 'areaId and price required' });
+  if (!areaId || price == null)
+    return res.status(400).json({ message: "areaId and price required" });
   await db.store.updateOne(
     { _id: getId(companyId) },
-    { $push: { supportedAreas: { areaId: getId(areaId), price, minOrder, eta } } }
+    {
+      $push: {
+        supportedAreas: { areaId: getId(areaId), price, minOrder, eta },
+      },
+    }
   );
-  res.json({ message: 'Area added to company' });
+  res.json({ message: "Area added to company" });
 });
 
 // Update price/minOrder/eta for area
-router.post('/api/delivery/company/:companyId/area/update/:areaId', async (req, res) => {
-  const db = req.app.db['delivery-company'];
-  const { companyId, areaId } = req.params;
-  const { price, minOrder, eta } = req.body;
-  await db.store.updateOne(
-    { _id: getId(companyId), 'supportedAreas.areaId': getId(areaId) },
-    { $set: { 'supportedAreas.$.price': price, 'supportedAreas.$.minOrder': minOrder, 'supportedAreas.$.eta': eta } }
-  );
-  res.json({ message: 'Area updated for company' });
-});
+router.post(
+  "/api/delivery/company/:companyId/area/update/:areaId",
+  async (req, res) => {
+    const db = req.app.db["delivery-company"];
+    const { companyId, areaId } = req.params;
+    const { price, minOrder, eta } = req.body;
+    await db.store.updateOne(
+      { _id: getId(companyId), "supportedAreas.areaId": getId(areaId) },
+      {
+        $set: {
+          "supportedAreas.$.price": price,
+          "supportedAreas.$.minOrder": minOrder,
+          "supportedAreas.$.eta": eta,
+        },
+      }
+    );
+    res.json({ message: "Area updated for company" });
+  }
+);
 
 // Remove area from company
-router.delete('/api/delivery/company/:companyId/area/:areaId', async (req, res) => {
-  const db = req.app.db['delivery-company'];
-  const { companyId, areaId } = req.params;
-  await db.store.updateOne(
-    { _id: getId(companyId) },
-    { $pull: { supportedAreas: { areaId: getId(areaId) } } }
-  );
-  res.json({ message: 'Area removed from company' });
-});
+router.delete(
+  "/api/delivery/company/:companyId/area/:areaId",
+  async (req, res) => {
+    const db = req.app.db["delivery-company"];
+    const { companyId, areaId } = req.params;
+    await db.store.updateOne(
+      { _id: getId(companyId) },
+      { $pull: { supportedAreas: { areaId: getId(areaId) } } }
+    );
+    res.json({ message: "Area removed from company" });
+  }
+);
 
 // Get a single supported area for a company
-router.get('/api/delivery/company/:companyId/area/:areaId', async (req, res) => {
-  const db = req.app.db['delivery-company'];
-  const { companyId, areaId } = req.params;
-  const company = await db.store.findOne({ _id: getId(companyId) });
-  if (!company) return res.status(404).json({ message: 'Company not found' });
-  const area = (company.supportedAreas || []).find(a => a.areaId.equals(getId(areaId)));
-  if (!area) return res.status(404).json({ message: 'Area not found for this company' });
-  res.json(area);
-});
+router.get(
+  "/api/delivery/company/:companyId/area/:areaId",
+  async (req, res) => {
+    const db = req.app.db["delivery-company"];
+    const { companyId, areaId } = req.params;
+    const company = await db.store.findOne({ _id: getId(companyId) });
+    if (!company) return res.status(404).json({ message: "Company not found" });
+    const area = (company.supportedAreas || []).find((a) =>
+      a.areaId.equals(getId(areaId))
+    );
+    if (!area)
+      return res
+        .status(404)
+        .json({ message: "Area not found for this company" });
+    res.json(area);
+  }
+);
 
 // --- Price by Location ---
 
-router.post('/api/delivery/company/price-by-location', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/company/price-by-location", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { companyId, lat, lng } = req.body;
-  if (!companyId || lat == null || lng == null) return res.status(400).json({ message: 'companyId, lat, lng required' });
+  if (!companyId || lat == null || lng == null)
+    return res.status(400).json({ message: "companyId, lat, lng required" });
 
   // Find area containing the point
   const area = await db.areas.findOne({
     geometry: {
       $geoIntersects: {
-        $geometry: { type: "Point", coordinates: [lng, lat] }
-      }
-    }
+        $geometry: { type: "Point", coordinates: [lng, lat] },
+      },
+    },
   });
-  if (!area) return res.status(404).json({ message: 'No delivery area found for this location' });
+  if (!area)
+    return res
+      .status(404)
+      .json({ message: "No delivery area found for this location" });
 
   // Find company and area price
   const company = await db.store.findOne({ _id: getId(companyId) });
-  if (!company) return res.status(404).json({ message: 'Company not found' });
-  const areaInfo = (company.supportedAreas || []).find(a => a.areaId.equals(area._id));
-  if (!areaInfo) return res.status(404).json({ message: 'Company does not support this area' });
+  if (!company) return res.status(404).json({ message: "Company not found" });
+  const areaInfo = (company.supportedAreas || []).find((a) =>
+    a.areaId.equals(area._id)
+  );
+  if (!areaInfo)
+    return res
+      .status(404)
+      .json({ message: "Company does not support this area" });
 
   res.json({
     areaId: area._id,
     areaName: area.name,
     price: areaInfo.price,
     minOrder: areaInfo.minOrder,
-    eta: areaInfo.eta
+    eta: areaInfo.eta,
   });
 });
 
 // --- City Management ---
 
 // List all cities
-router.get('/api/delivery/cities', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.get("/api/delivery/cities", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const cities = await db.cities.find().toArray();
   res.json(cities);
 });
 
 // Add city
-router.post('/api/delivery/city/add', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/city/add", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { nameAR, nameHE, geometry } = req.body;
-  if (!nameAR || !nameHE || !geometry) return res.status(400).json({ message: 'Name and geometry required' });
-  const city = { nameAR, nameHE, geometry, createdAt: new Date(), updatedAt: new Date() };
+  if (!nameAR || !nameHE || !geometry)
+    return res.status(400).json({ message: "Name and geometry required" });
+  const city = {
+    nameAR,
+    nameHE,
+    geometry,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
   const result = await db.cities.insertOne(city);
   res.status(201).json({ ...city, _id: result.insertedId });
 });
 
 // Update city
-router.post('/api/delivery/city/update/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.post("/api/delivery/city/update/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   const { nameAR, nameHE, geometry } = req.body;
-  await db.cities.updateOne({ _id: getId(id) }, { $set: { nameAR, nameHE, geometry, updatedAt: new Date() } });
-  res.json({ message: 'City updated' });
+  await db.cities.updateOne(
+    { _id: getId(id) },
+    { $set: { nameAR, nameHE, geometry, updatedAt: new Date() } }
+  );
+  res.json({ message: "City updated" });
 });
 
 // Delete city
-router.delete('/api/delivery/city/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.delete("/api/delivery/city/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   await db.cities.deleteOne({ _id: getId(id) });
-  res.json({ message: 'City deleted' });
+  res.json({ message: "City deleted" });
 });
 
 // Get single city by ID
-router.get('/api/delivery/city/:id', async (req, res) => {
-  const db = req.app.db['delivery-company'];
+router.get("/api/delivery/city/:id", async (req, res) => {
+  const db = req.app.db["delivery-company"];
   const { id } = req.params;
   const city = await db.cities.findOne({ _id: getId(id) });
-  if (!city) return res.status(404).json({ message: 'City not found' });
+  if (!city) return res.status(404).json({ message: "City not found" });
   res.json(city);
 });
 
 // Delivery Company Endpoints
 router.get("/api/delivery/companies", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const companies = await db.store.find().sort({ order: 1 }).toArray();
     res.status(200).json(companies);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch delivery companies', error: err.message });
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch delivery companies",
+        error: err.message,
+      });
   }
 });
 
@@ -844,33 +937,59 @@ router.post(
   upload.array("img"),
   async (req, res) => {
     try {
-      const db = req.app.db['delivery-company'];
-      const { nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, phone, email, status, supportedCities } = req.body;
+      const db = req.app.db["delivery-company"];
+      const {
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose,
+        isAlwaysOpen,
+        phone,
+        email,
+        status,
+        supportedCities,
+      } = req.body;
 
       // Validation
       if (!nameAR || !nameHE) {
-        return res.status(400).json({ message: 'nameAR, and nameHE are required' });
+        return res
+          .status(400)
+          .json({ message: "nameAR, and nameHE are required" });
       }
       if (!start || !end) {
-        return res.status(400).json({ message: 'Start and end times are required' });
+        return res
+          .status(400)
+          .json({ message: "Start and end times are required" });
       }
-      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
-        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      if (
+        typeof isStoreClose === "undefined" ||
+        typeof isAlwaysOpen === "undefined"
+      ) {
+        return res
+          .status(400)
+          .json({ message: "isStoreClose and isAlwaysOpen are required" });
       }
-
-
-
 
       let parsedSupportedCities = [];
       try {
-        parsedSupportedCities = typeof supportedCities === 'string' ? JSON.parse(supportedCities) : supportedCities;
+        parsedSupportedCities =
+          typeof supportedCities === "string"
+            ? JSON.parse(supportedCities)
+            : supportedCities;
       } catch (e) {
-        return res.status(400).json({ message: 'Invalid supportedCities format' });
+        return res
+          .status(400)
+          .json({ message: "Invalid supportedCities format" });
       }
       const newCompanyId = getId();
       let images = [];
       if (req.files && req.files.length > 0) {
-        images = await uploadFile(req.files, req, `delivery-companies/${newCompanyId}/logo`);
+        images = await uploadFile(
+          req.files,
+          req,
+          `delivery-companies/${newCompanyId}/logo`
+        );
       }
 
       const newCompany = {
@@ -879,36 +998,46 @@ router.post(
         nameHE,
         start,
         end,
-        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
-        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
-        phone: phone || '',
-        email: email || '',
-        status: status === 'true' || status === true,
-        image: images.length > 0 ? images[0] : '',
-        supportedCities: parsedSupportedCities.map(id => getId(id)),
+        isStoreClose: isStoreClose === "true" || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === "true" || isAlwaysOpen === true,
+        phone: phone || "",
+        email: email || "",
+        status: status === "true" || status === true,
+        image: images.length > 0 ? images[0] : "",
+        supportedCities: parsedSupportedCities.map((id) => getId(id)),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       await db.store.insertOne(newCompany);
       res.status(201).json(newCompany);
     } catch (err) {
-      res.status(500).json({ message: 'Failed to add delivery company', error: err.message });
+      res
+        .status(500)
+        .json({
+          message: "Failed to add delivery company",
+          error: err.message,
+        });
     }
   }
 );
 
 router.get("/api/delivery/company/:id", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { id } = req.params;
     const company = await db.store.findOne({ _id: getId(id) });
     if (!company) {
-      return res.status(404).json({ message: 'Delivery company not found' });
+      return res.status(404).json({ message: "Delivery company not found" });
     }
     res.status(200).json(company);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch delivery company', error: err.message });
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch delivery company",
+        error: err.message,
+      });
   }
 });
 
@@ -917,38 +1046,71 @@ router.post(
   upload.array("img"),
   async (req, res) => {
     try {
-      const db = req.app.db['delivery-company'];
+      const db = req.app.db["delivery-company"];
       const { id } = req.params;
-      const { nameAR, nameHE, start, end, isStoreClose, isAlwaysOpen, id: companyId, phone, email, status, order, supportedCities } = req.body;
+      const {
+        nameAR,
+        nameHE,
+        start,
+        end,
+        isStoreClose,
+        isAlwaysOpen,
+        id: companyId,
+        phone,
+        email,
+        status,
+        order,
+        supportedCities,
+      } = req.body;
 
       // Validation
       if (!nameAR || !nameHE) {
-        return res.status(400).json({ message: 'Company nameAR, and nameHE are required' });
+        return res
+          .status(400)
+          .json({ message: "Company nameAR, and nameHE are required" });
       }
       if (!start || !end) {
-        return res.status(400).json({ message: 'Start and end times are required' });
+        return res
+          .status(400)
+          .json({ message: "Start and end times are required" });
       }
-      if (typeof isStoreClose === 'undefined' || typeof isAlwaysOpen === 'undefined') {
-        return res.status(400).json({ message: 'isStoreClose and isAlwaysOpen are required' });
+      if (
+        typeof isStoreClose === "undefined" ||
+        typeof isAlwaysOpen === "undefined"
+      ) {
+        return res
+          .status(400)
+          .json({ message: "isStoreClose and isAlwaysOpen are required" });
       }
-      if (typeof id === 'undefined' && typeof companyId === 'undefined') {
-        return res.status(400).json({ message: 'id is required' });
+      if (typeof id === "undefined" && typeof companyId === "undefined") {
+        return res.status(400).json({ message: "id is required" });
       }
       let parsedSupportedCities = [];
       try {
-        parsedSupportedCities = typeof supportedCities === 'string' ? JSON.parse(supportedCities) : supportedCities;
+        parsedSupportedCities =
+          typeof supportedCities === "string"
+            ? JSON.parse(supportedCities)
+            : supportedCities;
       } catch (e) {
-        return res.status(400).json({ message: 'Invalid supportedCities format' });
+        return res
+          .status(400)
+          .json({ message: "Invalid supportedCities format" });
       }
 
       const company = await db.store.findOne({ _id: getId(id) });
       if (!company) {
-        return res.status(404).json({ message: 'Delivery company not found' });
+        return res.status(404).json({ message: "Delivery company not found" });
       }
 
       let image = company.image;
       if (req.files && req.files.length > 0) {
-        image = (await uploadFile(req.files, req, `delivery-companies/${companyId}/logo`))[0];
+        image = (
+          await uploadFile(
+            req.files,
+            req,
+            `delivery-companies/${companyId}/logo`
+          )
+        )[0];
         if (company.image) {
           await deleteImages([company.image], req);
         }
@@ -960,37 +1122,39 @@ router.post(
         nameHE,
         start,
         end,
-        isStoreClose: isStoreClose === 'true' || isStoreClose === true,
-        isAlwaysOpen: isAlwaysOpen === 'true' || isAlwaysOpen === true,
+        isStoreClose: isStoreClose === "true" || isStoreClose === true,
+        isAlwaysOpen: isAlwaysOpen === "true" || isAlwaysOpen === true,
         id: Number(companyId),
-        phone: phone || '',
-        email: email || '',
-        status: status === 'true' || status === true,
+        phone: phone || "",
+        email: email || "",
+        status: status === "true" || status === true,
         image,
         order: order ? Number(order) : 0,
-        supportedCities: parsedSupportedCities.map(id => getId(id)),
-        updatedAt: new Date()
+        supportedCities: parsedSupportedCities.map((id) => getId(id)),
+        updatedAt: new Date(),
       };
 
-      await db.store.updateOne(
-        { _id: getId(id) },
-        { $set: updatedCompany }
-      );
+      await db.store.updateOne({ _id: getId(id) }, { $set: updatedCompany });
       res.status(200).json(updatedCompany);
     } catch (err) {
-      res.status(500).json({ message: 'Failed to update delivery company', error: err.message });
+      res
+        .status(500)
+        .json({
+          message: "Failed to update delivery company",
+          error: err.message,
+        });
     }
   }
 );
 
 router.delete("/api/delivery/company/:id", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { id } = req.params;
-    
+
     const company = await db.store.findOne({ _id: getId(id) });
     if (!company) {
-      return res.status(404).json({ message: 'Delivery company not found' });
+      return res.status(404).json({ message: "Delivery company not found" });
     }
 
     if (company.image) {
@@ -998,137 +1162,173 @@ router.delete("/api/delivery/company/:id", async (req, res) => {
     }
 
     await db.store.deleteOne({ _id: getId(id) });
-    res.status(200).json({ message: 'Delivery company deleted successfully' });
+    res.status(200).json({ message: "Delivery company deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to delete delivery company', error: err.message });
+    res
+      .status(500)
+      .json({
+        message: "Failed to delete delivery company",
+        error: err.message,
+      });
   }
 });
 
 // Get companies by city
 router.get("/api/delivery/companies/by-city/:cityId", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { cityId } = req.params;
-    const companies = await db.store.find({ 
-      supportedCities: { $elemMatch: { $eq: getId(cityId) } }
-    }).sort({ order: 1 }).toArray();
+    const companies = await db.store
+      .find({
+        supportedCities: { $elemMatch: { $eq: getId(cityId) } },
+      })
+      .sort({ order: 1 })
+      .toArray();
     res.status(200).json(companies);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch companies by city', error: err.message });
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch companies by city",
+        error: err.message,
+      });
   }
 });
 
 // Delivery Company Employees Endpoints
 router.get("/api/delivery/company/:companyId/employees", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { companyId } = req.params;
     const employees = await db.customers.find({ companyId }).toArray();
     res.status(200).json(employees);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch employees', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch employees", error: err.message });
   }
 });
 
-router.post("/api/delivery/company/:companyId/employee/add", async (req, res) => {
-  try {
-    const db = req.app.db['delivery-company'];
-    const { companyId } = req.params;
-    const { phone, role, fullName, isActive, userName, isDriver } = req.body;
-    if (!phone || !role || !fullName) {
-      return res.status(400).json({ message: 'phone, role, and fullName are required' });
+router.post(
+  "/api/delivery/company/:companyId/employee/add",
+  async (req, res) => {
+    try {
+      const db = req.app.db["delivery-company"];
+      const { companyId } = req.params;
+      const { phone, role, fullName, isActive, userName, isDriver } = req.body;
+      if (!phone || !role || !fullName) {
+        return res
+          .status(400)
+          .json({ message: "phone, role, and fullName are required" });
+      }
+      const newEmployee = {
+        phone,
+        role,
+        fullName,
+        isActive: isActive === "true" || isActive === true,
+        companyId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        userName,
+        isDriver,
+      };
+      const result = await db.customers.insertOne(newEmployee);
+      res.status(201).json({ ...newEmployee, _id: result.insertedId });
+    } catch (err) {
+      res
+        .status(500)
+        .json({ message: "Failed to add employee", error: err.message });
     }
-    const newEmployee = {
-      phone,
-      role,
-      fullName,
-      isActive: isActive === 'true' || isActive === true,
-      companyId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      userName,
-      isDriver,
-    };
-    const result = await db.customers.insertOne(newEmployee);
-    res.status(201).json({ ...newEmployee, _id: result.insertedId });
-  } catch (err) {
-    res.status(500).json({ message: 'Failed to add employee', error: err.message });
   }
-});
+);
 
 router.post("/api/delivery/company/employee/update/:id", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { id } = req.params;
     const { phone, role, fullName, isActive } = req.body;
     const employee = await db.customers.findOne({ _id: getId(id) });
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
     const updatedEmployee = {
       ...employee,
       phone,
       role,
       fullName,
-      isActive: isActive === 'true' || isActive === true,
+      isActive: isActive === "true" || isActive === true,
       updatedAt: new Date(),
     };
     await db.customers.updateOne({ _id: getId(id) }, { $set: updatedEmployee });
     res.status(200).json(updatedEmployee);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to update employee', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to update employee", error: err.message });
   }
 });
 
 router.get("/api/delivery/company/employee/:id", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { id } = req.params;
     const employee = await db.customers.findOne({ _id: getId(id) });
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
     res.status(200).json(employee);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch employee', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch employee", error: err.message });
   }
 });
 
 router.delete("/api/delivery/company/employee/:id", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { id } = req.params;
     const employee = await db.customers.findOne({ _id: getId(id) });
     if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
+      return res.status(404).json({ message: "Employee not found" });
     }
     await db.customers.deleteOne({ _id: getId(id) });
-    res.status(200).json({ message: 'Employee deleted successfully' });
+    res.status(200).json({ message: "Employee deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: 'Failed to delete employee', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to delete employee", error: err.message });
   }
 });
 
 // Get areas by city
-router.get('/api/delivery/areas/by-city/:cityId', async (req, res) => {
+router.get("/api/delivery/areas/by-city/:cityId", async (req, res) => {
   try {
-    const db = req.app.db['delivery-company'];
+    const db = req.app.db["delivery-company"];
     const { cityId } = req.params;
     const areas = await db.areas.find({ cityId: cityId }).toArray();
     res.status(200).json(areas);
   } catch (err) {
-    res.status(500).json({ message: 'Failed to fetch areas by city', error: err.message });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch areas by city", error: err.message });
   }
 });
 
 router.post("/api/delivery/available-drivers", async (req, res) => {
   try {
     const { location, storeLocation } = req.body;
-    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
-      return res.status(400).json({ message: 'location (lat, lng) is required.' });
+    if (
+      !location ||
+      typeof location.lat !== "number" ||
+      typeof location.lng !== "number"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "location (lat, lng) is required." });
     }
 
-    const deliveryDB = req.app.db['delivery-company'];
+    const deliveryDB = req.app.db["delivery-company"];
 
     // 1. Find the area containing the location
     const area = await deliveryDB.areas.findOne({
@@ -1136,44 +1336,60 @@ router.post("/api/delivery/available-drivers", async (req, res) => {
         $geoIntersects: {
           $geometry: {
             type: "Point",
-            coordinates: [location.lng, location.lat]
-          }
-        }
-      }
+            coordinates: [location.lng, location.lat],
+          },
+        },
+      },
     });
 
     if (!area) {
-      return res.json({ available: false, reason: "No delivery area found for this location." });
+      return res.json({
+        available: false,
+        reason: "No delivery area found for this location.",
+      });
     }
 
     // 2. Find all delivery companies (stores) that support this area
-    const companies = await deliveryDB.store.find({
-      supportedAreas: { $elemMatch: { areaId: area._id } }
-    }).toArray();
+    const companies = await deliveryDB.store
+      .find({
+        supportedAreas: { $elemMatch: { areaId: area._id } },
+      })
+      .toArray();
 
     if (!companies.length) {
-      return res.json({ available: false, reason: "No delivery companies support this area." });
+      return res.json({
+        available: false,
+        reason: "No delivery companies support this area.",
+      });
     }
 
     // 3. For each company, find all active drivers
-    const results = await Promise.all(companies.map(async (company) => {
-      const drivers = await deliveryDB.customers.find({
-        role: { $in: ["driver", "admin"] },
-        isActive: true,
-        companyId: company._id.toString()
-      }).toArray();
-      return {
-        company,
-        drivers
-      };
-    }));
+    const results = await Promise.all(
+      companies.map(async (company) => {
+        const drivers = await deliveryDB.customers
+          .find({
+            role: { $in: ["driver", "admin"] },
+            isActive: true,
+            companyId: company._id.toString(),
+          })
+          .toArray();
+        return {
+          company,
+          drivers,
+        };
+      })
+    );
 
     // 4. Filter out companies with no drivers
-    const companiesWithDrivers = results.filter(r => r.drivers.length > 0);
+    const companiesWithDrivers = results.filter((r) => r.drivers.length > 0);
 
     // Calculate distance if storeLocation is provided
     let distanceKm = undefined;
-    if (storeLocation && typeof storeLocation.lat === 'number' && typeof storeLocation.lng === 'number') {
+    if (
+      storeLocation &&
+      typeof storeLocation.lat === "number" &&
+      typeof storeLocation.lng === "number"
+    ) {
       // Haversine formula
       const toRad = (value) => (value * Math.PI) / 180;
       const R = 6371; // Earth radius in km
@@ -1181,8 +1397,12 @@ router.post("/api/delivery/available-drivers", async (req, res) => {
       const dLon = toRad(storeLocation.lng - location.lng);
       const lat1 = toRad(location.lat);
       const lat2 = toRad(storeLocation.lat);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.sin(dLon / 2) *
+          Math.sin(dLon / 2) *
+          Math.cos(lat1) *
+          Math.cos(lat2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       distanceKm = R * c;
     }
@@ -1191,23 +1411,35 @@ router.post("/api/delivery/available-drivers", async (req, res) => {
       available: companiesWithDrivers.length > 0,
       companies: companiesWithDrivers,
       area,
-      ...(distanceKm !== undefined ? { distanceKm: Math.round(distanceKm * 10) / 10 } : {})
+      ...(distanceKm !== undefined
+        ? { distanceKm: Math.round(distanceKm * 10) / 10 }
+        : {}),
     });
   } catch (err) {
-    console.error('Error checking available drivers:', err);
-    res.status(500).json({ message: 'Failed to check available drivers', error: err.message });
+    console.error("Error checking available drivers:", err);
+    res
+      .status(500)
+      .json({
+        message: "Failed to check available drivers",
+        error: err.message,
+      });
   }
 });
-
 
 router.post("/api/delivery/location/supported", async (req, res) => {
   try {
     const { location } = req.body;
-    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
-      return res.status(400).json({ message: 'location (lat, lng) is required.' });
+    if (
+      !location ||
+      typeof location.lat !== "number" ||
+      typeof location.lng !== "number"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "location (lat, lng) is required." });
     }
 
-    const deliveryDB = req.app.db['delivery-company'];
+    const deliveryDB = req.app.db["delivery-company"];
 
     // 1. Find the area containing the location
     const area = await deliveryDB.areas.findOne({
@@ -1215,39 +1447,46 @@ router.post("/api/delivery/location/supported", async (req, res) => {
         $geoIntersects: {
           $geometry: {
             type: "Point",
-            coordinates: [location.lng, location.lat]
-          }
-        }
-      }
+            coordinates: [location.lng, location.lat],
+          },
+        },
+      },
     });
 
     if (!area) {
-      return res.json({ available: false, reason: "No delivery area found for this location." });
+      return res.json({
+        available: false,
+        reason: "No delivery area found for this location.",
+      });
     }
-
 
     return res.json({
       available: true,
       area,
     });
   } catch (err) {
-    console.error('Error checking available drivers:', err);
-    res.status(500).json({ message: 'Failed to check available drivers', error: err.message });
+    console.error("Error checking available drivers:", err);
+    res
+      .status(500)
+      .json({
+        message: "Failed to check available drivers",
+        error: err.message,
+      });
   }
 });
 
 // Get single order details for delivery driver
 router.get("/api/delivery/order/:id", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { id } = req.params;
     const order = await db.bookDelivery.findOne({ _id: getId(id) });
-    
+
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      return res.status(404).json({ message: "Order not found" });
     }
-    
+
     res.status(200).json(order);
   } catch (ex) {
     console.info("Error getting order details", ex);
@@ -1257,15 +1496,19 @@ router.get("/api/delivery/order/:id", async (req, res) => {
 
 // Get delivery driver statistics
 router.post("/api/delivery/driver/stats", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { driverId, startDate, endDate } = req.body;
-    
+
     const offsetHours = getUTCOffset();
-    const start = startDate ? moment(startDate).utcOffset(offsetHours) : moment().subtract(30, 'days').utcOffset(offsetHours);
-    const end = endDate ? moment(endDate).utcOffset(offsetHours) : moment().utcOffset(offsetHours);
-    
+    const start = startDate
+      ? moment(startDate).utcOffset(offsetHours)
+      : moment().subtract(30, "days").utcOffset(offsetHours);
+    const end = endDate
+      ? moment(endDate).utcOffset(offsetHours)
+      : moment().utcOffset(offsetHours);
+
     const filterBy = {
       "driver._id": driverId,
       created: { $gte: start.format(), $lte: end.format() },
@@ -1273,54 +1516,58 @@ router.post("/api/delivery/driver/stats", async (req, res) => {
 
     // Get total orders
     const totalOrders = await db.bookDelivery.countDocuments(filterBy);
-    
+
     // Get delivered orders
     const deliveredOrders = await db.bookDelivery.countDocuments({
       ...filterBy,
-      status: '0'
+      status: DELIVERY_STATUS.DELIVERED,
     });
-    
+
     // Get cancelled orders
     const cancelledOrders = await db.bookDelivery.countDocuments({
       ...filterBy,
-      status: '-1'
+      status: DELIVERY_STATUS.CANCELLED_BY_DRIVER,
     });
-    
+
     // Get total earnings (assuming there's a delivery fee or commission)
-    const deliveredOrdersData = await db.bookDelivery.find({
-      ...filterBy,
-      status: '0'
-    }).toArray();
-    
+    const deliveredOrdersData = await db.bookDelivery
+      .find({
+        ...filterBy,
+        status: DELIVERY_STATUS.DELIVERED,
+      })
+      .toArray();
+
     const totalEarnings = deliveredOrdersData.reduce((sum, order) => {
       // You can customize this calculation based on your business logic
       return sum + (order.price || 0);
     }, 0);
-    
+
     // Get average delivery time
-    const completedOrders = await db.bookDelivery.find({
-      ...filterBy,
-      status: '0',
-      deliveryTime: { $exists: true }
-    }).toArray();
-    
+    const completedOrders = await db.bookDelivery
+      .find({
+        ...filterBy,
+        status: DELIVERY_STATUS.DELIVERED,
+        deliveryTime: { $exists: true },
+      })
+      .toArray();
+
     let averageDeliveryTime = 0;
     if (completedOrders.length > 0) {
       const totalTime = completedOrders.reduce((sum, order) => {
         const created = moment(order.created);
         const delivered = moment(order.deliveryTime);
-        return sum + delivered.diff(created, 'minutes');
+        return sum + delivered.diff(created, "minutes");
       }, 0);
       averageDeliveryTime = Math.round(totalTime / completedOrders.length);
     }
-    
+
     // Get recent activity (last 7 days)
-    const recentStart = moment().subtract(7, 'days').utcOffset(offsetHours);
+    const recentStart = moment().subtract(7, "days").utcOffset(offsetHours);
     const recentOrders = await db.bookDelivery.countDocuments({
       "driver._id": driverId,
-      created: { $gte: recentStart.format() }
+      created: { $gte: recentStart.format() },
     });
-    
+
     res.status(200).json({
       totalOrders,
       deliveredOrders,
@@ -1328,7 +1575,8 @@ router.post("/api/delivery/driver/stats", async (req, res) => {
       totalEarnings,
       averageDeliveryTime,
       recentOrders,
-      successRate: totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0
+      successRate:
+        totalOrders > 0 ? Math.round((deliveredOrders / totalOrders) * 100) : 0,
     });
   } catch (ex) {
     console.info("Error getting driver statistics", ex);
@@ -1338,40 +1586,48 @@ router.post("/api/delivery/driver/stats", async (req, res) => {
 
 // Get delivery driver earnings report
 router.post("/api/delivery/driver/earnings", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { driverId, startDate, endDate } = req.body;
-    
+
     const offsetHours = getUTCOffset();
-    const start = startDate ? moment(startDate).utcOffset(offsetHours) : moment().subtract(30, 'days').utcOffset(offsetHours);
-    const end = endDate ? moment(endDate).utcOffset(offsetHours) : moment().utcOffset(offsetHours);
-    
-    const deliveredOrders = await db.bookDelivery.find({
-      "driver._id": ObjectId(driverId),
-      status: '0',
-      created: { $gte: start.format(), $lte: end.format() }
-    }).toArray();
-    
+    const start = startDate
+      ? moment(startDate).utcOffset(offsetHours)
+      : moment().subtract(30, "days").utcOffset(offsetHours);
+    const end = endDate
+      ? moment(endDate).utcOffset(offsetHours)
+      : moment().utcOffset(offsetHours);
+
+    const deliveredOrders = await db.bookDelivery
+      .find({
+        "driver._id": ObjectId(driverId),
+        status: DELIVERY_STATUS.DELIVERED,
+        created: { $gte: start.format(), $lte: end.format() },
+      })
+      .toArray();
+
     // Group by date
     const earningsByDate = deliveredOrders.reduce((acc, order) => {
-      const date = moment(order.created).utcOffset(offsetHours).format('YYYY-MM-DD');
+      const date = moment(order.created)
+        .utcOffset(offsetHours)
+        .format("YYYY-MM-DD");
       if (!acc[date]) {
         acc[date] = {
           date,
           orders: 0,
-          earnings: 0
+          earnings: 0,
         };
       }
       acc[date].orders += 1;
-      acc[date].earnings += (order.order.shippingPrice || 0);
+      acc[date].earnings += order.order.shippingPrice || 0;
       return acc;
     }, {});
-    
-    const earningsArray = Object.values(earningsByDate).sort((a, b) => 
+
+    const earningsArray = Object.values(earningsByDate).sort((a, b) =>
       moment(a.date).diff(moment(b.date))
     );
-    
+
     res.status(200).json(earningsArray);
   } catch (ex) {
     console.info("Error getting driver earnings", ex);
@@ -1381,22 +1637,22 @@ router.post("/api/delivery/driver/earnings", async (req, res) => {
 
 // Update delivery driver location
 router.post("/api/delivery/driver/location", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { driverId, latitude, longitude, isOnline } = req.body;
-    
+
     await db.customers.updateOne(
       { _id: getId(driverId) },
-      { 
-        $set: { 
+      {
+        $set: {
           currentLocation: { latitude, longitude },
           isOnline: isOnline !== undefined ? isOnline : true,
-          lastLocationUpdate: moment().utcOffset(getUTCOffset()).format()
-        }
+          lastLocationUpdate: moment().utcOffset(getUTCOffset()).format(),
+        },
       }
     );
-    
+
     res.status(200).json({ message: "Location updated successfully" });
   } catch (ex) {
     console.info("Error updating driver location", ex);
@@ -1406,49 +1662,57 @@ router.post("/api/delivery/driver/location", async (req, res) => {
 
 // Get nearby orders for driver
 router.post("/api/delivery/driver/nearby-orders", async (req, res) => {
-  const appName = req.headers['app-name'];
+  const appName = req.headers["app-name"];
   const db = req.app.db[appName];
   try {
     const { driverId, latitude, longitude, radius = 5000 } = req.body; // radius in meters
-    
+
     const offsetHours = getUTCOffset();
     const startOfToday = moment().utcOffset(offsetHours).startOf("day");
     const endOfToday = moment().utcOffset(offsetHours).endOf("day");
-    
+
     // Get pending orders
-    const pendingOrders = await db.bookDelivery.find({
-      status: '1',
-      created: {
-        $gte: startOfToday.format(),
-        $lte: endOfToday.format(),
-      }
-    }).toArray();
-    
+    const pendingOrders = await db.bookDelivery
+      .find({
+        status: DELIVERY_STATUS.WAITING_FOR_APPROVE,
+        created: {
+          $gte: startOfToday.format(),
+          $lte: endOfToday.format(),
+        },
+      })
+      .toArray();
+
     // Filter orders by distance (simple calculation - you might want to use a more sophisticated algorithm)
-    const nearbyOrders = pendingOrders.filter(order => {
+    const nearbyOrders = pendingOrders.filter((order) => {
       if (!order.customerLocation || !latitude || !longitude) return false;
-      
+
       const distance = calculateDistance(
-        latitude, longitude,
-        order.customerLocation.latitude, order.customerLocation.longitude
+        latitude,
+        longitude,
+        order.customerLocation.latitude,
+        order.customerLocation.longitude
       );
-      
+
       return distance <= radius;
     });
-    
+
     // Sort by distance
     nearbyOrders.sort((a, b) => {
       const distanceA = calculateDistance(
-        latitude, longitude,
-        a.customerLocation.latitude, a.customerLocation.longitude
+        latitude,
+        longitude,
+        a.customerLocation.latitude,
+        a.customerLocation.longitude
       );
       const distanceB = calculateDistance(
-        latitude, longitude,
-        b.customerLocation.latitude, b.customerLocation.longitude
+        latitude,
+        longitude,
+        b.customerLocation.latitude,
+        b.customerLocation.longitude
       );
       return distanceA - distanceB;
     });
-    
+
     res.status(200).json(nearbyOrders);
   } catch (ex) {
     console.info("Error getting nearby orders", ex);
@@ -1459,14 +1723,14 @@ router.post("/api/delivery/driver/nearby-orders", async (req, res) => {
 // Helper function to calculate distance between two points
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3; // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
 
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // Distance in meters
@@ -1474,41 +1738,48 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 
 // Get delivery driver work schedule
 router.post("/api/delivery/driver/schedule", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { driverId, startDate, endDate } = req.body;
-    
+
     const offsetHours = getUTCOffset();
-    const start = startDate ? moment(startDate).utcOffset(offsetHours) : moment().startOf('week').utcOffset(offsetHours);
-    const end = endDate ? moment(endDate).utcOffset(offsetHours) : moment().endOf('week').utcOffset(offsetHours);
-    
-    const orders = await db.bookDelivery.find({
-      "driver._id": driverId,
-      created: { $gte: start.format(), $lte: end.format() }
-    }).sort({ created: 1 }).toArray();
-    
+    const start = startDate
+      ? moment(startDate).utcOffset(offsetHours)
+      : moment().startOf("week").utcOffset(offsetHours);
+    const end = endDate
+      ? moment(endDate).utcOffset(offsetHours)
+      : moment().endOf("week").utcOffset(offsetHours);
+
+    const orders = await db.bookDelivery
+      .find({
+        "driver._id": driverId,
+        created: { $gte: start.format(), $lte: end.format() },
+      })
+      .sort({ created: 1 })
+      .toArray();
+
     // Group by date
     const scheduleByDate = orders.reduce((acc, order) => {
-      const date = moment(order.created).format('YYYY-MM-DD');
+      const date = moment(order.created).format("YYYY-MM-DD");
       if (!acc[date]) {
         acc[date] = {
           date,
           orders: [],
           totalOrders: 0,
-          totalEarnings: 0
+          totalEarnings: 0,
         };
       }
       acc[date].orders.push(order);
       acc[date].totalOrders += 1;
-      acc[date].totalEarnings += (order.price || 0);
+      acc[date].totalEarnings += order.price || 0;
       return acc;
     }, {});
-    
-    const scheduleArray = Object.values(scheduleByDate).sort((a, b) => 
+
+    const scheduleArray = Object.values(scheduleByDate).sort((a, b) =>
       moment(a.date).diff(moment(b.date))
     );
-    
+
     res.status(200).json(scheduleArray);
   } catch (ex) {
     console.info("Error getting driver schedule", ex);
@@ -1518,26 +1789,28 @@ router.post("/api/delivery/driver/schedule", async (req, res) => {
 
 // Update delivery driver availability
 router.post("/api/delivery/driver/availability", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { driverId, isAvailable, reason } = req.body;
-    
+
     await db.customers.updateOne(
       { _id: getId(driverId) },
-      { 
-        $set: { 
+      {
+        $set: {
           isAvailable: isAvailable,
           availabilityReason: reason || null,
-          lastAvailabilityUpdate: moment().utcOffset(getUTCOffset()).format()
-        }
+          lastAvailabilityUpdate: moment().utcOffset(getUTCOffset()).format(),
+        },
       }
     );
-    
+
     res.status(200).json({ message: "Availability updated successfully" });
   } catch (ex) {
     console.info("Error updating driver availability", ex);
-    return res.status(400).json({ message: "Error updating driver availability" });
+    return res
+      .status(400)
+      .json({ message: "Error updating driver availability" });
   }
 });
 
@@ -1545,14 +1818,21 @@ router.post("/api/delivery/driver/availability", async (req, res) => {
 router.post("/api/delivery/driver/notifications", async (req, res) => {
   try {
     const { driverId, limit = 20, offset = 0 } = req.body;
-    
+
     const options = { limit, offset, unreadOnly: true };
-    const result = await notificationService.getUserNotifications(driverId, 'delivery-company', req, options);
-    
+    const result = await notificationService.getUserNotifications(
+      driverId,
+      "delivery-company",
+      req,
+      options
+    );
+
     res.status(200).json(result);
   } catch (ex) {
     console.info("Error getting driver notifications", ex);
-    return res.status(400).json({ message: "Error getting driver notifications" });
+    return res
+      .status(400)
+      .json({ message: "Error getting driver notifications" });
   }
 });
 
@@ -1560,37 +1840,53 @@ router.post("/api/delivery/driver/notifications", async (req, res) => {
 router.post("/api/delivery/driver/notifications/read", async (req, res) => {
   try {
     const { notificationId } = req.body;
-    
-    await notificationService.markAsRead(notificationId, 'delivery-company', req, 'shoofi-shoofir');
-    
+
+    await notificationService.markAsRead(
+      notificationId,
+      "delivery-company",
+      req,
+      "shoofi-shoofir"
+    );
+
     res.status(200).json({ message: "Notification marked as read" });
   } catch (ex) {
     console.info("Error marking notification as read", ex);
-    return res.status(400).json({ message: "Error marking notification as read" });
+    return res
+      .status(400)
+      .json({ message: "Error marking notification as read" });
   }
 });
 
 // Create notification manually (for testing/admin purposes)
 router.post("/api/delivery/notifications/create", async (req, res) => {
   try {
-    const { recipientId, title, body, type = 'system', data = {}, channels = { websocket: true, push: true, email: false, sms: false } } = req.body;
-    
+    const {
+      recipientId,
+      title,
+      body,
+      type = "system",
+      data = {},
+      channels = { websocket: true, push: true, email: false, sms: false },
+    } = req.body;
+
     if (!recipientId || !title || !body) {
-      return res.status(400).json({ message: "recipientId, title, and body are required" });
+      return res
+        .status(400)
+        .json({ message: "recipientId, title, and body are required" });
     }
-    
+
     const notification = await notificationService.sendNotification({
       recipientId,
       title,
       body,
       type,
-      appName: 'delivery-company',
-      appType: 'shoofi-shoofir',
+      appName: "delivery-company",
+      appType: "shoofi-shoofir",
       channels,
       data,
-      req
+      req,
     });
-    
+
     res.status(201).json(notification);
   } catch (ex) {
     console.info("Error creating notification", ex);
@@ -1602,28 +1898,58 @@ router.post("/api/delivery/notifications/create", async (req, res) => {
 router.post("/api/delivery/notifications/admin", async (req, res) => {
   try {
     const { limit = 50, offset = 0, recipientId } = req.body;
-    
+
     const options = { limit, offset };
     if (recipientId) {
       options.recipientId = recipientId;
     }
-    
-    const result = await notificationService.getUserNotifications(recipientId, 'delivery-company', req, options);
-    
+
+    const result = await notificationService.getUserNotifications(
+      recipientId,
+      "delivery-company",
+      req,
+      options
+    );
+
     res.status(200).json(result);
   } catch (ex) {
     console.info("Error getting admin notifications", ex);
-    return res.status(400).json({ message: "Error getting admin notifications" });
+    return res
+      .status(400)
+      .json({ message: "Error getting admin notifications" });
   }
 });
 
 router.get("/api/delivery/admin/orders", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
-    const { limit = 20, offset = 0, status, driverId, sortBy = 'created', sortOrder = -1 } = req.query;
-    
+    const {
+      limit = 20,
+      offset = 0,
+      status,
+      driverId,
+      sortBy = "created",
+      sortOrder = -1,
+      showAll = "false",
+    } = req.query;
+
     let filter = {};
+
+    // By default, show only active orders (not delivered, not cancelled)
+    // Active orders: WAITING_FOR_APPROVE, APPROVED, COLLECTED_FROM_RESTAURANT
+    if (showAll !== "true") {
+      filter.status = {
+        $nin: [
+          DELIVERY_STATUS.DELIVERED,
+          DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+          DELIVERY_STATUS.CANCELLED_BY_STORE,
+          DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+        ],
+      };
+    }
+
+    // Override with specific status filter if provided
     if (status) {
       filter.status = status;
     }
@@ -1631,28 +1957,84 @@ router.get("/api/delivery/admin/orders", async (req, res) => {
       filter["driver._id"] = driverId;
     }
 
+    // Get alert criteria to exclude those orders from the main list
+    // This ensures orders don't appear in both alerts and orders lists
+    const twoMinutesAgo = moment().subtract(2, "minutes").format();
+    const now = moment().format();
+
+    // Create exclusion filter for orders that are in alerts
+    // $nor excludes documents that match ANY of the conditions in the array
+    const alertExclusionFilter = {
+      $nor: [
+        // Exclude unresponsive orders (pending for more than 2 minutes)
+        {
+          $and: [
+            { status: DELIVERY_STATUS.WAITING_FOR_APPROVE },
+            { created: { $lte: twoMinutesAgo } },
+          ],
+        },
+
+        // Exclude delayed orders (past expected delivery time) - all stages
+        {
+          $and: [
+            {
+              status: {
+                $nin: [
+                  DELIVERY_STATUS.DELIVERED,
+                  DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+                  DELIVERY_STATUS.CANCELLED_BY_STORE,
+                  DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+                ],
+              },
+            },
+            { expectedDeliveryAt: { $lte: now } },
+          ],
+        },
+      ],
+    };
+
+    // Combine the original filter with the alert exclusion filter
+    const combinedFilter = { ...filter, ...alertExclusionFilter };
+
     const orders = await db.bookDelivery
-      .find(filter)
+      .find(combinedFilter)
       .sort({ [sortBy]: parseInt(sortOrder) })
       .skip(parseInt(offset))
       .limit(parseInt(limit))
       .toArray();
-      
-    const totalCount = await db.bookDelivery.countDocuments(filter);
-    
+
+    const totalCount = await db.bookDelivery.countDocuments(combinedFilter);
+
+    // Get count of active orders for reference
+    const activeOrdersCount = await db.bookDelivery.countDocuments({
+      ...alertExclusionFilter,
+      status: {
+        $nin: [
+          DELIVERY_STATUS.DELIVERED,
+          DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+          DELIVERY_STATUS.CANCELLED_BY_STORE,
+          DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+        ],
+      },
+    });
+
     res.status(200).json({
       orders,
       totalCount,
-      hasMore: parseInt(offset) + parseInt(limit) < totalCount
+      activeOrdersCount,
+      hasMore: parseInt(offset) + parseInt(limit) < totalCount,
+      showAll: showAll === "true",
     });
   } catch (ex) {
     console.error("Error getting delivery orders for admin", ex);
-    return res.status(500).json({ message: "Error getting delivery orders for admin" });
+    return res
+      .status(500)
+      .json({ message: "Error getting delivery orders for admin" });
   }
 });
 
 router.post("/api/delivery/admin/reassign", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, bookId, newDriverId } = req.body;
@@ -1669,27 +2051,41 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
 
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), bookId: bookId },
-      { $set: { driver: { _id: driver._id, name: driver.name, phone: driver.phone }, status: '2' } }
+      {
+        $set: {
+          driver: { _id: driver._id, name: driver.name, phone: driver.phone },
+          status: DELIVERY_STATUS.APPROVED,
+        },
+      }
     );
-    
+
     // Send notification to new driver
     try {
       await notificationService.sendNotification({
         recipientId: newDriverId,
         title: "تم تعيين طلب جديد",
         body: `لقد تم تعيينك للطلب: ${order.orderId}`,
-        type: 'order',
-        appName: 'delivery-company',
-        appType: 'shoofi-shoofir',
+        type: "order",
+        appName: "delivery-company",
+        appType: "shoofi-shoofir",
         channels: { websocket: true, push: true, email: false, sms: false },
-        data: { orderId: order._id, bookId: order.bookId },
-        req
+        data: {
+          orderId: order._id,
+          bookId: order.bookId,
+          storeName: order.storeName,
+          pickupTime: order.pickupTime,
+          payment_method: order?.order?.payment_method,
+        },
+        req,
       });
     } catch (notificationError) {
-      console.error("Failed to send notification to new driver:", notificationError);
+      console.error(
+        "Failed to send notification to new driver:",
+        notificationError
+      );
       // Don't fail the reassignment if notification fails
     }
-    
+
     res.status(200).json({ message: "Order reassigned successfully" });
   } catch (ex) {
     console.error("Error reassigning order", ex);
@@ -1702,14 +2098,22 @@ router.get("/api/delivery/admin/drivers", async (req, res) => {
     const { orderId } = req.query;
 
     if (!orderId) {
-      const allDrivers = await req.app.db['delivery-company'].customers.find({ role: { $in: ["driver", "admin"] }, isActive: true }).toArray();
+      const allDrivers = await req.app.db["delivery-company"].customers
+        .find({ role: { $in: ["driver", "admin"] }, isActive: true })
+        .toArray();
       return res.status(200).json(allDrivers);
     }
 
-    const order = await req.app.db['delivery-company'].bookDelivery.findOne({ _id: getId(orderId) });
+    const order = await req.app.db["delivery-company"].bookDelivery.findOne({
+      _id: getId(orderId),
+    });
     if (!order || !order.customerLocation || !order.customerLocation.latitude) {
-      console.warn(`Order ${orderId} has no location, returning all available drivers.`);
-      const allDrivers = await req.app.db['delivery-company'].customers.find({ role: { $in: ["driver", "admin"] }, isActive: true }).toArray();
+      console.warn(
+        `Order ${orderId} has no location, returning all available drivers.`
+      );
+      const allDrivers = await req.app.db["delivery-company"].customers
+        .find({ role: { $in: ["driver", "admin"] }, isActive: true })
+        .toArray();
       return res.status(200).json(allDrivers);
     }
 
@@ -1718,10 +2122,12 @@ router.get("/api/delivery/admin/drivers", async (req, res) => {
       lng: order.customerLocation.longitude,
     };
 
-    const supportedDrivers = await findAllMatchingDrivers({ appDb: req.app.db, location: customerLocation });
-    
-    res.status(200).json(supportedDrivers);
+    const supportedDrivers = await findAllMatchingDrivers({
+      appDb: req.app.db,
+      location: customerLocation,
+    });
 
+    res.status(200).json(supportedDrivers);
   } catch (ex) {
     console.error("Error getting available drivers", ex);
     return res.status(500).json({ message: "Error getting available drivers" });
@@ -1729,42 +2135,127 @@ router.get("/api/delivery/admin/drivers", async (req, res) => {
 });
 
 router.get("/api/delivery/admin/alerts", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
+  const offsetHours = getUTCOffset();
   try {
-    const twoMinutesAgo = moment().subtract(2, 'minutes').format();
-    const now = moment().format();
+    const twoMinutesAgo = moment().subtract(2, "minutes").format();
+    const now = moment().utcOffset(offsetHours).format();
 
     // Alert 1: Driver not responding
-    const unresponsiveOrders = await db.bookDelivery.find({
-      status: '1', // Pending
-      created: { $lte: twoMinutesAgo }
-    }).toArray();
-    
-    const unresponsiveAlerts = unresponsiveOrders.map(order => ({
+    const unresponsiveOrders = await db.bookDelivery
+      .find({
+        status: DELIVERY_STATUS.WAITING_FOR_APPROVE, // Pending
+        created: { $lte: twoMinutesAgo },
+      })
+      .toArray();
+
+    const unresponsiveAlerts = unresponsiveOrders.map((order) => ({
       ...order,
-      alertType: 'unresponsive_driver',
-      alertMessage: `השליח לא הגיב להזמנה מעל 2 דקות.`
+      alertType: "unresponsive_driver",
+      alertMessage: `השליח לא הגיב להזמנה מעל 2 דקות.`,
     }));
 
-    // Alert 2: Delayed order
-    const delayedOrders = await db.bookDelivery.find({
-      status: { $nin: ['0', '-1'] }, // Not delivered or cancelled
-      expectedDeliveryAt: { $lte: now }
-    }).toArray();
+    // Alert 2: Pickup time delayed (based on pickupTime field)
+    const pickupDelayedOrders = await db.bookDelivery
+      .find({
+        status: {
+          $in: [DELIVERY_STATUS.WAITING_FOR_APPROVE, DELIVERY_STATUS.APPROVED],
+        }, // Only orders waiting for pickup
+        pickupTime: { $exists: true, $ne: null },
+      })
+      .toArray();
 
-    const delayedAlerts = delayedOrders.map(order => ({
-      ...order,
-      alertType: 'delayed_order',
-      alertMessage: `זמן המשלוח חלף. צפי הגעה ${moment(order.expectedDeliveryAt).format('HH:mm')}.`
-    }));
+    const pickupDelayedAlerts = pickupDelayedOrders
+      .filter((order) => {
+        if (!order.pickupTime || !order.created) return false;
+
+        try {
+          const created = moment(order.created);
+          const expectedPickupTime = moment(created).add(
+            order.pickupTime,
+            "minutes"
+          );
+          return expectedPickupTime.isBefore(moment());
+        } catch (error) {
+          return false;
+        }
+      })
+      .map((order) => {
+        const created = moment(order.created);
+        const expectedPickupTime = moment(created).add(
+          order.pickupTime,
+          "minutes"
+        );
+
+        return {
+          ...order,
+          alertType: "pickup_time_delayed",
+          alertMessage: `עיכוב בזמן האיסוף: זמן האיסוף חלף (${expectedPickupTime.format(
+            "HH:mm"
+          )}). צפי הגעה ${moment(order.expectedDeliveryAt).format("HH:mm")}.`,
+        };
+      });
+
+    // Alert 3: Delivery time delayed (based on expectedDeliveryAt)
+    const deliveryDelayedOrders = await db.bookDelivery
+      .find({
+        status: {
+          $nin: [
+            DELIVERY_STATUS.DELIVERED,
+            DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+            DELIVERY_STATUS.CANCELLED_BY_STORE,
+            DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+          ],
+        }, // Not delivered or cancelled
+        expectedDeliveryAt: { $lte: now },
+      })
+      .toArray();
+
+    const deliveryDelayedAlerts = deliveryDelayedOrders.map((order) => {
+      let alertType = "delayed_order";
+      let alertMessage = "";
+
+      switch (order.status) {
+        case DELIVERY_STATUS.WAITING_FOR_APPROVE:
+          alertType = "delayed_approval";
+          alertMessage = `עיכוב באישור: השליח לא אישר את ההזמנה. צפי איסוף ${order.pickupTime}.`;
+          break;
+        case DELIVERY_STATUS.APPROVED:
+          alertType = "delayed_pickup";
+          alertMessage = `עיכוב באישור: השליח לא אישר את ההזמנה. צפי איסוף ${order.pickupTime}.`;
+          break;
+        case DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT:
+          alertType = "delayed_delivery";
+          alertMessage = `עיכוב במסירה: השליח לא מסר את ההזמנה ללקוח. צפי הגעה ${moment(
+            order.expectedDeliveryAt
+          ).format("HH:mm")}.`;
+          break;
+        default:
+          alertType = "delayed_order";
+          alertMessage = `עיכוב כללי: זמן המשלוח חלף. צפי הגעה ${moment(
+            order.expectedDeliveryAt
+          ).format("HH:mm")}.`;
+      }
+
+      return {
+        ...order,
+        alertType,
+        alertMessage,
+      };
+    });
 
     // Combine alerts and remove duplicates
-    const allAlerts = [...unresponsiveAlerts, ...delayedAlerts];
-    const uniqueAlerts = Array.from(new Map(allAlerts.map(item => [item._id.toString(), item])).values());
-    
-    res.status(200).json(uniqueAlerts);
+    const allAlerts = [
+      ...unresponsiveAlerts,
+      ...pickupDelayedAlerts,
+      ...deliveryDelayedAlerts,
+    ];
+    const uniqueAlerts = Array.from(
+      new Map(allAlerts.map((item) => [item._id.toString(), item])).values()
+    );
 
+    res.status(200).json(uniqueAlerts);
   } catch (ex) {
     console.error("Error getting delivery alerts", ex);
     return res.status(500).json({ message: "Error getting delivery alerts" });
@@ -1773,37 +2264,48 @@ router.get("/api/delivery/admin/alerts", async (req, res) => {
 
 // Get delivery by bookId
 router.get("/api/delivery/book/:bookId", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { bookId } = req.params;
     const delivery = await db.bookDelivery.findOne({ bookId: bookId });
     if (!delivery) {
-      return res.status(404).json({ message: 'Delivery not found' });
+      return res.status(404).json({ message: "Delivery not found" });
     }
     res.status(200).json(delivery);
   } catch (ex) {
     console.info("Error getting delivery by bookId", ex);
-    return res.status(400).json({ message: "Error getting delivery by bookId" });
+    return res
+      .status(400)
+      .json({ message: "Error getting delivery by bookId" });
   }
 });
 
 // Cancel delivery by store
 router.post("/api/delivery/store/order/cancel", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, reason } = req.body;
-    
+
     // Update delivery status to cancelled by store
     await db.bookDelivery.updateOne(
       { _id: getId(orderId) },
-      { $set: { status: "-2", cancelledAt: new Date(), cancelReason: reason || null, cancelledBy: 'store' } }
+      {
+        $set: {
+          status: DELIVERY_STATUS.CANCELLED_BY_STORE,
+          cancelledAt: new Date(),
+          cancelReason: reason || null,
+          cancelledBy: "store",
+        },
+      }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
+
     // Send notification to customer about delivery cancellation by store
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -1811,59 +2313,73 @@ router.post("/api/delivery/store/order/cancel", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم إلغاء التوصيل من قبل المطعم",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`,
-          type: 'delivery_cancelled_store',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_cancelled_store",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "-2",
+            deliveryStatus: DELIVERY_STATUS.CANCELLED_BY_STORE,
             cancelReason: reason,
-            cancelledBy: 'store'
+            cancelledBy: "store",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for store cancellation:", notificationError);
+        console.error(
+          "Failed to send customer notification for store cancellation:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Delivery cancelled by store" });
   } catch (ex) {
     console.info("Error cancelling delivery by store", ex);
-    return res.status(400).json({ message: "Error cancelling delivery by store" });
+    return res
+      .status(400)
+      .json({ message: "Error cancelling delivery by store" });
   }
 });
 
 // Cancel delivery by admin
 router.post("/api/delivery/admin/order/cancel", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
   try {
     const { orderId, reason } = req.body;
-    
+
     // Update delivery status to cancelled by admin
     await db.bookDelivery.updateOne(
       { _id: getId(orderId) },
-      { $set: { status: "-3", cancelledAt: new Date(), cancelReason: reason || null, cancelledBy: 'admin' } }
+      {
+        $set: {
+          status: DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+          cancelledAt: new Date(),
+          cancelReason: reason || null,
+          cancelledBy: "admin",
+        },
+      }
     );
-    
+
     // Get the updated delivery order
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
-    
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
+
     // Send notification to customer about delivery cancellation by admin
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -1871,111 +2387,127 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم إلغاء التوصيل من قبل الإدارة",
           body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`,
-          type: 'delivery_cancelled_admin',
-          appName: deliveryOrder.appName || 'shoofi-app',
-          appType: 'shoofi-app',
+          type: "delivery_cancelled_admin",
+          appName: deliveryOrder.appName || "shoofi-app",
+          appType: "shoofi-app",
           channels: { websocket: true, push: true, email: false, sms: false },
-          data: { 
-            orderId: deliveryOrder._id, 
+          data: {
+            orderId: deliveryOrder._id,
             bookId: deliveryOrder.bookId,
-            deliveryStatus: "-3",
+            deliveryStatus: DELIVERY_STATUS.CANCELLED_BY_ADMIN,
             cancelReason: reason,
-            cancelledBy: 'admin'
+            cancelledBy: "admin",
           },
-          req: mockReq
+          req: mockReq,
         });
       } catch (notificationError) {
-        console.error("Failed to send customer notification for admin cancellation:", notificationError);
+        console.error(
+          "Failed to send customer notification for admin cancellation:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Delivery cancelled by admin" });
   } catch (ex) {
     console.info("Error cancelling delivery by admin", ex);
-    return res.status(400).json({ message: "Error cancelling delivery by admin" });
+    return res
+      .status(400)
+      .json({ message: "Error cancelling delivery by admin" });
   }
 });
 
-
 // General delivery status update endpoint
 router.post("/api/delivery/order/status/update", async (req, res) => {
-  const appName = 'delivery-company';
+  const appName = "delivery-company";
   const db = req.app.db[appName];
-  
+
   try {
     const { orderId, status, reason, updatedBy } = req.body;
-    
+
     // Validate status
-    const validStatuses = ["1", "2", "3", "4", "-1", "-2", "-3"];
+    const validStatuses = [
+      DELIVERY_STATUS.WAITING_FOR_APPROVE,
+      DELIVERY_STATUS.APPROVED,
+      DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT,
+      DELIVERY_STATUS.DELIVERED,
+      DELIVERY_STATUS.CANCELLED_BY_DRIVER,
+      DELIVERY_STATUS.CANCELLED_BY_STORE,
+      DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+    ];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid delivery status" });
     }
-    
+
     // Get current delivery state
-    const currentDelivery = await db.bookDelivery.findOne({ _id: getId(orderId) });
+    const currentDelivery = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
     const oldStatus = currentDelivery?.status;
-    
+
     // Update delivery status
     const updateData = { status, updatedAt: new Date() };
     if (reason) updateData.cancelReason = reason;
     if (updatedBy) updateData.updatedBy = updatedBy;
-    
+
     // Add specific timestamps based on status
     switch (status) {
-      case "2":
+      case DELIVERY_STATUS.APPROVED:
         updateData.approvedAt = new Date();
         break;
-      case "3":
+      case DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT:
         updateData.startedAt = new Date();
         break;
-      case "4":
+      case DELIVERY_STATUS.DELIVERED:
         updateData.completedAt = new Date();
         break;
-      case "-1":
-      case "-2":
-      case "-3":
+      case DELIVERY_STATUS.CANCELLED_BY_DRIVER:
+      case DELIVERY_STATUS.CANCELLED_BY_STORE:
+      case DELIVERY_STATUS.CANCELLED_BY_ADMIN:
         updateData.cancelledAt = new Date();
         break;
     }
-    
+
     await db.bookDelivery.updateOne(
       { _id: getId(orderId) },
       { $set: updateData }
     );
-    
-    const deliveryOrder = await db.bookDelivery.findOne({ _id: getId(orderId) });
+
+    const deliveryOrder = await db.bookDelivery.findOne({
+      _id: getId(orderId),
+    });
 
     // Track delivery status change centrally
     await centralizedFlowMonitor.trackOrderFlowEvent({
       orderId: deliveryOrder._id,
       orderNumber: deliveryOrder.bookId,
-      sourceApp: 'delivery-company',
-      eventType: 'delivery_status_change',
+      sourceApp: "delivery-company",
+      eventType: "delivery_status_change",
       status: status,
-      actor: updatedBy || 'System',
-      actorId: updatedBy || 'system',
-      actorType: 'driver',
+      actor: updatedBy || "System",
+      actorId: updatedBy || "system",
+      actorType: "driver",
       metadata: {
         previousStatus: oldStatus,
         statusChange: `${oldStatus} → ${status}`,
         reason: reason,
         driverId: deliveryOrder.driver?._id,
-        driverName: deliveryOrder.driver?.name
-      }
+        driverName: deliveryOrder.driver?.name,
+      },
     });
-    
+
     // Send notification to customer about delivery status update
     const customerId = deliveryOrder?.order?.customerId;
     if (deliveryOrder && customerId) {
@@ -1983,49 +2515,49 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
         // Create a mock request object for the notification service
         const mockReq = {
           app: {
-            db: req.app.db
+            db: req.app.db,
           },
           headers: {
-            'app-type': 'shoofi-app'
-          }
+            "app-type": "shoofi-app",
+          },
         };
-        
+
         // Determine notification content based on status
         let notificationTitle = "";
         let notificationBody = "";
         let notificationType = "delivery_status_update";
-        
+
         switch (status) {
-          case "1":
+          case DELIVERY_STATUS.WAITING_FOR_APPROVE:
             notificationTitle = "في انتظار تأكيد التوصيل";
             notificationBody = `طلبك رقم #${deliveryOrder.bookId} في انتظار تأكيد التوصيل من قبل السائق.`;
             break;
-          case "2":
+          case DELIVERY_STATUS.APPROVED:
             notificationTitle = "تم تأكيد التوصيل";
             notificationBody = `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`;
             notificationType = "delivery_approved";
             break;
-          case "3":
+          case DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT:
             notificationTitle = "تم استلام طلبك";
             notificationBody = `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`;
             notificationType = "delivery_collected";
             break;
-          case "4":
+          case DELIVERY_STATUS.DELIVERED:
             notificationTitle = "تم تسليم طلبك";
             notificationBody = `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`;
             notificationType = "delivery_completed";
             break;
-          case "-1":
+          case DELIVERY_STATUS.CANCELLED_BY_DRIVER:
             notificationTitle = "تم إلغاء التوصيل من قبل السائق";
             notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`;
             notificationType = "delivery_cancelled_driver";
             break;
-          case "-2":
+          case DELIVERY_STATUS.CANCELLED_BY_STORE:
             notificationTitle = "تم إلغاء التوصيل من قبل المطعم";
             notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "delivery_cancelled_store";
             break;
-          case "-3":
+          case DELIVERY_STATUS.CANCELLED_BY_ADMIN:
             notificationTitle = "تم إلغاء التوصيل من قبل الإدارة";
             notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "delivery_cancelled_admin";
@@ -2034,33 +2566,36 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
             notificationTitle = "تحديث حالة التوصيل";
             notificationBody = `تم تحديث حالة توصيل طلبك رقم #${deliveryOrder.bookId}.`;
         }
-        
+
         if (notificationTitle && notificationBody) {
           await notificationService.sendNotification({
             recipientId: customerId,
             title: notificationTitle,
             body: notificationBody,
             type: notificationType,
-            appName: deliveryOrder.appName || 'shoofi-app',
-            appType: 'shoofi-app',
+            appName: deliveryOrder.appName || "shoofi-app",
+            appType: "shoofi-app",
             channels: { websocket: true, push: true, email: false, sms: false },
-            data: { 
-              orderId: deliveryOrder._id, 
+            data: {
+              orderId: deliveryOrder._id,
               bookId: deliveryOrder.bookId,
               deliveryStatus: status,
               cancelReason: reason,
               updatedBy: updatedBy,
-              driverName: deliveryOrder.driver?.name || 'السائق'
+              driverName: deliveryOrder.driver?.name || "السائق",
             },
-            req: mockReq
+            req: mockReq,
           });
         }
       } catch (notificationError) {
-        console.error("Failed to send customer notification for delivery status update:", notificationError);
+        console.error(
+          "Failed to send customer notification for delivery status update:",
+          notificationError
+        );
         // Don't fail the delivery update if notification fails
       }
     }
-    
+
     res.status(200).json({ message: "Delivery status updated successfully" });
   } catch (ex) {
     console.info("Error updating delivery status", ex);

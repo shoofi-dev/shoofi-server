@@ -53,7 +53,7 @@ class CentralizedFlowMonitor {
       const collection = this.getCentralDb();
       const result = await collection.insertOne(event);
       
-      logger.info(`Centralized Flow Event: ${eventType} for order ${orderNumber}`, {
+      logger.info(`Centralized Flow Event: ${eventType} for order ${orderId || orderNumber}`, {
         eventId: result.insertedId,
         sourceApp,
         orderId: event.orderId

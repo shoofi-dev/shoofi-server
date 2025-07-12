@@ -1003,7 +1003,7 @@ router.post(
 
 
     if (!customer) {
-      res.status(400).json({
+      res.status(200).json({
         message: "Customer not found",
       });
       return;
@@ -1024,7 +1024,7 @@ router.post(
       });
     } catch (ex) {
       console.error(colors.red(`Failed updating customer: ${ex}`));
-      res.status(400).json({ message: "Failed to update customer" });
+      res.status(200).json({ message: "Failed to update customer" });
     }
   }
 );

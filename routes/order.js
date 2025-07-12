@@ -1692,7 +1692,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           phone: customer.phone,
           price: order.orderPrice || "",
           pickupTime: updateobj.readyMinutes,
-          storeName: storeData.storeName,
+          storeName: order.app_language == "ar" ? storeData?.name_ar : storeData?.name_he || storeData?.name_ar,
           appName: storeData.appName,
           storeId: storeData._id,
           bookId: order.orderId,
@@ -1719,7 +1719,7 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
             readyMinutes: updateobj.readyMinutes,
             customerPhone: customer.phone,
             customerName: customer.fullName,
-            storeName: storeData.storeName,
+            storeName: order.app_language == "ar" ? storeData?.name_ar : storeData?.name_he || storeData?.name_ar,
             receiptMethod: order.order.receipt_method
           }
         });
@@ -1825,13 +1825,14 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
         phone: customer.phone,
         price: order.orderPrice || "",
         pickupTime: updateobj.readyMinutes || 0,
-        storeName: storeData.storeName,
+        storeName: order.app_language == "ar" ? storeData?.name_ar : storeData?.name_he || storeData?.name_ar,
         appName: storeData.appName,
         storeId: storeData._id,
         bookId: order.orderId,
         storeLocation: storeData.location,
         coverageRadius: storeData.coverageRadius,
         customerLocation: order?.order?.geo_positioning,
+        order
       };
       deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
     }
@@ -1898,7 +1899,7 @@ router.post(
           phone: deliveryData.phone,
           price: deliveryData.price || "",
           pickupTime: deliveryData.time,
-          storeName: storeData.storeName,
+          storeName: order.app_language == "ar" ? storeData?.name_ar : storeData?.name_he || storeData?.name_ar,
           appName: storeData.appName,
           storeId: storeData._id,
           bookId: insertRetsult?.insertedId.toString(),
@@ -2062,6 +2063,218 @@ router.post("/api/order/printed", auth.required, async (req, res) => {
   } catch (ex) {
     console.info("Error updating order", ex);
     return res.status(400).json({ message: "Failed to print the order" });
+  }
+});
+
+router.post("/api/order/update-delay", auth.required, async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName];
+  const offsetHours = getUTCOffset();
+  
+  try {
+    const { orderId, delayMinutes } = req.body;
+    
+    if (!orderId || !delayMinutes) {
+      return res.status(400).json({ message: "Order ID and delay minutes are required" });
+    }
+
+    // Get current order
+    const order = await db.orders.findOne({ _id: getId(orderId) });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // Save original order date if not already saved
+    const updateData = {
+      originalOrderDate: order.originalOrderDate || order.orderDate,
+      orderDate: moment(order.orderDate).add(delayMinutes, 'minutes').utcOffset(offsetHours).format(),
+      delayUpdatedAt: moment().utcOffset(offsetHours).format(),
+      delayMinutes: delayMinutes
+    };
+
+    // Update order with delay
+    await db.orders.updateOne(
+      { _id: getId(orderId) },
+      { $set: updateData },
+      { multi: false }
+    );
+
+    // Update delivery record if order is for delivery
+    if (order.order.receipt_method === "DELIVERY") {
+      try {
+        const deliveryDB = req.app.db["delivery-company"];
+        const deliveryRecord = await deliveryDB.bookDelivery.findOne({
+          bookId: order.orderId
+        });
+
+        if (deliveryRecord) {
+          // Calculate new pickup time based on delay
+          // Parse pickupTime string (e.g., "16:05") and add delayMinutes
+          let newPickupTime;
+          if (deliveryRecord.pickupTime && typeof deliveryRecord.pickupTime === 'string') {
+            // Parse time string like "16:05"
+            const [hours, minutes] = deliveryRecord.pickupTime.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes + delayMinutes;
+            const newHours = Math.floor(totalMinutes / 60);
+            const newMinutes = totalMinutes % 60;
+            newPickupTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+          } else {
+            // Fallback if pickupTime is not a string or doesn't exist
+            newPickupTime = (deliveryRecord.pickupTime || 0) + delayMinutes;
+          }
+          
+          // Update delivery record with original pickup time and new pickup time
+          await deliveryDB.bookDelivery.updateOne(
+            { bookId: order.orderId },
+            { 
+              $set: { 
+                originalPickupTime: deliveryRecord.originalPickupTime || deliveryRecord.pickupTime || 0,
+                pickupTime: newPickupTime,
+                delayUpdatedAt: moment().utcOffset(offsetHours).format(),
+                delayMinutes: delayMinutes
+              }
+            },
+            { multi: false }
+          );
+
+          console.log(`Updated delivery record for order ${order.orderId}: originalPickupTime=${deliveryRecord.originalPickupTime || deliveryRecord.pickupTime || 0}, new pickupTime=${newPickupTime}`);
+        }
+      } catch (deliveryUpdateError) {
+        console.error("Failed to update delivery record:", deliveryUpdateError);
+        // Don't fail the order update if delivery update fails
+      }
+    }
+
+    // Get customer details for notifications
+    const customerDB = getCustomerAppName(req, appName);
+    const customer = await customerDB.customers.findOne({
+      _id: getId(order.customerId),
+    });
+
+    // Send notification to customer about delay
+    if (customer) {
+      try {
+        const notificationTitle = "تم تأخير طلبك";
+        const notificationBody = `عذراً، تم تأخير طلبك رقم #${order.orderId} بـ ${delayMinutes} دقيقة. نعتذر عن الإزعاج.`;
+        
+        // Determine app type based on app name
+        let appType = "shoofi-app";
+        if (appName.includes("partner")) {
+          appType = "shoofi-partner";
+        } else if (appName.includes("shoofir")) {
+          appType = "shoofi-shoofir";
+        }
+
+        await notificationService.sendNotification({
+          recipientId: order.customerId,
+          title: notificationTitle,
+          body: notificationBody,
+          type: 'order_delayed',
+          appName: order.appName,
+          appType: appType,
+          channels: {
+            websocket: true,
+            push: true,
+            email: false,
+            sms: false
+          },
+          data: {
+            orderId: order.orderId,
+            orderStatus: order.status,
+            receiptMethod: order.order.receipt_method,
+            total: order.total,
+            delayMinutes: delayMinutes,
+            newOrderDate: updateData.orderDate
+          },
+          req: req
+        });
+      } catch (notificationError) {
+        console.error("Failed to send customer delay notification:", notificationError);
+      }
+    }
+
+    // Send notification to driver if order is assigned to delivery
+    if (order.order.receipt_method === "DELIVERY") {
+      try {
+        // Find the delivery record for this order
+        const deliveryDB = req.app.db["delivery-company"];
+        const deliveryRecord = await deliveryDB.bookDelivery.findOne({
+          bookId: order.orderId
+        });
+
+        if (deliveryRecord && deliveryRecord.driver?._id) {
+          await notificationService.sendNotification({
+            recipientId: String(deliveryRecord.driver._id),
+            title: "تم تأخير الطلب",
+            body: `طلب رقم #${order.orderId} تم تأخيره بـ ${delayMinutes} دقيقة.`,
+            type: "order_delayed",
+            appName: "delivery-company",
+            appType: "shoofi-shoofir",
+            channels: {
+              websocket: true,
+              push: true,
+              email: false,
+              sms: false
+            },
+            data: {
+              orderId: order._id,
+              bookId: order.orderId,
+              orderStatus: order.status,
+              customerName: customer?.fullName || "العميل",
+              customerPhone: customer?.phone || "",
+              storeName: order.storeName || "المطعم",
+              delayMinutes: delayMinutes,
+              newOrderDate: updateData.orderDate,
+              payment_method: order.order.payment_method
+            },
+            req: req
+          });
+        }
+      } catch (driverNotificationError) {
+        console.error("Failed to send driver delay notification:", driverNotificationError);
+      }
+    }
+
+    // Track delay update centrally
+    await centralizedFlowMonitor.trackOrderFlowEvent({
+      orderId: orderId,
+      orderNumber: order.orderId,
+      sourceApp: appName,
+      eventType: 'order_delayed',
+      status: order.status,
+      actor: req.user?.fullName || 'Store Admin',
+      actorId: req.user?._id || 'store_admin',
+      actorType: 'store_admin',
+      metadata: {
+        delayMinutes: delayMinutes,
+        originalOrderDate: order.orderDate,
+        newOrderDate: updateData.orderDate,
+        receiptMethod: order.order.receipt_method,
+        customerName: customer?.fullName || 'Unknown'
+      }
+    });
+
+    // Send WebSocket notification to refresh orders in driver app
+    websocketService.sendToAppAdmins('shoofi-shoofir', {
+      type: 'order_delayed',
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderId,
+        delayMinutes: delayMinutes,
+        newOrderDate: updateData.orderDate,
+        action: 'order_delayed',
+        timestamp: new Date().toISOString()
+      },
+    }, appName);
+
+    return res.status(200).json({ 
+      message: "Order delay updated successfully",
+      newOrderDate: updateData.orderDate,
+      delayMinutes: delayMinutes
+    });
+  } catch (ex) {
+    console.error("Error updating order delay:", ex);
+    return res.status(400).json({ message: "Failed to update order delay" });
   }
 });
 function relDiff(a, b) {

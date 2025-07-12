@@ -149,7 +149,10 @@ async function bookDelivery({ deliveryData, appDb }) {
               orderId: insertedOrder._id, 
               bookId: insertedOrder.bookId, 
               customerName: deliveryData.fullName,
-              customerPhone: deliveryData.phone 
+              customerPhone: deliveryData.phone,
+              storeName: deliveryData.storeName,
+              pickupTime: pickupTime,
+              payment_method: deliveryData?.order?.order?.payment_method
             },
             req: mockReq
           });
