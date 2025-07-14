@@ -21,11 +21,11 @@
             "minimum": 0
         },
         "maxDiscount": {
-            "type": "number",
+            "type": ["number", "null"],
             "minimum": 0
         },
         "minOrderAmount": {
-            "type": "number",
+            "type": ["number", "null"],
             "minimum": 0
         },
         "usageLimit": {
@@ -78,6 +78,10 @@
         "customerId": {
             "type": "string",
             "format": "objectid"
+        },
+        "isAutoApply": {
+            "type": "boolean",
+            "default": false
         }
     },
     "required": [

@@ -322,4 +322,54 @@ router.post("/api/menu/refresh", async (req, res, next) => {
   }
 });
 
+// Search products across all stores and return matching stores
+router.post("/api/menu/search", async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== "string" || query.length < 2) {
+      return res.status(400).json({ error: "Query is required and must be at least 2 characters." });
+    }
+
+    // 1. Get all stores from the main shoofi db
+    const mainDb = req.app.db['shoofi'];
+    const allStores = await mainDb.collection('stores').find({ appName: { $exists: true } }).toArray();
+
+    // 2. For each store, search its products collection
+    const results = await Promise.all(
+      allStores.map(async (store) => {
+        const dbName = store.appName;
+        const db = req.app.db[dbName];
+        if (!db) return null;
+
+        // Check if products collection exists
+        const collections = await db.listCollections({ name: 'products' }).toArray();
+        if (collections.length === 0) {
+          console.log(`Skipping ${dbName}: no products collection.`);
+          return null;
+        }
+
+        // Use text index for efficient search
+        const products = await db.collection('products').find({
+          $text: { $search: query }
+        }, {
+          projection: { score: { $meta: "textScore" }, nameAR: 1, nameHE: 1, descriptionAR: 1, descriptionHE: 1 }
+        }).sort({ score: { $meta: "textScore" } }).limit(10).toArray();
+
+        if (products.length > 0) {
+          return { store, products };
+        }
+        return null;
+      })
+    );
+
+    // 3. Filter out stores with no matches
+    const storesWithMatches = results.filter(Boolean);
+
+    res.json({ stores: storesWithMatches });
+  } catch (error) {
+    console.error("Search error:", error);
+    res.status(500).json({ error: "Search failed", details: error.message });
+  }
+});
+
 module.exports = router;

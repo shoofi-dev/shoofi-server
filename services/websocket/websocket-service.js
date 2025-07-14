@@ -21,6 +21,93 @@ function parseRedisUrl(redisUrl) {
   }
 }
 
+// Add cache clearing functionality for explore data
+const exploreCache = new Map();
+
+// Function to clear explore cache
+function clearExploreCache() {
+  exploreCache.clear();
+  console.log('Explore cache cleared due to store status change');
+}
+
+// Function to clear specific location cache
+function clearExploreCacheForLocation(location) {
+  if (location) {
+    const cacheKey = `explore_categories_${location.lat}_${location.lng}`;
+    exploreCache.delete(cacheKey);
+    console.log(`Explore cache cleared for location: ${cacheKey}`);
+  } else {
+    clearExploreCache();
+  }
+}
+
+// Enhanced message handling for store updates
+function handleStoreUpdate(message) {
+  const { action, appName, storeData } = message;
+  
+  switch (action) {
+    case 'store_updated':
+      // Clear explore cache when store is updated
+      clearExploreCache();
+      
+      // Notify all connected clients about the update
+      broadcastToAllClients({
+        type: 'store_status_changed',
+        data: { appName, action }
+      });
+      break;
+      
+    case 'store_opened':
+    case 'store_closed':
+      // Clear cache for specific store location if available
+      if (storeData && storeData.location) {
+        clearExploreCacheForLocation(storeData.location);
+      } else {
+        clearExploreCache();
+      }
+      
+      // Notify clients about store status change
+      broadcastToAllClients({
+        type: 'store_status_changed',
+        data: { appName, action, storeData }
+      });
+      break;
+      
+    default:
+      console.log('Unknown store action:', action);
+  }
+}
+
+// Enhanced message processing
+function processMessage(client, message) {
+  try {
+    const parsedMessage = typeof message === 'string' ? JSON.parse(message) : message;
+    
+    // Handle store updates
+    if (parsedMessage.type === 'store_update') {
+      handleStoreUpdate(parsedMessage.data);
+      return;
+    }
+    
+    // Handle existing message types
+    switch (parsedMessage.type) {
+      case 'ping':
+        handlePing(client);
+        break;
+      case 'subscribe':
+        handleSubscribe(client, parsedMessage.data);
+        break;
+      case 'unsubscribe':
+        handleUnsubscribe(client, parsedMessage.data);
+        break;
+      default:
+        console.log('Unknown message type:', parsedMessage.type);
+    }
+  } catch (error) {
+    console.error('Error processing message:', error);
+  }
+}
+
 class WebSocketService {
   constructor() {
     this.clients = new Map(); // userId -> { connection, appName, appType, lastPing, metadata }
@@ -518,6 +605,20 @@ class WebSocketService {
   }
 
   /**
+   * Send message to all customers (non-admin users) in an app
+   */
+  async sendToAppCustomers(appType, message) {
+    const results = [];
+    for (const [userId, client] of this.clients) {
+      // Send to customers (non-admin users) of the specific app
+      if (client.appType === appType) {
+        results.push(await this.sendToUser(userId, message, appType));
+      }
+    }
+    return results;
+  }
+
+  /**
    * Join a room
    */
   async joinRoom(userId, roomId) {
@@ -707,4 +808,14 @@ class WebSocketService {
   }
 }
 
-module.exports = new WebSocketService(); 
+// Create singleton instance
+const websocketServiceInstance = new WebSocketService();
+
+module.exports = websocketServiceInstance;
+
+// Also export the class and utility functions for backward compatibility
+module.exports.WebSocketService = WebSocketService;
+module.exports.clearExploreCache = clearExploreCache;
+module.exports.clearExploreCacheForLocation = clearExploreCacheForLocation;
+module.exports.handleStoreUpdate = handleStoreUpdate;
+module.exports.processMessage = processMessage; 

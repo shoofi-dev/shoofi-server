@@ -125,7 +125,7 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم تأكيد التوصيل",
-          body: `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`,
+          body: `تم تأكيد توصيل طلبك من قبل السائق.`,
           type: "delivery_approved",
           appName: deliveryOrder.appName || "shoofi-app",
           appType: "shoofi-app",
@@ -226,7 +226,7 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم إلغاء التوصيل",
-          body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`,
+          body: `تم إلغاء توصيل طلبك من قبل السائق. سيتم تعيين سائق جديد.`,
           type: "delivery_cancelled_driver",
           appName: deliveryOrder.appName || "shoofi-app",
           appType: "shoofi-app",
@@ -327,7 +327,7 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم استلام طلبك",
-          body: `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`,
+          body: `تم استلام طلبك رقم من المطعم وهو في الطريق إليك.`,
           type: "delivery_collected",
           appName: deliveryOrder.appName || "shoofi-app",
           appType: "shoofi-app",
@@ -422,7 +422,7 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم تسليم طلبك",
-          body: `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`,
+          body: `تم تسليم طلبك رقم بنجاح. نتمنى لك وجبة شهية!`,
           type: "delivery_completed",
           appName: deliveryOrder.appName || "shoofi-app",
           appType: "shoofi-app",
@@ -2281,6 +2281,81 @@ router.get("/api/delivery/book/:bookId", async (req, res) => {
   }
 });
 
+// Get driver details for a specific order
+router.get("/api/delivery/order/:orderId/driver", async (req, res) => {
+  const appName = "delivery-company";
+  const db = req.app.db[appName];
+  try {
+    const { orderId } = req.params;
+    
+    // Find the delivery order
+    const delivery = await db.bookDelivery.findOne({ "order._id": getId(orderId) });
+    if (!delivery) {
+      return res.status(404).json({ message: "Delivery order not found" });
+    }
+
+    // If no driver is assigned, return null
+    if (!delivery.driver || !delivery.driver._id) {
+      return res.status(200).json(null);
+    }
+
+    // Get driver details
+    const driver = await db.customers.findOne({ _id: delivery.driver._id });
+    if (!driver) {
+      return res.status(404).json({ message: "Driver not found" });
+    }
+
+    // Get driver statistics
+    const stats = await db.bookDelivery.aggregate([
+      {
+        $match: {
+          "driver._id": delivery.driver._id,
+          status: "0" // Completed deliveries
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalDeliveries: { $sum: 1 },
+          totalEarnings: { $sum: "$order.shippingPrice" }
+        }
+      }
+    ]).toArray();
+
+    // Get company details if available
+    let companyName = null;
+    if (driver.companyId) {
+      const company = await db.store.findOne({ _id: getId(driver.companyId) });
+      companyName = company?.nameAR || company?.nameHE || null;
+    }
+
+    // Prepare driver details response
+    const driverDetails = {
+      _id: driver._id,
+      fullName: driver.fullName,
+      phone: driver.phone,
+      email: driver.email,
+      isActive: driver.isActive,
+      companyId: driver.companyId,
+      companyName: companyName,
+      vehicleInfo: driver.vehicleInfo,
+      rating: driver.rating,
+      totalDeliveries: stats[0]?.totalDeliveries || 0,
+      totalEarnings: stats[0]?.totalEarnings || 0,
+      createdAt: driver.createdAt,
+      currentLocation: driver.currentLocation,
+      isOnline: driver.isOnline,
+      isAvailable: driver.isAvailable,
+      role: driver.role
+    };
+
+    res.status(200).json(driverDetails);
+  } catch (ex) {
+    console.info("Error getting driver details for order", ex);
+    return res.status(400).json({ message: "Error getting driver details" });
+  }
+});
+
 // Cancel delivery by store
 router.post("/api/delivery/store/order/cancel", async (req, res) => {
   const appName = "delivery-company";
@@ -2397,7 +2472,7 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
         await notificationService.sendNotification({
           recipientId: customerId,
           title: "تم إلغاء التوصيل من قبل الإدارة",
-          body: `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`,
+          body: `تم إلغاء توصيل طلبك من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`,
           type: "delivery_cancelled_admin",
           appName: deliveryOrder.appName || "shoofi-app",
           appType: "shoofi-app",
@@ -2530,41 +2605,41 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
         switch (status) {
           case DELIVERY_STATUS.WAITING_FOR_APPROVE:
             notificationTitle = "في انتظار تأكيد التوصيل";
-            notificationBody = `طلبك رقم #${deliveryOrder.bookId} في انتظار تأكيد التوصيل من قبل السائق.`;
+            notificationBody = `طلبك في انتظار تأكيد التوصيل من قبل السائق.`;
             break;
           case DELIVERY_STATUS.APPROVED:
             notificationTitle = "تم تأكيد التوصيل";
-            notificationBody = `تم تأكيد توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق.`;
+            notificationBody = `تم تأكيد توصيل طلبك من قبل السائق.`;
             notificationType = "delivery_approved";
             break;
           case DELIVERY_STATUS.COLLECTED_FROM_RESTAURANT:
             notificationTitle = "تم استلام طلبك";
-            notificationBody = `تم استلام طلبك رقم #${deliveryOrder.bookId} من المطعم وهو في الطريق إليك.`;
+            notificationBody = `تم استلام طلبك من المطعم وهو في الطريق إليك.`;
             notificationType = "delivery_collected";
             break;
           case DELIVERY_STATUS.DELIVERED:
             notificationTitle = "تم تسليم طلبك";
-            notificationBody = `تم تسليم طلبك رقم #${deliveryOrder.bookId} بنجاح. نتمنى لك وجبة شهية!`;
+            notificationBody = `تم تسليم طلبك بنجاح. نتمنى لك وجبة شهية!`;
             notificationType = "delivery_completed";
             break;
           case DELIVERY_STATUS.CANCELLED_BY_DRIVER:
             notificationTitle = "تم إلغاء التوصيل من قبل السائق";
-            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل السائق. سيتم تعيين سائق جديد.`;
+            notificationBody = `تم إلغاء توصيل طلبك من قبل السائق. سيتم تعيين سائق جديد.`;
             notificationType = "delivery_cancelled_driver";
             break;
           case DELIVERY_STATUS.CANCELLED_BY_STORE:
             notificationTitle = "تم إلغاء التوصيل من قبل المطعم";
-            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationBody = `تم إلغاء توصيل طلبك من قبل المطعم. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "delivery_cancelled_store";
             break;
           case DELIVERY_STATUS.CANCELLED_BY_ADMIN:
             notificationTitle = "تم إلغاء التوصيل من قبل الإدارة";
-            notificationBody = `تم إلغاء توصيل طلبك رقم #${deliveryOrder.bookId} من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
+            notificationBody = `تم إلغاء توصيل طلبك رقم من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "delivery_cancelled_admin";
             break;
           default:
             notificationTitle = "تحديث حالة التوصيل";
-            notificationBody = `تم تحديث حالة توصيل طلبك رقم #${deliveryOrder.bookId}.`;
+            notificationBody = `تم تحديث حالة توصيل طلبك.`;
         }
 
         if (notificationTitle && notificationBody) {

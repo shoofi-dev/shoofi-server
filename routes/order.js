@@ -17,6 +17,55 @@ const axios = require("axios");
 const momentTZ = require("moment-timezone");
 const { getCustomerAppName } = require("../utils/app-name-helper");
 
+// Redis utility for order duplication prevention
+let redisClient = null;
+// In-memory fallback for order duplication prevention
+const orderCreationLocks = new Map(); // customerId -> timestamp
+
+try {
+  const Redis = require('ioredis');
+  const redisOptions = {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
+    password: process.env.REDIS_PASSWORD,
+    retryDelayOnFailover: 100,
+    maxRetriesPerRequest: 3,
+    lazyConnect: true,
+    connectTimeout: 5000,
+    commandTimeout: 3000,
+    enableOfflineQueue: false
+  };
+  if (process.env.REDIS_URL) {
+    const url = new URL(process.env.REDIS_URL);
+    redisOptions.host = url.hostname;
+    redisOptions.port = url.port ? parseInt(url.port, 10) : 6379;
+    redisOptions.username = url.username || undefined;
+    redisOptions.password = url.password || undefined;
+    redisOptions.tls = url.protocol === 'rediss:' ? {} : undefined;
+  }
+  redisClient = new Redis(redisOptions);
+  redisClient.on('error', (error) => {
+    console.warn('Redis connection error for order duplication prevention:', error.message);
+    redisClient = null;
+  });
+  redisClient.on('connect', () => {
+    console.log('✅ Redis connected for order duplication prevention');
+  });
+} catch (error) {
+  console.warn('Redis not available for order duplication prevention:', error.message);
+}
+
+// Clean up old in-memory locks every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const lockTimeout = 10 * 1000; // 10 seconds
+  for (const [customerId, timestamp] of orderCreationLocks.entries()) {
+    if (now - timestamp > lockTimeout) {
+      orderCreationLocks.delete(customerId);
+    }
+  }
+}, 5 * 60 * 1000); // 5 minutes
+
 const { clearSessionValue, getId } = require("../lib/common");
 const { paginateData } = require("../lib/paginate");
 const { restrict, checkAccess } = require("../lib/auth");
@@ -953,7 +1002,82 @@ router.post(
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
 
+    // Prevent order duplication using Redis lock or in-memory fallback
+    const orderLockKey = `order_lock:${appName}:${customerId}`;
+    const lockTimeout = 10; // 10 seconds lock timeout
+    const duplicateCheckWindow = 30; // 30 seconds to check for recent orders
+    let lockAcquired = false;
+    
+    // Try Redis lock first
+    if (redisClient) {
+      try {
+        // Try to acquire lock
+        lockAcquired = await redisClient.set(orderLockKey, Date.now(), 'EX', lockTimeout, 'NX');
+        
+        if (!lockAcquired) {
+          console.log(`Order creation blocked - customer ${customerId} already has an active order creation in progress (Redis)`);
+          return res.status(429).json({ 
+            err: "Order creation in progress. Please wait a moment and try again.",
+            code: "ORDER_IN_PROGRESS"
+          });
+        }
+      } catch (redisError) {
+        console.warn('Redis error during order duplication check:', redisError.message);
+        // Fall back to in-memory lock
+      }
+    }
+    
+    // Fallback to in-memory lock if Redis is not available or failed
+    if (!lockAcquired) {
+      const now = Date.now();
+      const lastOrderAttempt = orderCreationLocks.get(customerId);
+      
+      if (lastOrderAttempt && (now - lastOrderAttempt) < (lockTimeout * 1000)) {
+        console.log(`Order creation blocked - customer ${customerId} already has an active order creation in progress (Memory)`);
+        return res.status(429).json({ 
+          err: "Order creation in progress. Please wait a moment and try again.",
+          code: "ORDER_IN_PROGRESS"
+        });
+      }
+      
+      // Set in-memory lock
+      orderCreationLocks.set(customerId, now);
+    }
+
+    // Check for recent orders from the same customer (within last 30 seconds)
+    try {
+      const recentOrders = await db.orders.find({
+        customerId: customerId,
+        created: { 
+          $gte: moment().subtract(duplicateCheckWindow, 'seconds').utcOffset(getUTCOffset()).format() 
+        }
+      }).toArray();
+
+      if (recentOrders.length > 0) {
+        // Release the lock
+        if (redisClient && lockAcquired) {
+          await redisClient.del(orderLockKey);
+        } else {
+          orderCreationLocks.delete(customerId);
+        }
+        console.log(`Duplicate order prevented - customer ${customerId} has ${recentOrders.length} recent order(s)`);
+        return res.status(409).json({ 
+          err: "Duplicate order detected. Please check your recent orders.",
+          code: "DUPLICATE_ORDER",
+          recentOrderId: recentOrders[0].orderId
+        });
+      }
+    } catch (dbError) {
+      console.error('Database error during duplicate check:', dbError);
+      // Continue with order creation if database check fails
+    }
+
     const generatedOrderId = generateUniqueOrderId();
+    const orderIdSplit = generatedOrderId.split("-");
+    const idPart1 = orderIdSplit[0];
+    const idPart2 = orderIdSplit[2];
+    const newOrderId = `${idPart1}-${idPart2}`;
+    console.log("newOrderId", newOrderId);
     let imagesList = [];
     if (req.files && req.files.length > 0) {
       imagesList = await imagesService.uploadImage(req.files, req, "orders");
@@ -999,14 +1123,27 @@ router.post(
       },
       created: moment(new Date()).utcOffset(offsetHours).format(),
       customerId,
-      orderId: generatedOrderId,
+      orderId: newOrderId,
+      originalOrderId: generatedOrderId,
       status: isCreditCardPay ? "0" : "6", // Start with pending for credit card
       isPrinted: false,
       isViewd: false,
       isViewdAdminAll: false,
       ipAddress: req.ip,
       appName: appName,
+      // Add coupon data if present
+      appliedCoupon: parsedBodey.appliedCoupon || null,
     };
+
+    // Debug log for coupon data
+    if (parsedBodey.appliedCoupon) {
+      console.log('Order creation - Applied coupon data:', {
+        couponType: parsedBodey.appliedCoupon.coupon?.type,
+        couponCode: parsedBodey.appliedCoupon.coupon?.code,
+        discountAmount: parsedBodey.appliedCoupon.discountAmount,
+        isFreeDelivery: parsedBodey.appliedCoupon.coupon?.type === 'free_delivery'
+      });
+    }
 
     try {
       const newDoc = await db.orders.insertOne(orderDoc);
@@ -1227,6 +1364,18 @@ router.post(
     } catch (ex) {
       console.log(ex);
       res.status(400).json({ err: "Your order declined. Please try again" });
+    } finally {
+      // Release the lock (Redis or in-memory)
+      if (redisClient && lockAcquired) {
+        try {
+          await redisClient.del(orderLockKey);
+        } catch (lockError) {
+          console.error('Failed to release Redis order lock:', lockError);
+        }
+      } else {
+        // Release in-memory lock
+        orderCreationLocks.delete(customerId);
+      }
     }
   }
 );
@@ -1556,7 +1705,7 @@ router.post("/api/order/update", auth.required, async (req, res) => {
           await notificationService.sendNotification({
             recipientId: String(deliveryRecord.driver._id),
             title: "طلب جاهز للاستلام",
-            body: `طلب رقم #${order.orderId} جاهز للاستلام من المطعم.`,
+            body: `طلبك جاهز للاستلام من المطعم.`,
             type: "order_ready_pickup",
             appName: "delivery-company",
             appType: "shoofi-shoofir",
@@ -1699,8 +1848,20 @@ router.post("/api/order/update/viewd", auth.required, async (req, res) => {
           storeLocation: storeData.location,
           coverageRadius: storeData.coverageRadius,
           customerLocation: order?.order?.geo_positioning,
-          order
+          order,
+          // Add coupon data if present
+          appliedCoupon: order.appliedCoupon || null,
         };
+
+        // Debug log for delivery coupon data
+        if (order.appliedCoupon) {
+          console.log('Delivery booking - Applied coupon data:', {
+            couponType: order.appliedCoupon.coupon?.type,
+            couponCode: order.appliedCoupon.coupon?.code,
+            discountAmount: order.appliedCoupon.discountAmount,
+            isFreeDelivery: order.appliedCoupon.coupon?.type === 'free_delivery'
+          });
+        }
 
         deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
         
@@ -1832,7 +1993,9 @@ router.post("/api/order/book-delivery", auth.required, async (req, res) => {
         storeLocation: storeData.location,
         coverageRadius: storeData.coverageRadius,
         customerLocation: order?.order?.geo_positioning,
-        order
+        order,
+        // Add coupon data if present
+        appliedCoupon: order.appliedCoupon || null,
       };
       deliveryService.bookDelivery({ deliveryData, appDb: req.app.db });
     }
@@ -2155,7 +2318,7 @@ router.post("/api/order/update-delay", auth.required, async (req, res) => {
     if (customer) {
       try {
         const notificationTitle = "تم تأخير طلبك";
-        const notificationBody = `عذراً، تم تأخير طلبك رقم #${order.orderId} بـ ${delayMinutes} دقيقة. نعتذر عن الإزعاج.`;
+        const notificationBody = `عذراً، تم تأخير طلبك بـ ${delayMinutes} دقيقة. نعتذر عن الإزعاج.`;
         
         // Determine app type based on app name
         let appType = "shoofi-app";
@@ -2443,7 +2606,6 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
     res.status(400).json({ message: "Failed to fetch orders" });
   }
 });
-
 // Get only active orders for the authenticated customer
 router.get("/api/order/customer-active-orders", auth.required, async (req, res) => {
   const customerId = req.auth.id;
@@ -2497,6 +2659,9 @@ router.get("/api/order/customer-active-orders", auth.required, async (req, res) 
       const currentDb = req.app.db[dbName];
       const oids = orderIds.map((id) => getId(id));
 
+      const offsetHours = getUTCOffset();
+      const fortyEightHoursAgo = moment().subtract(48, "hours").utcOffset(offsetHours).format();
+      
       const orders = await paginateData(
         true,
         req,
@@ -2505,6 +2670,7 @@ router.get("/api/order/customer-active-orders", auth.required, async (req, res) 
         {
           _id: { $in: oids },
           status: { $in: activeStatuses },
+          orderDate: { $gte: fortyEightHoursAgo },
         },
         { created: -1 },
         currentDb // Pass the current database to paginateData

@@ -5,6 +5,7 @@ const { getId } = require("../lib/common");
 const { paginateData } = require("../lib/paginate");
 const websockets = require("../utils/websockets");
 const storeService = require("../utils/store-service")
+const websocketService = require("../services/websocket/websocket-service");
 const momentTZ = require("moment-timezone");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
@@ -123,7 +124,22 @@ router.post("/api/store/update", async (req, res, next) => {
   const id = storeDoc._id;
   delete storeDoc._id;
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
-  websockets.fireWebscoketEvent({appName, appName});
+  
+  // Send to admin users
+  websocketService.sendToAppAdmins('shoofi-partner', {
+    type: 'store_updated',
+    data: { action: 'store_updated', appName: appName }
+  }, appName);
+  
+  // Send to all customers of this app to refresh their store data
+  websocketService.sendToAppCustomers('shoofi-shopping', {
+    type: 'store_refresh',
+    data: { 
+      action: 'store_updated', 
+      appName: appName 
+    }
+  });
+  
   res.status(200).json({ message: "Successfully saved" });
 });
 

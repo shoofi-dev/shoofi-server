@@ -78,9 +78,20 @@ async function bookDelivery({ deliveryData, appDb }) {
         activeOrderCount: result.activeOrderCount,
         bookId: deliveryData.bookId || `${Math.floor(Math.random() * 9000) + 1000}-${Math.floor(Math.random() * 900000) + 100000}-${Math.floor(Math.random() * 9000) + 1000}`,
         appName: deliveryData.appName || 'shoofi-app',
-
+        // Include coupon data if present
+        appliedCoupon: deliveryData.appliedCoupon || null,
         expectedDeliveryAt: expectedDeliveryAtTemp.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ")
       };
+
+      // Debug log for delivery booking coupon data
+      if (deliveryData.appliedCoupon) {
+        console.log('Delivery service - Booking coupon data:', {
+          couponType: deliveryData.appliedCoupon.coupon?.type,
+          couponCode: deliveryData.appliedCoupon.coupon?.code,
+          discountAmount: deliveryData.appliedCoupon.discountAmount,
+          isFreeDelivery: deliveryData.appliedCoupon.coupon?.type === 'free_delivery'
+        });
+      }
 
       const bookDeliveryResult = await db.bookDelivery.insertOne(bookingData);
       const insertedOrder = { ...bookingData, _id: bookDeliveryResult.insertedId };

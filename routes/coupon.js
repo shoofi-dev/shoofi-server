@@ -1,8 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const moment = require('moment');
+const momentTZ = require('moment-timezone');
 const { validateJson } = require('../lib/schema');
 const { getId } = require('../lib/common');
+
+const getUTCOffset = () => {
+  const israelTimezone = "Asia/Jerusalem";
+
+  // Get the current time in UTC
+  const utcTime = moment.utc();
+
+  // Get the current time in Israel timezone
+  const israelTime = momentTZ.tz(israelTimezone);
+
+  // Get the UTC offset in minutes for Israel
+  const israelOffsetMinutes = israelTime.utcOffset();
+
+  // Convert the offset to hours
+  return israelOffsetMinutes;
+};
 
 // Apply coupon
 router.post('/api/coupons/apply', async (req, res) => {
@@ -37,7 +54,8 @@ router.post('/api/coupons/apply', async (req, res) => {
     }
 
     // Validate dates
-    if (!moment().isBetween(moment(coupon.start), moment(coupon.end))) {
+    const offsetHours = getUTCOffset();
+    if (!moment().utcOffset(offsetHours).isBetween(moment(coupon.start).utcOffset(offsetHours), moment(coupon.end).utcOffset(offsetHours))) {
         return res.status(400).json({
             message: 'Coupon has expired'
         });
@@ -88,11 +106,23 @@ router.post('/api/coupons/apply', async (req, res) => {
     return res.status(200).json({
         message: 'Coupon applied successfully',
         coupon: {
+            _id: coupon._id,
             code: coupon.code,
             type: coupon.type,
             value: coupon.value,
             maxDiscount: coupon.maxDiscount,
-            isCustomerSpecific: coupon.isCustomerSpecific
+            minOrderAmount: coupon.minOrderAmount,
+            usageLimit: coupon.usageLimit,
+            usagePerUser: coupon.usagePerUser,
+            start: coupon.start,
+            end: coupon.end,
+            applicableTo: coupon.applicableTo,
+            isActive: coupon.isActive,
+            isCustomerSpecific: coupon.isCustomerSpecific,
+            customerId: coupon.customerId,
+            isAutoApply: coupon.isAutoApply,
+            createdAt: coupon.createdAt,
+            updatedAt: coupon.updatedAt
         },
         discountAmount: discountAmount
     });
@@ -138,10 +168,12 @@ router.get('/api/coupons/available', async (req, res) => {
     const db = req.app.db[appName];
 
     try {
+        const offsetHours = getUTCOffset();
+        const currentTime = moment().utcOffset(offsetHours).toDate();
         const coupons = await db.coupons.find({
             isActive: true,
-            start: { $lte: new Date() },
-            end: { $gte: new Date() }
+            start: { $lte: currentTime },
+            end: { $gte: currentTime }
         }).toArray();
 
         return res.status(200).json(coupons);
@@ -159,10 +191,12 @@ router.get('/api/coupons/customer/:customerId/available', async (req, res) => {
     const customerId = req.params.customerId;
 
     try {
+        const offsetHours = getUTCOffset();
+        const currentTime = moment().utcOffset(offsetHours).toDate();
         const coupons = await db.coupons.find({
             isActive: true,
-            start: { $lte: new Date() },
-            end: { $gte: new Date() },
+            start: { $lte: currentTime },
+            end: { $gte: currentTime },
             $or: [
                 { isCustomerSpecific: false }, // General coupons
                 { 
@@ -194,6 +228,47 @@ router.get('/api/coupons/user/:userId/history', async (req, res) => {
     } catch (err) {
         return res.status(400).json({
             message: 'Failed to fetch coupon history'
+        });
+    }
+});
+
+// Get auto-apply coupons for a customer
+router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
+    const appName ='shoofi';
+    const db = req.app.db[appName];
+    const customerId = req.params.customerId;
+
+    try {
+        const offsetHours = getUTCOffset();
+        const currentTime = moment().utcOffset(offsetHours,true).toDate();
+        
+        console.log('Auto-apply query debug:');
+        console.log('Current time (with offset):', currentTime);
+        console.log('App name:', appName);
+        console.log('Customer ID:', customerId);
+        
+        const autoApplyCoupons = await db.coupons.find({
+            isActive: true,
+            isAutoApply: true,
+            start: { $lte: currentTime },
+            end: { $gte: currentTime },
+            $or: [
+                { isCustomerSpecific: false }, // General auto-apply coupons
+                { 
+                    isCustomerSpecific: true, 
+                    customerId: customerId 
+                } // Customer-specific auto-apply coupons for this customer
+            ]
+        }).toArray();
+
+        console.log('Found auto-apply coupons:', autoApplyCoupons.length);
+        console.log('Coupons:', autoApplyCoupons);
+
+        return res.status(200).json(autoApplyCoupons);
+    } catch (err) {
+        console.error('Error fetching auto-apply coupons:', err);
+        return res.status(400).json({
+            message: 'Failed to fetch auto-apply coupons'
         });
     }
 });
@@ -247,16 +322,17 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
         });
     }
     
+    const offsetHours = getUTCOffset();
     const couponDoc = {
         code: req.body.code.toUpperCase(),
         type: req.body.type,
-        value: parseFloat(req.body.value),
-        maxDiscount: req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null,
-        minOrderAmount: req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null,
+        value: req.body.type === 'free_delivery' ? 0 : parseFloat(req.body.value),
+        maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
+        minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
         usageLimit: parseInt(req.body.usageLimit),
         usagePerUser: parseInt(req.body.usagePerUser),
-        start: moment(req.body.start, 'YYYY-MM-DDTHH:mm').toDate(),
-        end: moment(req.body.end, 'YYYY-MM-DDTHH:mm').toDate(),
+        start: moment.tz(req.body.start, 'Asia/Jerusalem').toDate(),
+        end: moment.tz(req.body.end, 'Asia/Jerusalem').toDate(),
         applicableTo: {
             categories: req.body.categories || [],
             products: req.body.products || [],
@@ -264,7 +340,8 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
         },
         isActive: true,
         isCustomerSpecific: req.body.isCustomerSpecific || false,
-        customerId: req.body.isCustomerSpecific ? req.body.customerId : null
+        customerId: req.body.isCustomerSpecific ? req.body.customerId : null,
+        isAutoApply: req.body.isAutoApply || false
     };
 
     // Validate schema - only include customerId in validation if isCustomerSpecific is true
@@ -285,15 +362,14 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
             message: 'Coupon code already exists'
         });
     }
-
     // Validate dates
-    if (moment(couponDoc.start).isBefore(moment())) {
+    if (moment(couponDoc.start).utcOffset(offsetHours).isBefore(moment().utcOffset(offsetHours))) {
         return res.status(400).json({
             message: 'Start date must be in the future'
         });
     }
 
-    if (!moment(couponDoc.end).isAfter(moment(couponDoc.start))) {
+    if (!moment(couponDoc.end).utcOffset(offsetHours).isAfter(moment(couponDoc.start).utcOffset(offsetHours))) {
         return res.status(400).json({
             message: 'End date must be after start date'
         });
@@ -324,17 +400,18 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
         });
     }
 
+    const offsetHours = getUTCOffset();
     const couponDoc = {
         couponId: req.body.couponId,
         code: req.body.code.toUpperCase(),
         type: req.body.type,
-        value: parseFloat(req.body.value),
-        maxDiscount: req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null,
-        minOrderAmount: req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null,
+        value: req.body.type === 'free_delivery' ? 0 : parseFloat(req.body.value),
+        maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
+        minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
         usageLimit: parseInt(req.body.usageLimit),
         usagePerUser: parseInt(req.body.usagePerUser),
-        start: moment(req.body.start, 'YYYY-MM-DDTHH:mm').toDate(),
-        end: moment(req.body.end, 'YYYY-MM-DDTHH:mm').toDate(),
+        start: moment.tz(req.body.start, 'Asia/Jerusalem').toDate(),
+        end: moment.tz(req.body.end, 'Asia/Jerusalem').toDate(),
         applicableTo: {
             categories: req.body.categories || [],
             products: req.body.products || [],
@@ -342,7 +419,8 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
         },
         isActive: req.body.isActive,
         isCustomerSpecific: req.body.isCustomerSpecific || false,
-        customerId: req.body.isCustomerSpecific ? req.body.customerId : null
+        customerId: req.body.isCustomerSpecific ? req.body.customerId : null,
+        isAutoApply: req.body.isAutoApply || false
     };
 
     // Validate schema - only include customerId in validation if isCustomerSpecific is true
@@ -368,7 +446,7 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
     }
 
     // Validate dates
-    if (!moment(couponDoc.end).isAfter(moment(couponDoc.start))) {
+    if (!moment(couponDoc.end).utcOffset(offsetHours).isAfter(moment(couponDoc.start).utcOffset(offsetHours))) {
         return res.status(400).json({
             message: 'End date must be after start date'
         });

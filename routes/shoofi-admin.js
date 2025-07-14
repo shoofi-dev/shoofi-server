@@ -68,6 +68,36 @@ router.get("/api/shoofiAdmin/store/z-cr", async (req, res, next) => {
   res.status(200).json(credentials);
 });
 
+router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
+  const appName = req.headers['app-name'];
+  const db = req.app.db[appName];
+  let pageNum = 1;
+  if (req.params.page) {
+    pageNum = req.params.page;
+  }
+  let storeDoc = req.body.data || req.body;
+  const id = storeDoc._id;
+  delete storeDoc._id;
+  await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
+  
+  // Send to admin users
+  websocketService.sendToAppAdmins('shoofi-partner', {
+    type: 'shoofi_store_updated',
+    data: { action: 'store_updated', appName: appName }
+  }, appName);
+  
+  // Send to all customers of this app to refresh their store data
+  websocketService.sendToAppCustomers('shoofi-shopping', {
+    type: 'shoofi_store_updated',
+    data: { 
+      action: 'store_updated', 
+      appName: appName 
+    }
+  });
+  
+  res.status(200).json({ message: "Successfully saved" });
+});
+
 router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
   try {
     const { lat, lng } = req.body.location;
@@ -652,6 +682,216 @@ router.get('/admin/websocket/connections', async (req, res) => {
       res.status(200).json(connections);
   } catch (error) {
       res.status(500).json({ error: error.message });
+  }
+});
+
+// New endpoint for explore screen with server-side filtering and caching
+router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) => {
+  try {
+    console.time('exploreCategoriesQueryTime');
+    
+    const dbAdmin = req.app.db['shoofi'];
+    const location = req.query.location ? JSON.parse(req.query.location) : null;
+    
+    // Check cache first (with shorter TTL due to store status changes)
+    const cacheKey = `explore_categories_${location ? `${location.lat}_${location.lng}` : 'default'}`;
+    const cachedData = await getExploreCache(cacheKey);
+    // if (cachedData) {
+    //   console.timeEnd('exploreCategoriesQueryTime');
+    //   console.log('Explore categories served from cache');
+    //   return res.status(200).json(cachedData);
+    // }
+
+    // If location is provided, use the same logic as available-stores endpoint
+    if (location && (location.lat || location.coordinates?.[1]) && (location.lng || location.coordinates?.[0])) {
+      const deliveryDB = req.app.db['delivery-company'];
+      
+      // Get available stores using the same service as available-stores endpoint
+      const availableStoresData = await RestaurantAvailabilityService.getAvailableStores(
+        deliveryDB,
+        dbAdmin,
+        req.app.db,
+        Number(location.lat || location.coordinates?.[1]),
+        Number(location.lng || location.coordinates?.[0])
+      );
+
+      // Extract only the stores (not delivery companies) and filter by open status
+      const availableStores = availableStoresData
+        .map(storeData => ({
+          store: storeData.store,
+          storeData: {
+            ...storeData.store,
+            distance: null // Distance calculation is handled by the service
+          }
+        }));
+
+      // Get all categories
+      const allCategories = await dbAdmin.categories.find().toArray();
+      
+      // Group stores by category
+      const storesByCategory = {};
+      availableStores.forEach((storeData) => {
+        if (storeData.store.categoryIds) {
+          storeData.store.categoryIds.forEach((categoryId) => {
+            const categoryIdStr = categoryId.$oid || categoryId;
+            if (!storesByCategory[categoryIdStr]) {
+              storesByCategory[categoryIdStr] = [];
+            }
+            storesByCategory[categoryIdStr].push(storeData);
+          });
+        }
+      });
+
+      // Create categories with stores data
+      const categoriesWithStores = allCategories
+        .filter(category => storesByCategory[category._id])
+        .map(category => ({
+          category: category,
+          stores: storesByCategory[category._id] || []
+        }))
+        .filter(item => item.stores.length > 0) // Only include categories with stores
+        .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
+
+      // Cache the result (shorter TTL for store status changes)
+      await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
+
+      console.timeEnd('exploreCategoriesQueryTime');
+      console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores`);
+
+      res.status(200).json(categoriesWithStores);
+      return;
+    }
+
+    // Fallback: If no location provided, return all stores (original logic)
+    const allCategories = await dbAdmin.categories.find().toArray();
+    const allStores = await dbAdmin.stores.find().toArray();
+    
+    // Get store data for each store (including current open/closed status)
+    const storesWithData = await Promise.all(
+      allStores.map(async (store) => {
+        try {
+          const dbName = store.appName;
+          const db = req.app.db[dbName];
+          if (!db) return null;
+          
+          const storeDataArr = await db.store.find().toArray();
+          const storeData = storeDataArr[0];
+          
+          if (!storeData) return null;
+          
+          return {
+            store: store,
+            storeData: {
+              ...storeData,
+              distance: null
+            }
+          };
+        } catch (error) {
+          console.error(`Error fetching data for store ${store.appName}:`, error);
+          return null;
+        }
+      })
+    );
+
+    // Filter out null results
+    const validStores = storesWithData.filter(Boolean);
+    
+    // Group stores by category
+    const storesByCategory = {};
+    validStores.forEach((storeData) => {
+      if (storeData.store.categoryIds) {
+        storeData.store.categoryIds.forEach((categoryId) => {
+          const categoryIdStr = categoryId.$oid || categoryId;
+          if (!storesByCategory[categoryIdStr]) {
+            storesByCategory[categoryIdStr] = [];
+          }
+          storesByCategory[categoryIdStr].push(storeData);
+        });
+      }
+    });
+
+    // Create categories with stores data
+    const categoriesWithStores = allCategories
+      .filter(category => storesByCategory[category._id])
+      .map(category => ({
+        category: category,
+        stores: storesByCategory[category._id] || []
+      }))
+      .filter(item => item.stores.length > 0) // Only include categories with stores
+      .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
+
+    // Cache the result (shorter TTL for store status changes)
+    await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
+
+    console.timeEnd('exploreCategoriesQueryTime');
+    console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${validStores.length} stores`);
+
+    res.status(200).json(categoriesWithStores);
+
+  } catch (error) {
+    console.error('Error fetching explore categories:', error);
+    res.status(500).json({ error: 'Failed to fetch explore categories', details: error.message });
+  }
+});
+
+// Cache management functions
+const exploreCache = new Map();
+
+async function getExploreCache(key) {
+  const entry = exploreCache.get(key);
+  if (!entry) return null;
+  
+  // Check if cache is expired
+  if (Date.now() - entry.timestamp > entry.ttl) {
+    exploreCache.delete(key);
+    return null;
+  }
+  
+  return entry.data;
+}
+
+async function setExploreCache(key, data, ttl = 5 * 60 * 1000) {
+  exploreCache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl
+  });
+  
+  // Clean up old entries (keep only last 100 entries)
+  if (exploreCache.size > 100) {
+    const entries = Array.from(exploreCache.entries());
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toDelete = entries.slice(0, entries.length - 100);
+    toDelete.forEach(([key]) => exploreCache.delete(key));
+  }
+}
+
+// Endpoint to clear explore cache
+router.post("/api/shoofiAdmin/explore/clear-cache", async (req, res) => {
+  try {
+    exploreCache.clear();
+    res.status(200).json({ message: 'Explore cache cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing explore cache:', error);
+    res.status(500).json({ error: 'Failed to clear explore cache' });
+  }
+});
+
+// Endpoint to get explore cache stats
+router.get("/api/shoofiAdmin/explore/cache-stats", async (req, res) => {
+  try {
+    const stats = {
+      size: exploreCache.size,
+      entries: Array.from(exploreCache.entries()).map(([key, entry]) => ({
+        key,
+        age: Date.now() - entry.timestamp,
+        ttl: entry.ttl
+      }))
+    };
+    res.status(200).json(stats);
+  } catch (error) {
+    console.error('Error getting explore cache stats:', error);
+    res.status(500).json({ error: 'Failed to get explore cache stats' });
   }
 });
 
