@@ -23,6 +23,8 @@ const notificationService = require("./services/notification/notification-servic
 const smsService = require("./utils/sms");
 const cronOrdersService = require("./utils/crons/orders");
 const persistentAlertsCron = require("./utils/crons/persistent-alerts-cron");
+const storeAutoCloseCron = require("./utils/crons/store-auto-close");
+const storeOpenReminderCron = require("./utils/crons/store-open-reminder");
 const logger = require("./utils/logger");
 
 const {
@@ -248,6 +250,16 @@ console.log(colors.blue("Starting persistent alerts cron jobs..."));
 persistentAlertsCron.startPersistentAlertsCron(app.db);
 persistentAlertsCron.startCleanupCron(app.db);
 console.log(colors.green("Persistent alerts cron jobs started successfully"));
+
+// Start store auto-close cron job
+console.log(colors.blue("Starting store auto-close cron job..."));
+storeAutoCloseCron.startStoreAutoCloseCron(app.db);
+console.log(colors.green("Store auto-close cron job started successfully"));
+
+// Start store open reminder cron job
+console.log(colors.blue("Starting store open reminder cron job..."));
+storeOpenReminderCron.startStoreOpenReminderCron(app.db);
+console.log(colors.green("Store open reminder cron job started successfully"));
 
 
 

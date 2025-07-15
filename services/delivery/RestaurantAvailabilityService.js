@@ -91,6 +91,7 @@ class RestaurantAvailabilityService {
     const results = await Promise.all(validStores.map(async store => {
       // Get store data to check opening hours
       let isOpen = false;
+      let isBusy = false;
       try {
         const storeDB = generalDB[store.appName];
         if (storeDB) {
@@ -98,6 +99,7 @@ class RestaurantAvailabilityService {
           if (storeData && storeData.openHours) {
             const storeStatus = storeService.isStoreOpenNow(storeData.openHours);
             isOpen = storeStatus.isOpen && !storeData.isStoreClose;
+            isBusy = storeData.isBusy;
           }
         }
       } catch (error) {
@@ -133,7 +135,8 @@ class RestaurantAvailabilityService {
       return {
         store: {
           ...store,
-          isOpen
+          isOpen,
+          isBusy
         },
         deliveryCompanies: availableDeliveryCompanies
       };

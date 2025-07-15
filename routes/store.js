@@ -348,4 +348,28 @@ router.delete("/api/store-category/:id", async (req, res) => {
   res.status(200).json({ message: "Category deleted" });
 });
 
+// Manual trigger for store auto-close (for testing purposes)
+router.post("/api/store/auto-close", async (req, res) => {
+  try {
+    const storeAutoCloseCron = require("../utils/crons/store-auto-close");
+    await storeAutoCloseCron.autoCloseStores(req.app.db);
+    res.status(200).json({ message: "Store auto-close job executed successfully" });
+  } catch (error) {
+    console.error("Error executing store auto-close:", error);
+    res.status(500).json({ message: "Failed to execute store auto-close job" });
+  }
+});
+
+// Manual trigger for store open reminder (for testing purposes)
+router.post("/api/store/open-reminder", async (req, res) => {
+  try {
+    const storeOpenReminderCron = require("../utils/crons/store-open-reminder");
+    await storeOpenReminderCron.sendStoreOpenReminders(req.app.db);
+    res.status(200).json({ message: "Store open reminder job executed successfully" });
+  } catch (error) {
+    console.error("Error executing store open reminder:", error);
+    res.status(500).json({ message: "Failed to execute store open reminder job" });
+  }
+});
+
 module.exports = router;
