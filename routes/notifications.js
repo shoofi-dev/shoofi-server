@@ -43,7 +43,8 @@ router.post('/send', async (req, res) => {
           type,
           appName,
           channels,
-          req
+          req,
+          soundType: 'customer.wav'
         });
         
         results.push({
@@ -135,7 +136,8 @@ router.post('/send-to-app', async (req, res) => {
           type,
           appName,
           channels,
-          req
+          req,
+          soundType: 'customer.wav'
         });
         
         results.push({

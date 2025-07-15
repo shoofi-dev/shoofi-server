@@ -137,6 +137,7 @@ router.post("/api/delivery/driver/order/approve", async (req, res) => {
             driverName: deliveryOrder.driver?.name || "السائق",
           },
           req: mockReq,
+          soundType: 'driver.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -239,6 +240,7 @@ router.post("/api/delivery/driver/order/cancel", async (req, res) => {
             driverName: deliveryOrder.driver?.name || "السائق",
           },
           req: mockReq,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -339,6 +341,7 @@ router.post("/api/delivery/driver/order/start", async (req, res) => {
             driverName: deliveryOrder.driver?.name || "السائق",
           },
           req: mockReq,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -434,6 +437,7 @@ router.post("/api/delivery/driver/order/complete", async (req, res) => {
             driverName: deliveryOrder.driver?.name || "السائق",
           },
           req: mockReq,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -1885,6 +1889,7 @@ router.post("/api/delivery/notifications/create", async (req, res) => {
       channels,
       data,
       req,
+      soundType: 'driver.wav'
     });
 
     res.status(201).json(notification);
@@ -2077,6 +2082,7 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
           payment_method: order?.order?.payment_method,
         },
         req,
+        soundType: 'driver.wav'
       });
     } catch (notificationError) {
       console.error(
@@ -2411,6 +2417,7 @@ router.post("/api/delivery/store/order/cancel", async (req, res) => {
             cancelledBy: "store",
           },
           req: mockReq,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -2485,6 +2492,7 @@ router.post("/api/delivery/admin/order/cancel", async (req, res) => {
             cancelledBy: "admin",
           },
           req: mockReq,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error(
@@ -2660,6 +2668,7 @@ router.post("/api/delivery/order/status/update", async (req, res) => {
               driverName: deliveryOrder.driver?.name || "السائق",
             },
             req: mockReq,
+            soundType: 'customer.wav'
           });
         }
       } catch (notificationError) {

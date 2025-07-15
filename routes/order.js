@@ -241,7 +241,8 @@ const sendOrderNotifications = async (orderDoc, req, appName) => {
         receiptMethod: orderDoc.order.receipt_method,
         total: orderDoc.total
       },
-      req
+      req,
+      soundType: 'customer.wav'
     });
   } catch (error) {
     console.error("Failed to send notification to customer:", error);
@@ -1671,7 +1672,8 @@ router.post("/api/order/update", auth.required, async (req, res) => {
               total: order.total,
               customerName: customer.fullName
             },
-            req: req
+            req: req,
+            soundType: 'customer.wav'
           });
         }
       } catch (notificationError) {
@@ -1724,7 +1726,8 @@ router.post("/api/order/update", auth.required, async (req, res) => {
               storeName: order.storeName || "المطعم",
               isReadyForPickup: true
             },
-            req: req
+            req: req,
+            soundType: 'driver.wav'
           });
         }
       } catch (driverNotificationError) {
@@ -2349,7 +2352,8 @@ router.post("/api/order/update-delay", auth.required, async (req, res) => {
             delayMinutes: delayMinutes,
             newOrderDate: updateData.orderDate
           },
-          req: req
+          req: req,
+          soundType: 'customer.wav'
         });
       } catch (notificationError) {
         console.error("Failed to send customer delay notification:", notificationError);
@@ -2390,7 +2394,8 @@ router.post("/api/order/update-delay", auth.required, async (req, res) => {
               newOrderDate: updateData.orderDate,
               payment_method: order.order.payment_method
             },
-            req: req
+            req: req,
+            soundType: 'driver.wav'
           });
         }
       } catch (driverNotificationError) {

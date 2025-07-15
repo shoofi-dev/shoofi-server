@@ -53,7 +53,8 @@ async function sendUrgentNotification(req, userId, message) {
       body: message,
       data: { priority: 'high', type: 'urgent' },
       appName: 'shoofi-app',
-      req
+      req,
+      soundType: 'customer.wav'
     });
     console.log('Urgent notification sent with buffalo sound');
   } catch (error) {
@@ -86,12 +87,12 @@ async function sendSystemNotification(req, userId, message) {
 async function sendAppSpecificNotification(req, userId, title, body, appType) {
   try {
     // Choose sound based on app type
-    let soundType = 'buffalosound.wav'; // default
+    let soundType = 'customer.wav'; // default
     
     if (appType === 'shoofi-shoofir') {
-      soundType = 'deliverysound.wav'; // delivery drivers get delivery sound
+      soundType = 'driver.wav'; // delivery drivers get delivery sound
     } else if (appType === 'shoofi-partner') {
-      soundType = 'buffalosound.wav'; // partners get buffalo sound
+      soundType = 'store.wav'; // partners get buffalo sound
     }
     
     await notificationService.sendNotification({

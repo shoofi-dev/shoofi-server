@@ -165,7 +165,8 @@ async function bookDelivery({ deliveryData, appDb }) {
               pickupTime: pickupTime,
               payment_method: deliveryData?.order?.order?.payment_method
             },
-            req: mockReq
+            req: mockReq,
+            soundType: 'driver.wav'
           });
       } catch (notificationError) {
         console.error("Failed to send notification to driver:", notificationError);
@@ -297,7 +298,8 @@ async function updateDelivery({ deliveryData, appDb }) {
             appType: 'shoofi-shoofir',
             channels: { websocket: true, push: true, email: false, sms: false },
             data: { orderId: order._id, bookId: order.bookId, status: updateData.status },
-            req: mockReq
+            req: mockReq,
+            soundType: 'driver.wav'
           });
         } catch (notificationError) {
           console.error("Failed to send notification to driver:", notificationError);

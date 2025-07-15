@@ -80,7 +80,8 @@ class PersistentAlertsService {
           appName,
           appType: "shoofi-partner",
           channels: { websocket: true, push: true, email: false, sms: false },
-          req
+          req,  
+          soundType: 'store.wav'
         })
       );
 
@@ -252,7 +253,8 @@ class PersistentAlertsService {
                 db: db,
                 appName: alert.appName
               }
-            }
+            },
+            soundType: 'store.wav'
           })
         );
 
