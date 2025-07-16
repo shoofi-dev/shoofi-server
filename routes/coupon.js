@@ -326,7 +326,7 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
     const couponDoc = {
         code: req.body.code.toUpperCase(),
         type: req.body.type,
-        value: req.body.type === 'free_delivery' ? 0 : parseFloat(req.body.value),
+        value: parseFloat(req.body.value),
         maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
         minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
         usageLimit: parseInt(req.body.usageLimit),
@@ -405,7 +405,7 @@ router.post('/api/admin/coupon/update',  async (req, res) => {
         couponId: req.body.couponId,
         code: req.body.code.toUpperCase(),
         type: req.body.type,
-        value: req.body.type === 'free_delivery' ? 0 : parseFloat(req.body.value),
+        value: parseFloat(req.body.value),
         maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
         minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
         usageLimit: parseInt(req.body.usageLimit),

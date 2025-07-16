@@ -372,4 +372,40 @@ router.post("/api/store/open-reminder", async (req, res) => {
   }
 });
 
+// Manual trigger for order overdue checker (for testing purposes)
+router.post("/api/store/check-overdue-orders", async (req, res) => {
+  try {
+    const orderOverdueCheckerCron = require("../utils/crons/order-overdue-checker");
+    await orderOverdueCheckerCron.checkOverdueOrders(req.app.db);
+    res.status(200).json({ message: "Order overdue checker job executed successfully" });
+  } catch (error) {
+    console.error("Error executing order overdue checker:", error);
+    res.status(500).json({ message: "Failed to execute order overdue checker job" });
+  }
+});
+
+// Manual trigger for delivery pickup delay checker (for testing purposes)
+router.post("/api/store/check-pickup-delays", async (req, res) => {
+  try {
+    const deliveryPickupCheckerCron = require("../utils/crons/delivery-pickup-checker");
+    await deliveryPickupCheckerCron.checkDeliveryPickupDelays(req.app.db);
+    res.status(200).json({ message: "Delivery pickup delay checker job executed successfully" });
+  } catch (error) {
+    console.error("Error executing delivery pickup delay checker:", error);
+    res.status(500).json({ message: "Failed to execute delivery pickup delay checker job" });
+  }
+});
+
+// Manual trigger for delivery completion delay checker (for testing purposes)
+router.post("/api/store/check-delivery-completion-delays", async (req, res) => {
+  try {
+    const deliveryCompletionDelayCheckerCron = require("../utils/crons/delivery-completion-delay-checker");
+    await deliveryCompletionDelayCheckerCron.checkDeliveryCompletionDelays(req.app.db);
+    res.status(200).json({ message: "Delivery completion delay checker job executed successfully" });
+  } catch (error) {
+    console.error("Error executing delivery completion delay checker:", error);
+    res.status(500).json({ message: "Failed to execute delivery completion delay checker job" });
+  }
+});
+
 module.exports = router;

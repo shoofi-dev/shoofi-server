@@ -25,6 +25,8 @@ const cronOrdersService = require("./utils/crons/orders");
 const persistentAlertsCron = require("./utils/crons/persistent-alerts-cron");
 const storeAutoCloseCron = require("./utils/crons/store-auto-close");
 const storeOpenReminderCron = require("./utils/crons/store-open-reminder");
+const orderOverdueCheckerCron = require("./utils/crons/order-overdue-checker");
+const deliveryPickupCheckerCron = require("./utils/crons/delivery-pickup-checker");
 const logger = require("./utils/logger");
 
 const {
@@ -261,6 +263,21 @@ console.log(colors.blue("Starting store open reminder cron job..."));
 storeOpenReminderCron.startStoreOpenReminderCron(app.db);
 console.log(colors.green("Store open reminder cron job started successfully"));
 
+// Start order overdue checker cron job
+console.log(colors.blue("Starting order overdue checker cron job..."));
+orderOverdueCheckerCron.startOrderOverdueCheckerCron(app.db);
+console.log(colors.green("Order overdue checker cron job started successfully"));
+
+// Start delivery pickup delay checker cron job
+console.log(colors.blue("Starting delivery pickup delay checker cron job..."));
+deliveryPickupCheckerCron.startDeliveryPickupCheckerCron(app.db);
+console.log(colors.green("Delivery pickup delay checker cron job started successfully"));
+
+// Start delivery completion delay checker cron job
+console.log(colors.blue("Starting delivery completion delay checker cron job..."));
+const deliveryCompletionDelayCheckerCron = require("./utils/crons/delivery-completion-delay-checker");
+deliveryCompletionDelayCheckerCron.startDeliveryCompletionDelayCheckerCron(app.db);
+console.log(colors.green("Delivery completion delay checker cron job started successfully"));
 
 
 // cron.schedule('*/1 * * * *', function () {
