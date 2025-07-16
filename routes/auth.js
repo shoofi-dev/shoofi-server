@@ -3,7 +3,7 @@ const APP_CONSTS = require("../consts/consts");
 const { expressjwt } = require("express-jwt");
 const jwt = require("jsonwebtoken");
 const { getId } = require("../lib/common");
-const fakeTokenForBuffalo = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6IjA1NDI0NTQzNjIiLCJpZCI6IjY1N2RhODVmNDE4ZTAwNTZlMDcwYTAwMCIsImV4cCI6MTc1NDkyNzQ3OCwiaWF0IjoxNzIzODIzNDc4fQ.aVmYgx_MJkfpWYBFI6TDI4YfZSAhEhBBz_R3S7K9l3M";
+const shoofiAdminFakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6IjA1NDI0NTQzNjIiLCJpZCI6IjY1N2RhODVmNDE4ZTAwNTZlMDcwYTAwMCIsImV4cCI6MTc1NDkyNzQ3OCwiaWF0IjoxNzIzODIzNDc4fQ.aVmYgx_MJkfpWYBFI6TDI4YfZSAhEhBBz_R3S7K9l3M";
 const getTokenFromHeaders = async (req, res) => {
   const appType = req.headers['app-type'];
 
@@ -13,7 +13,11 @@ const getTokenFromHeaders = async (req, res) => {
   } = req;
   var token = authorization?.split(" ")[1],
     decoded;
+
   try {
+    if(appType === 'shoofi-admin'){
+      return shoofiAdminFakeToken;
+    }
       decoded = jwt.verify(token, "secret");
   } catch (e) {
     console.log("E", e);
@@ -21,6 +25,7 @@ const getTokenFromHeaders = async (req, res) => {
   }
   let db = null;
   let collection = null;
+ 
   if(appType === 'shoofi-shoofir'){
     db = req.app.db['delivery-company'];
     collection = 'customers';

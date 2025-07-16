@@ -113,7 +113,7 @@ const processCreditCardPayment = async (paymentData, orderDoc, req) => {
       FaxNum: "",
       TaxRate: "17",
       Comment: "",
-      ReceipientEmail: "invoices@shoofi.app",
+      ReceipientEmail: "customerinvoices@shoofi.app",
       EmailDocumentToReceipient: true,
       ReturnDocumentInResponse: "",
       Items: [{
@@ -2508,9 +2508,7 @@ router.post("/api/order/statistics/new-orders/:page?", async (req, res) => {
 
 router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
   try {
-    const appName = req.headers["app-name"];
-    const dbAdmin = req.app.db["shoofi"];
-    const storesList = await dbAdmin.stores.find().toArray();
+    let appName = req.headers["app-name"];
     let allOrders = [];
     let totalItems = 0;
     const pageNum = req.body.pageNumber || 1;
@@ -2539,38 +2537,69 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
       statusFilter = { status: { $in: req.body.status } };
     }
 
-    // City filter if provided
-    let filteredStores = storesList;
-    if (req.body.cityIds && req.body.cityIds.length > 0) {
-      filteredStores = storesList.filter((store) =>
-        req.body.cityIds.includes(store.cityId)
-      );
-    }
-
     // Combine filters
-    const filterBy = {
+    let filterBy = {
       ...dateFilter,
       ...statusFilter,
     };
 
-    // Get orders from each store
-    for (const store of filteredStores) {
-      const db = req.app.db[store.appName];
-      if (!db) continue;
+    // Add orderId filter if provided
+    if (req.body.orderId) {
+      filterBy = { orderId: { $regex: req.body.orderId, $options: 'i' } };
+    }
 
-      const storeOrders = await db.orders
-        .find(filterBy)
-        .sort({ created: -1 })
-        .toArray();
-
-      // Add store info to each order
-      const ordersWithStoreInfo = storeOrders.map((order) => ({
-        ...order,
-        storeName: store.storeName,
-        storeAppName: store.appName,
-      }));
-
-      allOrders = [...allOrders, ...ordersWithStoreInfo];
+    // If no appName, loop over all stores in shoofi DB
+    if (!appName || appName === 'shoofi') {
+      const dbShoofi = req.app.db['shoofi'];
+      const storesList = await dbShoofi.stores.find().toArray();
+      // City filter if provided
+      let filteredStores = storesList;
+      if (req.body.cityIds && req.body.cityIds.length > 0) {
+        filteredStores = storesList.filter((store) =>
+          req.body.cityIds.includes(store.cityId)
+        );
+      }
+      for (const store of filteredStores) {
+        const db = req.app.db[store.appName];
+        if (!db) continue;
+        const storeOrders = await db.orders
+          .find(filterBy)
+          .sort({ created: -1 })
+          .toArray();
+        // Add store info to each order
+        const ordersWithStoreInfo = storeOrders.map((order) => ({
+          ...order,
+          storeName: store.storeName,
+          storeAppName: store.appName,
+        }));
+        allOrders = [...allOrders, ...ordersWithStoreInfo];
+      }
+    } else {
+      // If appName is provided, only fetch from that app's DB
+      const dbAdmin = req.app.db[appName];
+      const storesList = await dbAdmin.stores.find().toArray();
+      // City filter if provided
+      let filteredStores = storesList;
+      if (req.body.cityIds && req.body.cityIds.length > 0) {
+        filteredStores = storesList.filter((store) =>
+          req.body.cityIds.includes(store.cityId)
+        );
+      }
+      for (const store of filteredStores) {
+        const db = req.app.db[store.appName];
+        if (!db) continue;
+        const storeOrders = await db.orders
+          .find(filterBy)
+          .sort({ created: -1 })
+          .toArray();
+        // Add store info to each order
+        const ordersWithStoreInfo = storeOrders.map((order) => ({
+          ...order,
+          storeName: store.storeName,
+          storeAppName: store.appName,
+        }));
+        allOrders = [...allOrders, ...ordersWithStoreInfo];
+      }
     }
 
     // Sort all orders by creation date

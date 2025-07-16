@@ -334,8 +334,18 @@ router.post("/api/menu/search", async (req, res) => {
     const mainDb = req.app.db['shoofi'];
     const allStores = await mainDb.collection('stores').find({ appName: { $exists: true } }).toArray();
 
-    // 2. For each store, search its products collection
-    const results = await Promise.all(
+    // 2. Search for stores by name_ar or name_he (case-insensitive, prefix/word start match for Arabic/Hebrew)
+    const storeNameRegex = new RegExp(`(^|\\s)${query}`, 'i');
+    const storeNameMatches = await mainDb.collection('stores').find({
+      $or: [
+        { name_ar: storeNameRegex },
+        { name_he: storeNameRegex }
+      ],
+      appName: { $exists: true }
+    }).toArray();
+
+    // 3. For each store, search its products collection
+    const productResults = await Promise.all(
       allStores.map(async (store) => {
         const dbName = store.appName;
         const db = req.app.db[dbName];
@@ -344,16 +354,21 @@ router.post("/api/menu/search", async (req, res) => {
         // Check if products collection exists
         const collections = await db.listCollections({ name: 'products' }).toArray();
         if (collections.length === 0) {
-          console.log(`Skipping ${dbName}: no products collection.`);
           return null;
         }
 
-        // Use text index for efficient search
+        // Use regex for Arabic/Hebrew prefix/word start matching instead of text index
+        const productNameRegex = new RegExp(`(^|\\s)${query}`, 'i');
         const products = await db.collection('products').find({
-          $text: { $search: query }
+          $or: [
+            { nameAR: productNameRegex },
+            { nameHE: productNameRegex },
+            { descriptionAR: productNameRegex },
+            { descriptionHE: productNameRegex }
+          ]
         }, {
-          projection: { score: { $meta: "textScore" }, nameAR: 1, nameHE: 1, descriptionAR: 1, descriptionHE: 1 }
-        }).sort({ score: { $meta: "textScore" } }).limit(10).toArray();
+          projection: { nameAR: 1, nameHE: 1, descriptionAR: 1, descriptionHE: 1 }
+        }).limit(10).toArray();
 
         if (products.length > 0) {
           return { store, products };
@@ -362,8 +377,23 @@ router.post("/api/menu/search", async (req, res) => {
       })
     );
 
-    // 3. Filter out stores with no matches
-    const storesWithMatches = results.filter(Boolean);
+    // 4. Merge results, deduplicating by appName
+    const resultsByAppName = {};
+    // Add product search results
+    for (const result of productResults) {
+      if (result && result.store && result.store.appName) {
+        resultsByAppName[result.store.appName] = { store: result.store, products: result.products };
+      }
+    }
+    // Add store name matches (with empty products if not already present)
+    for (const store of storeNameMatches) {
+      if (store && store.appName && !resultsByAppName[store.appName]) {
+        resultsByAppName[store.appName] = { store, products: [] };
+      }
+    }
+
+    // 5. Prepare final result
+    const storesWithMatches = Object.values(resultsByAppName);
 
     res.json({ stores: storesWithMatches });
   } catch (error) {

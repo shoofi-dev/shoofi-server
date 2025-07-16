@@ -12,8 +12,8 @@ var {
 
   const BUCKET_NAME = "shoofi-spaces";
   const imapConfig = {
-  user: "invoices@shoofi.app",
-  password: "qqrdqeelnowmrfsc",
+  user: "customerinvoices@shoofi.app",
+  password: "gzoqdsvcjfkulgac",
   host: "imap.gmail.com",
   port: 993,
   tls: true,
@@ -38,14 +38,22 @@ const searchAndFetch = async (searchString, req) => {
 
     // Open the INBOX folder
     imap.openBox("INBOX", true, (err) => {
-      if (err) throw err;
+      if (err) {
+        console.error("Error opening INBOX:", err);
+        imap.end();
+        return reject(err);
+      }
 
       // Search for all unseen emails
       imap.search([["SUBJECT", `*${searchString}*`]], (searchErr, results) => {
-        if (searchErr){ 
-            throw searchErr;
+        if (searchErr) {
+            console.error("Error searching emails:", searchErr);
+            imap.end();
+            return reject(searchErr);
         }else  if(!results || !results.length){
             console.log("The server didn't find any emails matching the specified criteria")
+            imap.end();
+            return resolve(false);
         }
 
         // Fetch each unseen email
@@ -111,6 +119,8 @@ const searchAndFetch = async (searchString, req) => {
   });
   imap.once("error", (err) => {
     console.error("IMAP connection error:", err);
+    imap.end();
+    return reject(err);
   });
 
   imap.once("end", () => {

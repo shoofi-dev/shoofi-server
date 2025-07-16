@@ -174,6 +174,7 @@ router.get("/api/store/download-app/:appType?", async (req, res) => {
 router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
+    const all = req.query.all === 'true';
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -194,22 +195,27 @@ router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
       };
     }
     
-    const stores = await dbAdmin.stores.find(searchQuery)
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-    
-    const total = await dbAdmin.stores.countDocuments(searchQuery);
-    
-    res.status(200).json({
-      stores,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(total / limit),
-        totalItems: total,
-        itemsPerPage: limit
-      }
-    });
+    let stores, total;
+    if (all) {
+      stores = await dbAdmin.stores.find(searchQuery).toArray();
+      total = stores.length;
+      res.status(200).json({ stores });
+    } else {
+      stores = await dbAdmin.stores.find(searchQuery)
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+      total = await dbAdmin.stores.countDocuments(searchQuery);
+      res.status(200).json({
+        stores,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          itemsPerPage: limit
+        }
+      });
+    }
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch stores', error: err.message });
   }
@@ -582,6 +588,7 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
     const cityId = req.params.cityId;
+    const all = req.query.all === 'true';
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -613,22 +620,27 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
       { $and: [cityQuery, searchQuery] } : 
       cityQuery;
     
-    const stores = await dbAdmin.stores.find(combinedQuery)
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-    
-    const total = await dbAdmin.stores.countDocuments(combinedQuery);
-    
-    res.status(200).json({
-      stores,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(total / limit),
-        totalItems: total,
-        itemsPerPage: limit
-      }
-    });
+    let stores, total;
+    if (all) {
+      stores = await dbAdmin.stores.find(combinedQuery).toArray();
+      total = stores.length;
+      res.status(200).json({ stores });
+    } else {
+      stores = await dbAdmin.stores.find(combinedQuery)
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+      total = await dbAdmin.stores.countDocuments(combinedQuery);
+      res.status(200).json({
+        stores,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalItems: total,
+          itemsPerPage: limit
+        }
+      });
+    }
   } catch (err) {
     res.status(500).json({ message: 'Failed to fetch stores by city', error: err.message });
   }
@@ -685,7 +697,7 @@ router.get('/admin/websocket/connections', async (req, res) => {
   }
 });
 
-// New endpoint for explore screen with server-side filtering and caching
+// New endpoint for explore screen with server-side filtering and area-based caching
 router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) => {
   try {
     console.time('exploreCategoriesQueryTime');
@@ -693,14 +705,43 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     const dbAdmin = req.app.db['shoofi'];
     const location = req.query.location ? JSON.parse(req.query.location) : null;
     
+
+
+
     // Check cache first (with shorter TTL due to store status changes)
-    const cacheKey = `explore_categories_${location ? `${location.lat}_${location.lng}` : 'default'}`;
+    // Use area-based caching: if location is in a delivery area, cache by area ID
+    // This ensures all users in the same area get the same cached results
+    let cacheKey = 'explore_categories_default';
+    let area = null;
+    
+    if (location && (location.lat || location.coordinates?.[1]) && (location.lng || location.coordinates?.[0])) {
+      const deliveryDB = req.app.db['delivery-company'];
+      
+      // Find the area containing the location
+      area = await deliveryDB.areas.findOne({
+        geometry: {
+          $geoIntersects: {
+            $geometry: { type: "Point", coordinates: [location.lng || location.coordinates?.[0], location.lat || location.coordinates?.[1]] }
+          }
+        }
+      });
+      
+      console.log(`Area lookup for location (${location.lat || location.coordinates?.[1]}, ${location.lng || location.coordinates?.[0]}): ${area ? area.name : 'no area found'}`);
+      
+      if (area) {
+        cacheKey = `explore_categories_area_${area._id}`;
+      } else {
+        cacheKey = `explore_categories_no_area_${location.lat || location.coordinates?.[1]}_${location.lng || location.coordinates?.[0]}`;
+      }
+    }
+    
     const cachedData = await getExploreCache(cacheKey);
-    // if (cachedData) {
-    //   console.timeEnd('exploreCategoriesQueryTime');
-    //   console.log('Explore categories served from cache');
-    //   return res.status(200).json(cachedData);
-    // }
+    console.log(`Cache lookup for key: ${cacheKey}, found: ${cachedData ? 'yes' : 'no'}`);
+    if (cachedData) {
+      console.timeEnd('exploreCategoriesQueryTime');
+      console.log('Explore categories served from cache');
+      return res.status(200).json(cachedData);
+    }
 
     // If location is provided, use the same logic as available-stores endpoint
     if (location && (location.lat || location.coordinates?.[1]) && (location.lng || location.coordinates?.[0])) {
@@ -756,7 +797,7 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
       console.timeEnd('exploreCategoriesQueryTime');
-      console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores`);
+      console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
 
       res.status(200).json(categoriesWithStores);
       return;
@@ -824,7 +865,7 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
     console.timeEnd('exploreCategoriesQueryTime');
-    console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${validStores.length} stores`);
+    console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${validStores.length} stores for area: ${area ? area.name : 'default'}`);
 
     res.status(200).json(categoriesWithStores);
 
@@ -839,14 +880,19 @@ const exploreCache = new Map();
 
 async function getExploreCache(key) {
   const entry = exploreCache.get(key);
-  if (!entry) return null;
+  if (!entry) {
+    console.log(`Cache miss for key: ${key}`);
+    return null;
+  }
   
   // Check if cache is expired
   if (Date.now() - entry.timestamp > entry.ttl) {
+    console.log(`Cache expired for key: ${key}`);
     exploreCache.delete(key);
     return null;
   }
   
+  console.log(`Cache hit for key: ${key}, age: ${Date.now() - entry.timestamp}ms`);
   return entry.data;
 }
 
@@ -857,12 +903,15 @@ async function setExploreCache(key, data, ttl = 5 * 60 * 1000) {
     ttl
   });
   
+  console.log(`Cache set for key: ${key}, size: ${data.length}, ttl: ${ttl}ms`);
+  
   // Clean up old entries (keep only last 100 entries)
   if (exploreCache.size > 100) {
     const entries = Array.from(exploreCache.entries());
     entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
     const toDelete = entries.slice(0, entries.length - 100);
     toDelete.forEach(([key]) => exploreCache.delete(key));
+    console.log(`Cache cleanup: removed ${toDelete.length} old entries`);
   }
 }
 
@@ -884,14 +933,53 @@ router.get("/api/shoofiAdmin/explore/cache-stats", async (req, res) => {
       size: exploreCache.size,
       entries: Array.from(exploreCache.entries()).map(([key, entry]) => ({
         key,
+        cacheType: key.startsWith('explore_categories_area_') ? 'area-based' : 
+                   key.startsWith('explore_categories_no_area_') ? 'location-based' : 'default',
         age: Date.now() - entry.timestamp,
-        ttl: entry.ttl
+        ttl: entry.ttl,
+        dataSize: entry.data ? entry.data.length : 0
       }))
     };
     res.status(200).json(stats);
   } catch (error) {
     console.error('Error getting explore cache stats:', error);
     res.status(500).json({ error: 'Failed to get explore cache stats' });
+  }
+});
+
+// Debug endpoint to test area lookup
+router.post("/api/shoofiAdmin/explore/debug-area", async (req, res) => {
+  try {
+    const { location } = req.body;
+    if (!location || (location.lat === undefined && location.coordinates === undefined)) {
+      return res.status(400).json({ error: 'Location is required' });
+    }
+
+    const deliveryDB = req.app.db['delivery-company'];
+    const lat = location.lat || location.coordinates?.[1];
+    const lng = location.lng || location.coordinates?.[0];
+
+    const area = await deliveryDB.areas.findOne({
+      geometry: {
+        $geoIntersects: {
+          $geometry: { type: "Point", coordinates: [lng, lat] }
+        }
+      }
+    });
+
+    const cacheKey = area ? `explore_categories_area_${area._id}` : `explore_categories_no_area_${lat}_${lng}`;
+    const cachedData = await getExploreCache(cacheKey);
+
+    res.status(200).json({
+      location: { lat, lng },
+      area: area ? { id: area._id, name: area.name } : null,
+      cacheKey,
+      hasCachedData: !!cachedData,
+      cacheSize: exploreCache.size
+    });
+  } catch (error) {
+    console.error('Error in debug area endpoint:', error);
+    res.status(500).json({ error: 'Failed to debug area lookup' });
   }
 });
 
