@@ -81,7 +81,7 @@ const generateUniqueOrderId = () => {
   return orderid.generate();
 };
 // Helper function to process credit card payment
-const processCreditCardPayment = async (paymentData, orderDoc, req) => {
+const processCreditCardPayment = async (paymentData, orderDoc, req, customerName) => {
   const shoofiDB = req.app.db["shoofi"];
   const shoofiStoreData = await shoofiDB.store.findOne({ id: 1 });
 
@@ -104,7 +104,7 @@ const processCreditCardPayment = async (paymentData, orderDoc, req) => {
     CustomerEmail: paymentData.email || "shoofi.dev@gmail.com",
     ZCreditInvoiceReceipt: {
       Type: "0",
-      RecepientName: `${paymentData.userName} - ${paymentData.phone}`,
+      RecepientName: customerName,
       RecepientCompanyID: "",
       Address: "",
       City: "",
@@ -1215,7 +1215,8 @@ router.post(
                 const paymentResult = await processCreditCardPayment(
                   parsedBodey.paymentData,
                   orderDoc,
-                  req
+                  req,
+                  customer?.fullName
                 );
       
                 if (paymentResult.success) {
@@ -1318,7 +1319,7 @@ router.post(
                   });
                   
                   // Payment failed - keep order in pending status
-                  res.status(200).json({
+                  res.status(400).json({
                     message: "Order created but payment failed",
                     orderId,
                     paymentStatus: "failed",
@@ -1348,7 +1349,7 @@ router.post(
                 });
                 
                 // Keep order in pending status if payment processing fails
-                res.status(200).json({
+                res.status(400).json({
                   message: "Order created but payment processing failed",
                   orderId,
                   paymentStatus: "error",

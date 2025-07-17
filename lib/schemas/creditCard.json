@@ -29,6 +29,10 @@
       "isActive": {
         "type": "boolean",
         "description": "Whether the card is active"
+      },
+      "cvv": {
+        "type": "string",
+        "description": "CVV of the credit card"
       }
     },
     "required": ["customerId", "ccToken", "last4Digits", "ccType", "holderName"],

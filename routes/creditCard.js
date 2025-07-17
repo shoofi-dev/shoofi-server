@@ -36,6 +36,7 @@ router.post('/api/credit-cards', auth.required, async (req, res) => {
       ccToken: req.body.ccToken,
       last4Digits: req.body.last4Digits,
       ccType: req.body.ccType,
+      cvv: req.body.cvv,
       holderName: req.body.holderName,
       isDefault: req.body.isDefault || false,
       isActive: true,
