@@ -1062,11 +1062,7 @@ router.post(
           orderCreationLocks.delete(customerId);
         }
         console.log(`Duplicate order prevented - customer ${customerId} has ${recentOrders.length} recent order(s)`);
-        return res.status(409).json({ 
-          err: "Duplicate order detected. Please check your recent orders.",
-          code: "DUPLICATE_ORDER",
-          recentOrderId: recentOrders[0].orderId
-        });
+ 
       }
     } catch (dbError) {
       console.error('Database error during duplicate check:', dbError);
@@ -2723,5 +2719,278 @@ router.get("/api/order/customer-active-orders", auth.required, async (req, res) 
     res.status(400).json({ message: "Failed to get customer active orders" });
   }
 });
+
+// Generate invoice image endpoint
+router.post("/api/order/generate-invoice-image", auth.required, async (req, res) => {
+  try {
+    const { orderId, appName } = req.body;
+    
+    if (!orderId || !appName) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "orderId and appName are required" 
+      });
+    }
+
+    const db = req.app.db['pizza-alshams'];
+    if (!db) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Database not found for appName" 
+      });
+    }
+
+    // Get the order
+    const order = await db.orders.findOne({ orderId: orderId });
+    if (!order) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Order not found" 
+      });
+    }
+
+    // Get customer details
+    const customerDB = getCustomerAppName(req, appName);
+    const customer = await customerDB.customers.findOne({
+      _id: getId(order.customerId),
+    });
+
+    // Get store data
+    const storeData = await db.store.findOne({ id: 1 });
+
+    // Generate invoice HTML
+    const invoiceHTML = generateInvoiceHTML(order, customer, storeData);
+    
+    // Validate HTML content
+    if (!invoiceHTML || invoiceHTML.trim().length === 0) {
+      console.error(`Generated HTML is empty for order ${orderId}`);
+      return res.status(500).json({ 
+        success: false, 
+        message: "Generated HTML is empty" 
+      });
+    }
+    
+    // Debug: Log the HTML content
+    console.log(`Generated HTML for order ${orderId}:`, invoiceHTML.substring(0, 500) + '...');
+    
+    // Convert HTML to image
+    const textToImage = require('text-to-image');
+    const imageBuffer = await textToImage.generate(invoiceHTML, {
+      maxWidth: 820,
+      fontSize: 16,
+      fontFamily: 'Arial',
+      lineHeight: 24,
+      margin: 20,
+      bgColor: 'white',
+      textColor: 'black'
+    });
+
+    // Validate the generated image buffer
+    if (!imageBuffer || imageBuffer.length === 0) {
+      console.error(`Generated image buffer is empty for order ${orderId}, trying fallback`);
+      
+      // Fallback: Generate a simple text-based image
+      try {
+        const fallbackText = `Order: ${orderId}\nCustomer: ${customer?.fullName || order?.name || 'Unknown'}\nTotal: ₪${getOrderTotalPrice(order)}`;
+        const fallbackBuffer = await textToImage.generate(fallbackText, {
+          maxWidth: 400,
+          fontSize: 20,
+          fontFamily: 'Arial',
+          lineHeight: 30,
+          margin: 20,
+          bgColor: 'white',
+          textColor: 'black'
+        });
+        
+        if (fallbackBuffer && fallbackBuffer.length > 0) {
+          console.log(`Generated fallback image for order ${orderId}, buffer size: ${fallbackBuffer.length} bytes`);
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Content-Disposition', `inline; filename="invoice-${orderId}.png"`);
+          res.send(fallbackBuffer);
+          return;
+        }
+      } catch (fallbackError) {
+        console.error(`Fallback image generation also failed for order ${orderId}:`, fallbackError);
+      }
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: "Generated image is empty" 
+      });
+    }
+
+    console.log(`Successfully generated image for order ${orderId}, buffer size: ${imageBuffer.length} bytes`);
+
+    // Set response headers
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `inline; filename="invoice-${orderId}.png"`);
+    
+    // Send the image buffer
+    res.send(imageBuffer);
+
+  } catch (error) {
+    console.error("Error generating invoice image:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to generate invoice image" 
+    });
+  }
+});
+
+// Helper function to get order total price
+function getOrderTotalPrice(order) {
+  return order?.total || 0;
+}
+
+// Helper function to generate invoice HTML
+function generateInvoiceHTML(order, customer, storeData) {
+  const moment = require('moment');
+  const i18n = require('../locales/en.json'); // You might need to adjust this path
+
+  const getShippingPrice = (order) => {
+    return order.shippingPrice - (order.appliedCoupon?.coupon?.type === "free_delivery" ? order.appliedCoupon.discountAmount : 0);
+  };
+
+  const getIconByPaymentMethod = (method) => {
+    switch (method) {
+      case 'CASH': return '💵';
+      case 'CARD': return '💳';
+      default: return '💰';
+    }
+  };
+
+  const getIconByShippingMethod = (method) => {
+    switch (method) {
+      case 'DELIVERY': return '🚚';
+      case 'PICKUP': return '🏪';
+      default: return '📦';
+    }
+  };
+
+  // Generate items HTML
+  const itemsHTML = order.order.items && order.order.items.length > 0 
+    ? order.order.items.map(item => `
+      <div style="margin: 10px 0; padding: 10px; border: 2px solid #000;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;">
+            <span style="font-size: 18px; font-weight: bold;">X${item.qty || 1}</span>
+            <span style="font-size: 18px; margin-left: 10px;">${item.nameAR || item.nameHE || item.name || 'Item'}</span>
+          </div>
+          <div style="font-size: 18px; font-weight: bold;">₪${(item.price || 0) * (item.qty || 1)}</div>
+        </div>
+      </div>
+    `).join('')
+    : '<div style="margin: 10px 0; padding: 10px; border: 2px solid #000; text-align: center;">No items</div>';
+
+  return `
+    <!DOCTYPE html>
+    <html dir="rtl">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { 
+          font-family: Arial, sans-serif; 
+          margin: 0; 
+          padding: 20px; 
+          background: white; 
+          direction: rtl;
+          min-height: 200px;
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .logo { width: 200px; height: 100px; margin: 0 auto; }
+        .customer-info { margin: 20px 0; text-align: center; }
+        .customer-name { font-size: 24px; font-weight: bold; margin: 5px 0; }
+        .customer-phone { font-size: 18px; margin: 5px 0; }
+        .order-details { margin: 20px 0; }
+        .order-row { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          padding: 10px; 
+          border: 2px solid #000; 
+          margin: 5px 0; 
+        }
+        .order-number { font-size: 20px; font-weight: bold; }
+        .time-info { font-size: 18px; }
+        .items-section { margin: 20px 0; }
+        .total-section { 
+          margin: 20px 0; 
+          border-top: 3px solid #000; 
+          padding-top: 10px; 
+        }
+        .total-row { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          padding: 5px 0; 
+          font-size: 20px; 
+          font-weight: bold; 
+        }
+        .note { margin: 10px 0; font-size: 16px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="logo">🏪 ${storeData?.name_ar || storeData?.name_he || 'Store'}</div>
+      </div>
+      
+      <div class="customer-info">
+        <div class="customer-name">${customer?.fullName || order?.name || 'Customer'}</div>
+        <div class="customer-phone">${customer?.phone || order?.phone || 'Phone'}</div>
+      </div>
+      
+      <div class="order-details">
+        <div class="order-row">
+          <span>${getIconByPaymentMethod(order.order?.payment_method || 'UNKNOWN')} ${order.order?.payment_method || 'UNKNOWN'}</span>
+          <span>${getIconByShippingMethod(order.order?.receipt_method || 'UNKNOWN')} ${order.order?.receipt_method || 'UNKNOWN'}</span>
+        </div>
+        
+        <div class="order-row">
+          <span>Order Sent Time:</span>
+          <span>${moment(order.datetime || new Date()).format("HH:mm")}</span>
+        </div>
+        
+        <div class="order-row">
+          <span>Collect Time:</span>
+          <span>${moment(order.orderDate || new Date()).format("HH:mm")}</span>
+        </div>
+        
+        <div class="order-row">
+          <span>Order Number:</span>
+          <span class="order-number">${order.orderId || 'N/A'}</span>
+        </div>
+      </div>
+      
+      <div class="items-section">
+        ${itemsHTML}
+      </div>
+      
+      ${order.note ? `<div class="note"><strong>Note:</strong> ${order.note}</div>` : ''}
+      
+      ${order.order?.receipt_method === 'DELIVERY' ? `
+        <div class="total-row">
+          <span>Order Price:</span>
+          <span>₪${order.orderPrice || 0}</span>
+        </div>
+        <div class="total-row">
+          <span>Delivery Price:</span>
+          <span>₪${getShippingPrice(order)}</span>
+        </div>
+      ` : ''}
+      
+      <div class="total-row">
+        <span>Final Price:</span>
+        <span>₪${getOrderTotalPrice(order)}</span>
+      </div>
+      
+      ${order.order?.locationText ? `
+        <div class="note">
+          <strong>Address:</strong> ${order.order.locationText}
+        </div>
+      ` : ''}
+    </body>
+    </html>
+  `;
+}
 
 module.exports = router;
