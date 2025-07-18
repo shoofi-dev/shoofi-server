@@ -4,6 +4,7 @@ const websocketService = require("../../services/websocket/websocket-service");
 const notificationService = require("../../services/notification/notification-service");
 const { acquireLock, releaseLock } = require("../redis-lock");
 const { getCustomerAppName } = require("../app-name-helper");
+const { ObjectId } = require('mongodb');
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -84,7 +85,7 @@ async function checkOverdueOrders(appDb) {
           orderDate: { $lt: currentTime.format() },
           status: { $in: ["1"] }, // IN_PROGRESS
           isViewd: true, // Only check approved orders
-          isOverdueNotified: { $ne: true } // Only notify once per order
+          // isOverdueNotified: { $ne: true } // Only notify once per order
         }).toArray();
         
         if (overdueOrders.length > 0) {
@@ -93,7 +94,7 @@ async function checkOverdueOrders(appDb) {
           // Get store users to notify
           const storeUsers = await shoofiDb.storeUsers.find({
             appName: appName,
-            isActive: true
+            // isActive: true
           }).toArray();
           
           if (storeUsers.length === 0) {
@@ -107,7 +108,7 @@ async function checkOverdueOrders(appDb) {
               // Get customer details
               const customerDB = getCustomerAppName({ app: { db: appDb } }, appName);
               const customer = await customerDB.customers.findOne({
-                _id: order.customerId
+                _id: ObjectId(order.customerId)
               });
               
               const customerName = customer?.fullName || order?.name || "العميل";

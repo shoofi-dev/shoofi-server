@@ -15,7 +15,7 @@ router.get('/api/credit-cards', auth.required, async (req, res) => {
     const creditCards = await customerDB.creditCards.find({
       customerId: getId(customerId),
       isActive: true
-    }).sort({ isDefault: -1, created: -1 }).toArray();
+    }).sort({ created: -1 }).toArray();
 
     res.status(200).json(creditCards);
   } catch (error) {
