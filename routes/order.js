@@ -1313,6 +1313,14 @@ router.post(
                       total: orderDoc.total
                     }
                   });
+                  await db.orders.updateOne(
+                    { _id: orderId },
+                    {
+                      $set: {
+                        ccPaymentRefData: paymentResult,
+                      },
+                    }
+                  );
                   
                   // Payment failed - keep order in pending status
                   res.status(400).json({
