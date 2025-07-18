@@ -5,6 +5,21 @@ const notificationService = require("../../services/notification/notification-se
 const { acquireLock, releaseLock } = require("../redis-lock");
 const { getCustomerAppName } = require("../app-name-helper");
 
+const getUTCOffset = () => {
+  const israelTimezone = "Asia/Jerusalem";
+
+  // Get the current time in UTC
+  const utcTime = moment.utc();
+
+  // Get the current time in Israel timezone
+  const israelTime = momentTZ.tz(israelTimezone);
+
+  // Get the UTC offset in minutes for Israel
+  const israelOffsetMinutes = israelTime.utcOffset();
+
+  // Convert the offset to hours
+  return israelOffsetMinutes;
+};
 /**
  * Check for orders that have passed their orderDate and send notifications to stores
  * This cron job runs every 5 minutes to check all stores for overdue orders
