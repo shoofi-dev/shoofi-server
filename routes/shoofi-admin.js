@@ -78,7 +78,46 @@ router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
   let storeDoc = req.body.data || req.body;
   const id = storeDoc._id;
   delete storeDoc._id;
+  
+  // Get the current store data to check if status is changing
+  const currentStore = await db.store.findOne({ _id: getId(id) });
+  const isStatusChanging = currentStore && (
+    currentStore.isOpen !== storeDoc.isOpen || 
+    currentStore.isStoreClose !== storeDoc.isStoreClose ||
+    currentStore.isBusy !== storeDoc.isBusy
+  );
+  
+  console.log(`Store update for ${appName}:`, {
+    currentStatus: {
+      isOpen: currentStore?.isOpen,
+      isStoreClose: currentStore?.isStoreClose,
+      isBusy: currentStore?.isBusy
+    },
+    newStatus: {
+      isOpen: storeDoc.isOpen,
+      isStoreClose: storeDoc.isStoreClose,
+      isBusy: storeDoc.isBusy
+    },
+    isStatusChanging
+  });
+  
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
+  
+  // If store status is changing, clear the explore cache
+  if (isStatusChanging) {
+    console.log(`Store status changed for ${appName}, clearing explore cache`);
+    await clearExploreCacheForStore(currentStore);
+    
+    // Send to all customers of this app to refresh their store data
+    websocketService.sendToAppCustomers('shoofi-shopping', {
+      type: 'store_refresh',
+      data: { 
+        action: 'store_updated', 
+        appName: appName,
+        timestamp: Date.now() // Add timestamp for deduplication
+      }
+    });
+  }
   
   // Send to admin users
   websocketService.sendToAppAdmins('shoofi-partner', {
@@ -86,21 +125,13 @@ router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
     data: { action: 'store_updated', appName: appName }
   }, appName);
   
-  // Send to all customers of this app to refresh their store data
-  websocketService.sendToAppCustomers('shoofi-shopping', {
-    type: 'shoofi_store_updated',
-    data: { 
-      action: 'store_updated', 
-      appName: appName 
-    }
-  });
-  
   res.status(200).json({ message: "Successfully saved" });
 });
 
 router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
   try {
-    const { lat, lng } = req.body.location;
+    const lat = req.body.location.lat || req.body.location[1];
+    const lng = req.body.location.lng || req.body.location[0];
     if (!lat || !lng) {
       return res.status(400).json({ message: 'lat and lng are required' });
     }
@@ -700,7 +731,6 @@ router.get('/admin/websocket/connections', async (req, res) => {
 // New endpoint for explore screen with server-side filtering and area-based caching
 router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) => {
   try {
-    console.time('exploreCategoriesQueryTime');
     
     const dbAdmin = req.app.db['shoofi'];
     const location = req.query.location ? JSON.parse(req.query.location) : null;
@@ -738,7 +768,6 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     const cachedData = await getExploreCache(cacheKey);
     console.log(`Cache lookup for key: ${cacheKey}, found: ${cachedData ? 'yes' : 'no'}`);
     if (cachedData) {
-      console.timeEnd('exploreCategoriesQueryTime');
       console.log('Explore categories served from cache');
       return res.status(200).json(cachedData);
     }
@@ -796,7 +825,6 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       // Cache the result (shorter TTL for store status changes)
       await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
-      console.timeEnd('exploreCategoriesQueryTime');
       console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
 
       res.status(200).json(categoriesWithStores);
@@ -864,7 +892,6 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     // Cache the result (shorter TTL for store status changes)
     await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
-    console.timeEnd('exploreCategoriesQueryTime');
     console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${validStores.length} stores for area: ${area ? area.name : 'default'}`);
 
     res.status(200).json(categoriesWithStores);
@@ -875,45 +902,16 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
   }
 });
 
-// Cache management functions
-const exploreCache = new Map();
-
-async function getExploreCache(key) {
-  const entry = exploreCache.get(key);
-  if (!entry) {
-    console.log(`Cache miss for key: ${key}`);
-    return null;
-  }
-  
-  // Check if cache is expired
-  if (Date.now() - entry.timestamp > entry.ttl) {
-    console.log(`Cache expired for key: ${key}`);
-    exploreCache.delete(key);
-    return null;
-  }
-  
-  console.log(`Cache hit for key: ${key}, age: ${Date.now() - entry.timestamp}ms`);
-  return entry.data;
-}
-
-async function setExploreCache(key, data, ttl = 5 * 60 * 1000) {
-  exploreCache.set(key, {
-    data,
-    timestamp: Date.now(),
-    ttl
-  });
-  
-  console.log(`Cache set for key: ${key}, size: ${data.length}, ttl: ${ttl}ms`);
-  
-  // Clean up old entries (keep only last 100 entries)
-  if (exploreCache.size > 100) {
-    const entries = Array.from(exploreCache.entries());
-    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-    const toDelete = entries.slice(0, entries.length - 100);
-    toDelete.forEach(([key]) => exploreCache.delete(key));
-    console.log(`Cache cleanup: removed ${toDelete.length} old entries`);
-  }
-}
+// Import shared cache utility
+const {
+  getExploreCache,
+  setExploreCache,
+  clearExploreCache,
+  clearExploreCacheForArea,
+  clearExploreCacheForLocation,
+  clearExploreCacheForStore,
+  getCacheStats
+} = require('../utils/explore-cache');
 
 // Endpoint to clear explore cache
 router.post("/api/shoofiAdmin/explore/clear-cache", async (req, res) => {
@@ -929,17 +927,7 @@ router.post("/api/shoofiAdmin/explore/clear-cache", async (req, res) => {
 // Endpoint to get explore cache stats
 router.get("/api/shoofiAdmin/explore/cache-stats", async (req, res) => {
   try {
-    const stats = {
-      size: exploreCache.size,
-      entries: Array.from(exploreCache.entries()).map(([key, entry]) => ({
-        key,
-        cacheType: key.startsWith('explore_categories_area_') ? 'area-based' : 
-                   key.startsWith('explore_categories_no_area_') ? 'location-based' : 'default',
-        age: Date.now() - entry.timestamp,
-        ttl: entry.ttl,
-        dataSize: entry.data ? entry.data.length : 0
-      }))
-    };
+    const stats = getCacheStats();
     res.status(200).json(stats);
   } catch (error) {
     console.error('Error getting explore cache stats:', error);
@@ -969,13 +957,14 @@ router.post("/api/shoofiAdmin/explore/debug-area", async (req, res) => {
 
     const cacheKey = area ? `explore_categories_area_${area._id}` : `explore_categories_no_area_${lat}_${lng}`;
     const cachedData = await getExploreCache(cacheKey);
+    const stats = getCacheStats();
 
     res.status(200).json({
       location: { lat, lng },
       area: area ? { id: area._id, name: area.name } : null,
       cacheKey,
       hasCachedData: !!cachedData,
-      cacheSize: exploreCache.size
+      cacheSize: stats.size
     });
   } catch (error) {
     console.error('Error in debug area endpoint:', error);

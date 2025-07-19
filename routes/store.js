@@ -123,7 +123,47 @@ router.post("/api/store/update", async (req, res, next) => {
   let storeDoc = req.body.data || req.body;
   const id = storeDoc._id;
   delete storeDoc._id;
+  
+  // Get the current store data to check if status is changing
+  const currentStore = await db.store.findOne({ _id: getId(id) });
+  const isStatusChanging = currentStore && (
+    currentStore.isOpen !== storeDoc.isOpen || 
+    currentStore.isStoreClose !== storeDoc.isStoreClose ||
+    currentStore.isBusy !== storeDoc.isBusy
+  );
+  
+  console.log(`Store update for ${appName}:`, {
+    currentStatus: {
+      isOpen: currentStore?.isOpen,
+      isStoreClose: currentStore?.isStoreClose,
+      isBusy: currentStore?.isBusy
+    },
+    newStatus: {
+      isOpen: storeDoc.isOpen,
+      isStoreClose: storeDoc.isStoreClose,
+      isBusy: storeDoc.isBusy
+    },
+    isStatusChanging
+  });
+  
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
+  
+  // If store status is changing, clear the explore cache
+  if (isStatusChanging) {
+    console.log(`Store status changed for ${appName}, clearing explore cache`);
+    const { clearExploreCacheForStore } = require('../utils/explore-cache');
+    await clearExploreCacheForStore(currentStore);
+    
+    // Send to all customers of this app to refresh their store data
+    websocketService.sendToAppCustomers('shoofi-shopping', {
+      type: 'store_refresh',
+      data: { 
+        action: 'store_updated', 
+        appName: appName,
+        timestamp: Date.now() // Add timestamp for deduplication
+      }
+    });
+  }
   
   // Send to admin users
   websocketService.sendToAppAdmins('shoofi-partner', {

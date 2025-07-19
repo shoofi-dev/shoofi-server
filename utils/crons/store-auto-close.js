@@ -71,6 +71,10 @@ async function autoCloseStores(appDb) {
             { $set: { isOpen: false } }
           );
           
+          // Clear explore cache for this store
+          const { clearExploreCacheForStore } = require('../explore-cache');
+          await clearExploreCacheForStore(storeData);
+          
           // Send websocket notifications
           // Notify admin users
           websocketService.sendToAppAdmins('shoofi-partner', {
