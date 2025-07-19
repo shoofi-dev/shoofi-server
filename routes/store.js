@@ -129,19 +129,25 @@ router.post("/api/store/update", async (req, res, next) => {
   const isStatusChanging = currentStore && (
     currentStore.isOpen !== storeDoc.isOpen || 
     currentStore.isStoreClose !== storeDoc.isStoreClose ||
-    currentStore.isBusy !== storeDoc.isBusy
+    currentStore.isBusy !== storeDoc.isBusy ||
+    currentStore.business_visible !== storeDoc.business_visible ||
+    currentStore.isCoomingSoon !== storeDoc.isCoomingSoon
   );
   
   console.log(`Store update for ${appName}:`, {
     currentStatus: {
       isOpen: currentStore?.isOpen,
       isStoreClose: currentStore?.isStoreClose,
-      isBusy: currentStore?.isBusy
+      isBusy: currentStore?.isBusy,
+      business_visible: currentStore?.business_visible,
+      isCoomingSoon: currentStore?.isCoomingSoon
     },
     newStatus: {
       isOpen: storeDoc.isOpen,
       isStoreClose: storeDoc.isStoreClose,
-      isBusy: storeDoc.isBusy
+      isBusy: storeDoc.isBusy,
+      business_visible: storeDoc.business_visible,
+      isCoomingSoon: storeDoc.isCoomingSoon
     },
     isStatusChanging
   });

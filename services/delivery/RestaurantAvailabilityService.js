@@ -66,7 +66,8 @@ class RestaurantAvailabilityService {
 
     // Find stores in nearby cities
     const availableStores = await shoofiDB.stores.find({
-      supportedCities: { $in: nearbyCityIds }
+      supportedCities: { $in: nearbyCityIds },
+      business_visible: true
     }).toArray();
 
     console.log(`Found ${availableStores.length} stores in nearby cities`);
@@ -100,6 +101,7 @@ class RestaurantAvailabilityService {
             const storeStatus = storeService.isStoreOpenNow(storeData.openHours);
             isOpen = storeStatus.isOpen && !storeData.isStoreClose;
             isBusy = storeData.isBusy;
+            
           }
         }
       } catch (error) {

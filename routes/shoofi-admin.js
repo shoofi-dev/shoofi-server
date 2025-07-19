@@ -87,19 +87,6 @@ router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
     currentStore.isBusy !== storeDoc.isBusy
   );
   
-  console.log(`Store update for ${appName}:`, {
-    currentStatus: {
-      isOpen: currentStore?.isOpen,
-      isStoreClose: currentStore?.isStoreClose,
-      isBusy: currentStore?.isBusy
-    },
-    newStatus: {
-      isOpen: storeDoc.isOpen,
-      isStoreClose: storeDoc.isStoreClose,
-      isBusy: storeDoc.isBusy
-    },
-    isStatusChanging
-  });
   
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
   
