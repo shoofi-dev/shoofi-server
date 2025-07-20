@@ -131,26 +131,11 @@ router.post("/api/store/update", async (req, res, next) => {
     currentStore.isStoreClose !== storeDoc.isStoreClose ||
     currentStore.isBusy !== storeDoc.isBusy ||
     currentStore.business_visible !== storeDoc.business_visible ||
-    currentStore.isCoomingSoon !== storeDoc.isCoomingSoon
+    currentStore.isCoomingSoon !== storeDoc.isCoomingSoon ||
+    JSON.stringify(currentStore.openHours) !== JSON.stringify(storeDoc.openHours)
   );
   
-  console.log(`Store update for ${appName}:`, {
-    currentStatus: {
-      isOpen: currentStore?.isOpen,
-      isStoreClose: currentStore?.isStoreClose,
-      isBusy: currentStore?.isBusy,
-      business_visible: currentStore?.business_visible,
-      isCoomingSoon: currentStore?.isCoomingSoon
-    },
-    newStatus: {
-      isOpen: storeDoc.isOpen,
-      isStoreClose: storeDoc.isStoreClose,
-      isBusy: storeDoc.isBusy,
-      business_visible: storeDoc.business_visible,
-      isCoomingSoon: storeDoc.isCoomingSoon
-    },
-    isStatusChanging
-  });
+
   
   await db.store.updateOne({ _id: getId(id) }, { $set: storeDoc }, {});
   

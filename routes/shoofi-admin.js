@@ -84,7 +84,10 @@ router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
   const isStatusChanging = currentStore && (
     currentStore.isOpen !== storeDoc.isOpen || 
     currentStore.isStoreClose !== storeDoc.isStoreClose ||
-    currentStore.isBusy !== storeDoc.isBusy
+    currentStore.isBusy !== storeDoc.isBusy ||
+    currentStore.business_visible !== storeDoc.business_visible ||
+    currentStore.isCoomingSoon !== storeDoc.isCoomingSoon ||
+    JSON.stringify(currentStore.openHours) !== JSON.stringify(storeDoc.openHours)
   );
   
   
@@ -722,8 +725,26 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     const dbAdmin = req.app.db['shoofi'];
     const location = req.query.location ? JSON.parse(req.query.location) : null;
     
+    // Require location parameter
+    if (!location || (location.lat === undefined && location.coordinates === undefined)) {
+      return res.status(400).json({ 
+        error: 'Location is required', 
+        message: 'Please provide location coordinates to fetch available stores' 
+      });
+    }
 
-
+    // Validate location coordinates
+    const lat = location.lat || location.coordinates?.[1];
+    const lng = location.lng || location.coordinates?.[0];
+    
+    if (typeof lat !== 'number' || typeof lng !== 'number' || 
+        isNaN(lat) || isNaN(lng) || 
+        lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ 
+        error: 'Invalid location coordinates', 
+        message: 'Please provide valid latitude and longitude coordinates' 
+      });
+    }
 
     // Check cache first (with shorter TTL due to store status changes)
     // Use area-based caching: if location is in a delivery area, cache by area ID
@@ -731,25 +752,23 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     let cacheKey = 'explore_categories_default';
     let area = null;
     
-    if (location && (location.lat || location.coordinates?.[1]) && (location.lng || location.coordinates?.[0])) {
-      const deliveryDB = req.app.db['delivery-company'];
-      
-      // Find the area containing the location
-      area = await deliveryDB.areas.findOne({
-        geometry: {
-          $geoIntersects: {
-            $geometry: { type: "Point", coordinates: [location.lng || location.coordinates?.[0], location.lat || location.coordinates?.[1]] }
-          }
+    const deliveryDB = req.app.db['delivery-company'];
+    
+    // Find the area containing the location
+    area = await deliveryDB.areas.findOne({
+      geometry: {
+        $geoIntersects: {
+          $geometry: { type: "Point", coordinates: [lng, lat] }
         }
-      });
-      
-      console.log(`Area lookup for location (${location.lat || location.coordinates?.[1]}, ${location.lng || location.coordinates?.[0]}): ${area ? area.name : 'no area found'}`);
-      
-      if (area) {
-        cacheKey = `explore_categories_area_${area._id}`;
-      } else {
-        cacheKey = `explore_categories_no_area_${location.lat || location.coordinates?.[1]}_${location.lng || location.coordinates?.[0]}`;
       }
+    });
+    
+    console.log(`Area lookup for location (${lat}, ${lng}): ${area ? area.name : 'no area found'}`);
+    
+    if (area) {
+      cacheKey = `explore_categories_area_${area._id}`;
+    } else {
+      cacheKey = `explore_categories_no_area_${lat}_${lng}`;
     }
     
     const cachedData = await getExploreCache(cacheKey);
@@ -759,102 +778,31 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       return res.status(200).json(cachedData);
     }
 
-    // If location is provided, use the same logic as available-stores endpoint
-    if (location && (location.lat || location.coordinates?.[1]) && (location.lng || location.coordinates?.[0])) {
-      const deliveryDB = req.app.db['delivery-company'];
-      
-      // Get available stores using the same service as available-stores endpoint
-      const availableStoresData = await RestaurantAvailabilityService.getAvailableStores(
-        deliveryDB,
-        dbAdmin,
-        req.app.db,
-        Number(location.lat || location.coordinates?.[1]),
-        Number(location.lng || location.coordinates?.[0])
-      );
-
-      // Extract only the stores (not delivery companies) and filter by open status
-      const availableStores = availableStoresData
-        .map(storeData => ({
-          store: storeData.store,
-          storeData: {
-            ...storeData.store,
-            distance: null // Distance calculation is handled by the service
-          }
-        }));
-
-      // Get all categories
-      const allCategories = await dbAdmin.categories.find().toArray();
-      
-      // Group stores by category
-      const storesByCategory = {};
-      availableStores.forEach((storeData) => {
-        if (storeData.store.categoryIds) {
-          storeData.store.categoryIds.forEach((categoryId) => {
-            const categoryIdStr = categoryId.$oid || categoryId;
-            if (!storesByCategory[categoryIdStr]) {
-              storesByCategory[categoryIdStr] = [];
-            }
-            storesByCategory[categoryIdStr].push(storeData);
-          });
-        }
-      });
-
-      // Create categories with stores data
-      const categoriesWithStores = allCategories
-        .filter(category => storesByCategory[category._id])
-        .map(category => ({
-          category: category,
-          stores: storesByCategory[category._id] || []
-        }))
-        .filter(item => item.stores.length > 0) // Only include categories with stores
-        .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
-
-      // Cache the result (shorter TTL for store status changes)
-      await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
-
-      console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
-
-      res.status(200).json(categoriesWithStores);
-      return;
-    }
-
-    // Fallback: If no location provided, return all stores (original logic)
-    const allCategories = await dbAdmin.categories.find().toArray();
-    const allStores = await dbAdmin.stores.find().toArray();
-    
-    // Get store data for each store (including current open/closed status)
-    const storesWithData = await Promise.all(
-      allStores.map(async (store) => {
-        try {
-          const dbName = store.appName;
-          const db = req.app.db[dbName];
-          if (!db) return null;
-          
-          const storeDataArr = await db.store.find().toArray();
-          const storeData = storeDataArr[0];
-          
-          if (!storeData) return null;
-          
-          return {
-            store: store,
-            storeData: {
-              ...storeData,
-              distance: null
-            }
-          };
-        } catch (error) {
-          console.error(`Error fetching data for store ${store.appName}:`, error);
-          return null;
-        }
-      })
+    // Get available stores using the same service as available-stores endpoint
+    const availableStoresData = await RestaurantAvailabilityService.getAvailableStores(
+      deliveryDB,
+      dbAdmin,
+      req.app.db,
+      lat,
+      lng
     );
 
-    // Filter out null results
-    const validStores = storesWithData.filter(Boolean);
+    // Extract only the stores (not delivery companies) and filter by open status
+    const availableStores = availableStoresData
+      .map(storeData => ({
+        store: storeData.store,
+        storeData: {
+          ...storeData.store,
+          distance: null // Distance calculation is handled by the service
+        }
+      }));
+
+    // Get all categories
+    const allCategories = await dbAdmin.categories.find().toArray();
     
     // Group stores by category
     const storesByCategory = {};
-    validStores.forEach((storeData) => {
+    availableStores.forEach((storeData) => {
       if (storeData.store.categoryIds) {
         storeData.store.categoryIds.forEach((categoryId) => {
           const categoryIdStr = categoryId.$oid || categoryId;
@@ -879,7 +827,7 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     // Cache the result (shorter TTL for store status changes)
     await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
-    console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${validStores.length} stores for area: ${area ? area.name : 'default'}`);
+    console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
 
     res.status(200).json(categoriesWithStores);
 
