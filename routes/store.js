@@ -220,10 +220,12 @@ router.post("/api/store/holiday/delete", async (req, res, next) => {
 
 router.get("/api/store/is-should-update", async (req, res) => {
   const version = req.headers["app-version"];
+  const appType = req.headers["app-type"];
+
   const appName = 'shoofi';
     const db = req.app.db[appName];
   const storeData = await db.store.findOne({ id: 1 });
-  const isValidVersion = compareVersions(version, storeData.minVersion);
+  const isValidVersion = compareVersions(version, storeData.minVersionUpdate[appType]);
   if (!isValidVersion) {
     console.log("YESS");
     res.status(200).json(true);

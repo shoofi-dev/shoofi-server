@@ -155,14 +155,14 @@ router.post("/api/shoofiAdmin/category/list", async (req, res, next) => {
   res.status(200).json(categoryList);
 });
 
-router.get("/api/store/download-app/:appType?", async (req, res) => {
+router.get("/api/store/download-app/:appType?/:linkSource?", async (req, res) => {
   let appN = "";
   if (req.params.appType) {
     appN = req.params.appType;
   } else {
     appN = req.headers["app-name"];
   }
-  const db = req.app.db[appN];
+  const db = req.app.db['shoofi'];
   const stores = await db.store.find().toArray();
   const branch = stores[0];
 
@@ -174,20 +174,23 @@ router.get("/api/store/download-app/:appType?", async (req, res) => {
       created: new Date(),
       ipAddress: req.ip,
       type: "IOS",
-      appType: appN
+      appType: appN,
+      linkSource: req.params?.linkSource
     };
     await db.downloadAppQr.insertOne(data);
-    res.redirect(`itms-apps://itunes.apple.com/app/${branch.appleAppId}`);
+    res.redirect(`itms-apps://itunes.apple.com/app/${branch.appleAppIdDownload[appN]}`);
   } else if (userAgent.includes("Android")) {
     const data = {
       source: "default",
       created: new Date(),
       ipAddress: req.ip,
       type: "ANDROID",
+      appType: appN,
+      linkSource: req.params?.linkSource
     };
     await db.downloadAppQr.insertOne(data);
     res.redirect(
-      `https://play.google.com/store/apps/details?id=${branch.androidAppId}`
+      `https://play.google.com/store/apps/details?id=${branch.androidAppIdDownload[appN]}`
     );
   }
 });
