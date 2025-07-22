@@ -3,7 +3,7 @@ const router = express.Router();
 
 router.get("/api/getTranslations", async (req, res, next) => {
   try {
-    const appName = req.headers['app-name'] || 'shoofi';
+    const appName = req.headers['shoofi'] || 'shoofi';
     const db = req.app.db[appName];
 
     const dbTranslations = await db.translations
