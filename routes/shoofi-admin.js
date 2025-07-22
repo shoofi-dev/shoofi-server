@@ -482,7 +482,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isComingSoon } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -580,10 +580,40 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       phone: phone || store.phone || '',
       address: address || store.address || '',
       ...(location ? { location } : {}),
+      isComingSoon: isComingSoon === 'true',
       updatedAt: new Date()
     };
 
     await dbAdmin.stores.updateOne({ _id: getId(id) }, { $set: updatedStore });
+    
+    // Check if store status is changing
+    const isStatusChanging = store && (
+      store.business_visible !== updatedStore.business_visible ||
+      store.isComingSoon !== updatedStore.isComingSoon
+    );
+    
+    // If store status is changing, send websocket notification to customers
+    if (isStatusChanging) {
+      console.log(`Store status changed for ${appName}, sending websocket notification`);
+      await clearExploreCacheForStore(store);
+
+      // Send to all customers of this app to refresh their store data
+      websocketService.sendToAppCustomers('shoofi-shopping', {
+        type: 'store_refresh',
+        data: { 
+          action: 'store_updated', 
+          appName: appName,
+          timestamp: Date.now() // Add timestamp for deduplication
+        }
+      });
+    }
+    
+    // Send to admin users
+    websocketService.sendToAppAdmins('shoofi-partner', {
+      type: 'shoofi_store_updated',
+      data: { action: 'store_updated', appName: appName }
+    }, appName);
+    
     res.status(200).json(updatedStore);
   } catch (err) {
     res.status(500).json({ message: 'Failed to update store', error: err.message });
