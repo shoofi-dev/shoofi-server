@@ -18,7 +18,7 @@ const createCronRequest = () => ({
  */
 const startPersistentAlertsCron = (db) => {
   // Send reminders every 5 minutes
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('*/1 * * * *', async () => {
     try {
       logger.info('Starting persistent alerts reminder cron job');
       

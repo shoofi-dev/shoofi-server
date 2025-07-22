@@ -2,11 +2,27 @@ const { getId } = require("../lib/common");
 const { getCustomerAppName } = require("./app-name-helper");
 const notificationService = require("../services/notification/notification-service");
 const logger = require("./logger");
+const moment = require("moment");
 
 /**
  * Persistent Alerts System for Store Managers
  * Manages persistent notifications for pending orders until they are approved
  */
+
+const getUTCOffset = () => {
+  const israelTimezone = "Asia/Jerusalem";
+
+  // Get the current time in UTC
+  const utcTime = moment.utc();
+
+  // Get the current time in Israel timezone
+  const israelTime = momentTZ.tz(israelTimezone);
+
+  // Get the UTC offset in minutes for Israel
+  const israelOffsetMinutes = israelTime.utcOffset();
+
+  // Convert the offset to hours
+  re
 
 class PersistentAlertsService {
   /**
@@ -212,8 +228,10 @@ class PersistentAlertsService {
   async sendReminders(db) {
     try {
       const shoofiDB = db["shoofi"];
-      const now = new Date();
-      
+      const offsetHours = getUTCOffset();
+
+      const now = moment().utcOffset(offsetHours);
+
       // Find alerts that need reminders
       const alertsNeedingReminders = await shoofiDB.persistentAlerts.find({
         status: "pending",
@@ -221,7 +239,7 @@ class PersistentAlertsService {
           { lastReminderSent: null },
           {
             lastReminderSent: {
-              $lt: new Date(now.getTime() - 5 * 60 * 1000) // 5 minutes ago
+              $lt: now.subtract(1, 'minutes').toDate() // 1 minute ago
             }
           }
         ],
