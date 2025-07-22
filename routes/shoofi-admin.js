@@ -482,7 +482,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isComingSoon } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isCoomingSoon } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -580,7 +580,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       phone: phone || store.phone || '',
       address: address || store.address || '',
       ...(location ? { location } : {}),
-      isComingSoon: isComingSoon === 'true',
+      isCoomingSoon: isCoomingSoon === 'true',
       updatedAt: new Date()
     };
 
@@ -589,7 +589,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
     // Check if store status is changing
     const isStatusChanging = store && (
       store.business_visible !== updatedStore.business_visible ||
-      store.isComingSoon !== updatedStore.isComingSoon
+      store.isCoomingSoon !== updatedStore.isCoomingSoon
     );
     
     // If store status is changing, send websocket notification to customers
