@@ -3,6 +3,7 @@ const { getCustomerAppName } = require("./app-name-helper");
 const notificationService = require("../services/notification/notification-service");
 const logger = require("./logger");
 const moment = require("moment");
+const momentTZ = require("moment-timezone");
 
 /**
  * Persistent Alerts System for Store Managers
@@ -22,7 +23,8 @@ const getUTCOffset = () => {
   const israelOffsetMinutes = israelTime.utcOffset();
 
   // Convert the offset to hours
-  re
+  return israelOffsetMinutes;
+};
 
 class PersistentAlertsService {
   /**
@@ -337,4 +339,4 @@ class PersistentAlertsService {
   }
 }
 
-module.exports = new PersistentAlertsService(); 
+module.exports = new PersistentAlertsService();
