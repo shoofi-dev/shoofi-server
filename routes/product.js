@@ -319,7 +319,7 @@ router.post(
       isInStore: req.body.isInStore === "false" ? false : true,
       extras: req.body.extras ? JSON.parse(req.body.extras) : [],
       others: req.body.others ? JSON.parse(req.body.others) : [],
-      price: Number(JSON.parse(req.body.price)),
+      price: req.body.price ? Number(JSON.parse(req.body.price)) : 0,
       hasDiscount: req.body.hasDiscount === "true",
       discountQuantity: req.body.hasDiscount === "true" ? Number(req.body.discountQuantity) : 0,
       discountPrice: req.body.hasDiscount === "true" ? Number(req.body.discountPrice) : 0,
