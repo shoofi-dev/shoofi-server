@@ -12,6 +12,16 @@ async function bookDelivery({ deliveryData, appDb }) {
     const db = appDb["delivery-company"];
     const offsetHours = utcTimeService.getUTCOffset();
 
+        // Check for existing booking with the same bookId
+        const existingBooking = await db.bookDelivery.findOne({ bookId: deliveryData.bookId });
+        if (existingBooking) {
+          return {
+            success: false,
+            message: "A booking with this bookId already exists.",
+            bookId: bookingData.bookId,
+          };
+        }
+
     var pickupTime = moment()
       .add(deliveryData.pickupTime, "m")
       .utcOffset(offsetHours)
@@ -82,6 +92,8 @@ async function bookDelivery({ deliveryData, appDb }) {
         appliedCoupon: deliveryData.appliedCoupon || null,
         expectedDeliveryAt: expectedDeliveryAtTemp.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ")
       };
+
+  
 
       // Debug log for delivery booking coupon data
       if (deliveryData.appliedCoupon) {
