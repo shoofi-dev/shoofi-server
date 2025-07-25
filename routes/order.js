@@ -999,9 +999,9 @@ const verifiedAppName = async (req, appName, storeData) => {
   console.log("foundedStore", foundedStore?.appName);
   console.log("appName", appName);
   if (appName !== foundedStore?.appName) {
-    return foundedStore?.appName;
+      console.log("foundedStore?.appName", foundedStore?.appName);
   }
-  return appName;
+  console.log("appName", appName);
 }
 
 router.post(
@@ -1010,8 +1010,9 @@ router.post(
   auth.required,
   async (req, res, next) => {
     const appName = req.headers["app-name"];
+    const appNameReq = req.headers["app-name"];
     const parsedBodey = JSON.parse(req.body.body);
-    // const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
+    verifiedAppName(req,appNameReq, parsedBodey?.storeData);
 
     const db = req.app.db[appName];
     const config = req.app.config;
