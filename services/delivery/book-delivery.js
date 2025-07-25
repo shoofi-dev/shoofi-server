@@ -18,7 +18,7 @@ async function bookDelivery({ deliveryData, appDb }) {
           return {
             success: false,
             message: "A booking with this bookId already exists.",
-            bookId: bookingData.bookId,
+            bookId: existingBooking.bookId,
           };
         }
 
