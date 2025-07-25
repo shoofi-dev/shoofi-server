@@ -599,6 +599,8 @@ router.post("/api/delivery/list", async (req, res) => {
 
     if (isAllWeek) {
       startOfToday.subtract(7, "d");
+    }else{
+      startOfToday.subtract(2, "d");
     }
 
     // Get the end of today in UTC
