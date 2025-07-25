@@ -1000,8 +1000,10 @@ const verifiedAppName = async (req, appName, storeData) => {
   console.log("appName", appName);
   if (appName !== foundedStore?.appName) {
       console.log("foundedStore?.appName", foundedStore?.appName);
+      return foundedStore?.appName;
   }
   console.log("appName", appName);
+  return appName;
 }
 
 router.post(
@@ -1009,12 +1011,12 @@ router.post(
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    const appName = req.headers["app-name"];
+    //const appName = req.headers["app-name"];
     const appNameReq = req.headers["app-name"];
     const parsedBodey = JSON.parse(req.body.body);
-    await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
+    const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
 
-    const db = req.app.db[appName];
+    const db = req.app.db[appName || appNameReq];
     const config = req.app.config;
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
