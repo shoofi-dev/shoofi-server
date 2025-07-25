@@ -1009,9 +1009,9 @@ router.post(
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    const appNameReq = req.headers["app-name"];
+    const appName = req.headers["app-name"];
     const parsedBodey = JSON.parse(req.body.body);
-    const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
+    // const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
 
     const db = req.app.db[appName];
     const config = req.app.config;
