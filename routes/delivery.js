@@ -2053,13 +2053,17 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
-
+    const company = await db.store.findOne({
+      _id: getId(driver.companyId)
+    });
+    console.log("company", company);
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), bookId: bookId },
       {
         $set: {
           driver: driver,
           status: DELIVERY_STATUS.APPROVED,
+          company: company,
         },
       }
     );
