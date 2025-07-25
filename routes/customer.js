@@ -129,6 +129,7 @@ router.post("/api/customer/create", async (req, res) => {
     phone: sanitize(req.body.phone),
     authCode: random4DigitsCode,
     created: new Date(),
+    addresses: [],
   };
 
   // const schemaResult = validateJson("newCustomer", customerObj);
