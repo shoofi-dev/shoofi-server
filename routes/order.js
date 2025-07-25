@@ -1010,9 +1010,9 @@ router.post(
   auth.required,
   async (req, res, next) => {
     const appName = req.headers["app-name"];
-    // const appNameReq = req.headers["app-name"];
+    const appNameReq = req.headers["app-name"];
     const parsedBodey = JSON.parse(req.body.body);
-   // verifiedAppName(req,appNameReq, parsedBodey?.storeData);
+    await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
 
     const db = req.app.db[appName];
     const config = req.app.config;
