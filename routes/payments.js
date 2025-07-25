@@ -3,6 +3,7 @@ const moment = require("moment");
 const router = express.Router();
 const { getId } = require("../lib/common");
 const { ObjectId } = require("mongodb");
+const utcTimeService = require("../utils/utc-time");
 
 // Helper function to get date range
 const getDateRange = (period) => {
@@ -41,7 +42,8 @@ const calculateCommission = (amount, commissionRate = 0.15) => {
 router.post("/api/payments/partner/summary", async (req, res) => {
   const appName = req.headers['app-name'];
   const db = req.app.db[appName];
-  
+  const offsetHours = utcTimeService.getUTCOffset();
+
   try {
     const { partnerId, period = 'month', startDate, endDate } = req.body;
     
@@ -50,12 +52,12 @@ router.post("/api/payments/partner/summary", async (req, res) => {
     }
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { start: moment(startDate).utcOffset(offsetHours).format(), end: moment(endDate).utcOffset(offsetHours).format() }
       : getDateRange(period);
     
     // Get orders for this partner (excluding canceled orders)
     const orders = await db.orders.find({
-      orderStatus: { $ne: "Cancelled" },
+      status: { $in: ["2","3","10","11","12"] },
       orderDate: { $gte: dateRange.start, $lte: dateRange.end }
     }).toArray();
     
@@ -64,23 +66,46 @@ router.post("/api/payments/partner/summary", async (req, res) => {
     const totalRevenue = orders.reduce((sum, order) => sum + (order.orderPrice || 0), 0);
     const totalCommission = calculateCommission(totalRevenue);
     const partnerEarnings = totalRevenue - totalCommission;
+
+    // Calculate revenue by payment method
+    const totalRevenueCreditCard = orders
+      .filter(order => order.order?.payment_method === 'CREDITCARD')
+      .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+    const totalRevenueCash = orders
+      .filter(order => order.order?.payment_method === 'CASH')
+      .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+    const totalRevenueCreditCardCount = orders.filter(order => order.order?.payment_method === 'CREDITCARD').length;
+    const totalRevenueCashCount = orders.filter(order => order.order?.payment_method === 'CASH').length;
+    const totalRevenueCount = orders.length;
     
     // Group by date for charts
     const dailyData = orders.reduce((acc, order) => {
-      const date = moment(order.orderDate).format('YYYY-MM-DD');
+      const date = moment(order.orderDate).utcOffset(offsetHours).format('YYYY-MM-DD');
       if (!acc[date]) {
         acc[date] = {
           date,
           orders: 0,
           revenue: 0,
           commission: 0,
-          earnings: 0
+          earnings: 0,
+          dailyRevenueCreditCard: 0,
+          dailyRevenueCash: 0,
+          dailyCountCreditCard: 0,
+          dailyCountCash: 0
         };
       }
       acc[date].orders += 1;
       acc[date].revenue += (order.orderPrice || 0);
       acc[date].commission += calculateCommission(order.orderPrice || 0);
       acc[date].earnings += (order.orderPrice || 0) - calculateCommission(order.orderPrice || 0);
+      if (order.order?.payment_method === 'CREDITCARD') {
+        acc[date].dailyRevenueCreditCard += (order.orderPrice || 0);
+        acc[date].dailyCountCreditCard += 1;
+      }
+      if (order.order?.payment_method === 'CASH') {
+        acc[date].dailyRevenueCash += (order.orderPrice || 0);
+        acc[date].dailyCountCash += 1;
+      }
       return acc;
     }, {});
     
@@ -94,6 +119,11 @@ router.post("/api/payments/partner/summary", async (req, res) => {
         totalRevenue,
         totalCommission,
         partnerEarnings,
+        totalRevenueCreditCard,
+        totalRevenueCash,
+        totalRevenueCount,
+        totalRevenueCreditCardCount,
+        totalRevenueCashCount,
         period: period,
         dateRange: {
           start: dateRange.start,
@@ -129,7 +159,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
     
     // Get orders with pagination
     const orders = await db.orders.find({
-      orderStatus: { $ne: "Cancelled" },
+      status: { $in: ["2","3","10","11","12"] },
       "orderProducts.storeId": partnerId,
       orderDate: { $gte: dateRange.start, $lte: dateRange.end }
     })
@@ -140,7 +170,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
     
     // Get total count for pagination
     const totalOrders = await db.orders.countDocuments({
-      orderStatus: { $ne: "Cancelled" },
+      status: { $in: ["2","3","10","11","12"] },
       "orderProducts.storeId": partnerId,
       orderDate: { $gte: dateRange.start, $lte: dateRange.end }
     });
@@ -154,7 +184,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
         ...order,
         commission,
         earnings,
-        paymentStatus: order.orderStatus === 'Paid' ? 'paid' : 'pending'
+        paymentStatus: order.status === 'Paid' ? 'paid' : 'pending'
       };
     });
     
@@ -372,7 +402,7 @@ router.post("/api/payments/admin/overview", async (req, res) => {
       if (collectionNames.includes('orders')) {
         // This is an order app (like shoofi-app)
         const ordersQuery = {
-          orderStatus: { $ne: "Cancelled" },
+          status: { $in: ["2","3","10","11","12"] },
           orderDate: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
@@ -451,7 +481,7 @@ router.post("/api/payments/admin/partners", async (req, res) => {
       if (collectionNames.includes('orders')) {
         // Build match condition
         const matchCondition = {
-          orderStatus: { $ne: "Cancelled" },
+          status: { $in: ["2","3","10","11","12"] },
           orderDate: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
@@ -632,7 +662,7 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
       if (collectionNames.includes('orders')) {
         // Build match condition for orders
         const matchCondition = {
-          orderStatus: { $ne: "Cancelled" },
+          status: { $in: ["2","3","10","11","12"] },
           orderDate: { $gte: dateRange.start, $lte: dateRange.end }
         };
         

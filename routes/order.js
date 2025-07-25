@@ -98,7 +98,7 @@ const processCreditCardPayment = async (paymentData, orderDoc, req, customerName
     CardNumber: paymentData.ccToken,
     TransactionSum: orderDoc.total,
     ExtraData: orderDoc.orderId?.toString(),
-    HolderID: paymentData.id?.toString(),
+    HolderID: paymentData?.id || '',
     CVV: paymentData.cvv,
     PhoneNumber: paymentData.phone,
     CustomerEmail: paymentData.email || "shoofi.dev@gmail.com",
@@ -593,7 +593,7 @@ router.get("/api/order/admin/not-viewd", async (req, res, next) => {
   const orders = await db.orders
     .find({
       isViewd: false,
-      status: "1",
+      status: "6",
     })
     .toArray();
   const finalOrders = [];

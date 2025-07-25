@@ -2058,7 +2058,7 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
       { _id: getId(orderId), bookId: bookId },
       {
         $set: {
-          driver: { _id: driver._id, name: driver.name, phone: driver.phone },
+          driver: driver,
           status: DELIVERY_STATUS.APPROVED,
         },
       }
