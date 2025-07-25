@@ -991,17 +991,33 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
   }
 });
 
+const verifiedAppName = async (req, appName, storeData) => {
+  const dbShoofi = req.app.db['shoofi'];
+  const storesList = await dbShoofi.stores.find({name_ar: storeData?.name_ar}).toArray();
+  const foundedStore = storesList?.length > 0 ? storesList[0] : null;
+  console.log("storeData?.name_ar", storeData?.name_ar);
+  console.log("foundedStore", foundedStore?.appName);
+  console.log("appName", appName);
+  if (appName !== foundedStore?.appName) {
+    return foundedStore?.appName;
+  }
+  return appName;
+}
+
 router.post(
   "/api/order/create",
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    const appName = req.headers["app-name"];
+    const appNameReq = req.headers["app-name"];
+    const parsedBodey = JSON.parse(req.body.body);
+    const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
+
     const db = req.app.db[appName];
     const config = req.app.config;
-    const parsedBodey = JSON.parse(req.body.body);
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
+
 
     // Prevent order duplication using Redis lock or in-memory fallback
     const orderLockKey = `order_lock:${appName}:${customerId}`;
