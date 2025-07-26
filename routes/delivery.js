@@ -1221,7 +1221,7 @@ router.post(
     try {
       const db = req.app.db["delivery-company"];
       const { companyId } = req.params;
-      const { phone, role, fullName, isActive, userName, isDriver } = req.body;
+      const { phone, role, fullName, isActive, userName, isDriver, maxOrdersByAdmin } = req.body;
       if (!phone || !role || !fullName) {
         return res
           .status(400)
@@ -1237,6 +1237,7 @@ router.post(
         updatedAt: new Date(),
         userName,
         isDriver,
+        maxOrdersByAdmin: maxOrdersByAdmin ? Number(maxOrdersByAdmin) : null,
       };
       const result = await db.customers.insertOne(newEmployee);
       res.status(201).json({ ...newEmployee, _id: result.insertedId });
@@ -1252,7 +1253,7 @@ router.post("/api/delivery/company/employee/update/:id", async (req, res) => {
   try {
     const db = req.app.db["delivery-company"];
     const { id } = req.params;
-    const { phone, role, fullName, isActive } = req.body;
+    const { phone, role, fullName, isActive, maxOrdersByAdmin } = req.body;
     const employee = await db.customers.findOne({ _id: getId(id) });
     if (!employee) {
       return res.status(404).json({ message: "Employee not found" });
@@ -1264,6 +1265,7 @@ router.post("/api/delivery/company/employee/update/:id", async (req, res) => {
       fullName,
       isActive: isActive === "true" || isActive === true,
       updatedAt: new Date(),
+      maxOrdersByAdmin: maxOrdersByAdmin ? Number(maxOrdersByAdmin) : null,
     };
     await db.customers.updateOne({ _id: getId(id) }, { $set: updatedEmployee });
     res.status(200).json(updatedEmployee);
