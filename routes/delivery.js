@@ -2055,10 +2055,13 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
+    
+    // Store the old driver ID before reassignment
+    const oldDriverId = order.driver?._id;
+    
     const company = await db.store.findOne({
       _id: getId(driver.companyId)
     });
-    console.log("company", company);
     await db.bookDelivery.updateOne(
       { _id: getId(orderId), bookId: bookId },
       {
@@ -2069,6 +2072,36 @@ router.post("/api/delivery/admin/reassign", async (req, res) => {
         },
       }
     );
+
+    // Send notification to old driver (if exists)
+    if (oldDriverId) {
+      try {
+        await notificationService.sendNotification({
+          recipientId: oldDriverId,
+          title: "تم إلغاء تعيين الطلب",
+          body: `تم إلغاء تعيينك من الطلب: ${order.orderId} من قبل الإدارة`,
+          type: "order",
+          appName: "delivery-company",
+          appType: "shoofi-shoofir",
+          channels: { websocket: true, push: true, email: false, sms: false },
+          data: {
+            orderId: order._id,
+            bookId: order.bookId,
+            storeName: order.storeName,
+            pickupTime: order.pickupTime,
+            payment_method: order?.order?.payment_method,
+          },
+          req,
+          soundType: 'driver.wav'
+        });
+      } catch (notificationError) {
+        console.error(
+          "Failed to send notification to old driver:",
+          notificationError
+        );
+        // Don't fail the reassignment if notification fails
+      }
+    }
 
     // Send notification to new driver
     try {
