@@ -3,7 +3,7 @@ const router = express.Router();
 const moment = require("moment");
 const { getId } = require("../lib/common");
 const utcTimeService = require("../utils/utc-time");
-
+const { ObjectId } = require("mongodb");
 
 // Orders per restaurant
 router.post("/api/analytics/orders-per-restaurant", async (req, res) => {
@@ -135,14 +135,31 @@ router.post("/api/analytics/customer-orders", async (req, res) => {
 router.post("/api/analytics/deliveries", async (req, res) => {
   const appName = req.headers['app-name'];
   const db = req.app.db[appName];
-  const { storeId, status, startDate, endDate } = req.body;
+  const { storeId, status, startDate, endDate, companyId, driverId, orderId } = req.body;
 
   let match = {};
   if (storeId) {
     match.storeId = getId(storeId);
   }
+  if (companyId) {
+    match["company._id"] = ObjectId(companyId);
+  }
+  if (driverId) {
+    if (Array.isArray(driverId)) {
+      match["driver._id"] = { $in: driverId.map(id => getId(id)) };
+    } else {
+      match["driver._id"] = getId(driverId);
+    }
+  }
   if (status) {
-    match.status = status;
+    match.status = { $in: status };
+  }
+  if (orderId) {
+    // Support both order.orderId and orderId at root
+    match.$or = [
+      { "order.orderId": { $regex: orderId, $options: "i" } },
+      { orderId: { $regex: orderId, $options: "i" } }
+    ];
   }
   if (startDate && endDate) {
 
