@@ -173,8 +173,42 @@ router.post("/api/analytics/deliveries", async (req, res) => {
   }
 
   try {
-    const result = await db.bookDelivery.find(match).toArray();
-    res.status(200).json(result);
+    const deliveries = await db.bookDelivery.find(match).toArray();
+    
+    // Fetch order details for each delivery
+    const deliveriesWithOrders = await Promise.all(
+      deliveries.map(async (delivery) => {
+        try {
+          // Get order details from the delivery record
+          const orderInfo = delivery.order;
+          if (!orderInfo || !orderInfo.orderId || !orderInfo.appName) {
+            return { ...delivery, storeOrder: null };
+          }
+
+          // Get the store database using the order's appName
+          const storeDb = req.app.db[orderInfo.appName];
+          if (!storeDb) {
+            console.warn(`Store database not found for appName: ${orderInfo.appName}`);
+            return { ...delivery, storeOrder: null };
+          }
+
+          // Fetch the order from the store database
+          const storeOrder = await storeDb.orders.findOne({ 
+            orderId: orderInfo.orderId 
+          });
+
+          return {
+            ...delivery,
+            storeOrder: storeOrder || null
+          };
+        } catch (error) {
+          console.error(`Error fetching order for delivery ${delivery._id}:`, error);
+          return { ...delivery, storeOrder: null };
+        }
+      })
+    );
+
+    res.status(200).json(deliveriesWithOrders);
   } catch (ex) {
     res.status(400).json({ message: "Failed to get deliveries", error: ex });
   }
