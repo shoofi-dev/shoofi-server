@@ -325,7 +325,7 @@ router.post("/api/payments/driver/details", async (req, res) => {
     // Get total count for pagination
     const totalDeliveries = await db.bookDelivery.countDocuments({
       "driver._id": driverId,
-      status: '0',
+      status: '4',
       created: { $gte: dateRange.start, $lte: dateRange.end }
     });
     
@@ -380,6 +380,11 @@ router.post("/api/payments/admin/overview", async (req, res) => {
     let totalOrders = 0;
     let totalDeliveries = 0;
     let totalCommission = 0;
+    let totalRevenueCreditCard = 0;
+    let totalRevenueCash = 0;
+    let totalRevenueCreditCardCount = 0;
+    let totalRevenueCashCount = 0;
+    let totalRevenueCount = 0;
     
     // Loop through stores to get app names
     for (const store of storesList) {
@@ -406,17 +411,35 @@ router.post("/api/payments/admin/overview", async (req, res) => {
           orderDate: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
-        
         const orders = await db.orders.find(ordersQuery).toArray();
         
         totalOrders += orders.length;
         const appRevenue = orders.reduce((sum, order) => sum + (order.orderPrice || 0), 0);
         totalRevenue += appRevenue;
         totalCommission += calculateCommission(appRevenue);
-      } else if (collectionNames.includes('bookDelivery')) {
+        
+        // Calculate revenue by payment method for orders
+        const appRevenueCreditCard = orders
+          .filter(order => order.order?.payment_method === 'CREDITCARD')
+          .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+        const appRevenueCash = orders
+          .filter(order => order.order?.payment_method === 'CASH')
+          .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+        const appRevenueCreditCardCount = orders.filter(order => order.order?.payment_method === 'CREDITCARD').length;
+        const appRevenueCashCount = orders.filter(order => order.order?.payment_method === 'CASH').length;
+        
+        totalRevenueCreditCard += appRevenueCreditCard;
+        totalRevenueCash += appRevenueCash;
+        totalRevenueCreditCardCount += appRevenueCreditCardCount;
+        totalRevenueCashCount += appRevenueCashCount;
+        totalRevenueCount += orders.length;
+      }
         // This is a delivery app (like delivery-company)
-        const deliveries = await db.bookDelivery.find({
-          status: '0', // Completed deliveries
+        const deliveryDb = req.app.db['delivery-company'];
+
+        const deliveries = await deliveryDb.bookDelivery.find({
+          status: '4', // Completed deliveries
+          appName: appName,
           created: { $gte: dateRange.start, $lte: dateRange.end }
         }).toArray();
         
@@ -424,9 +447,25 @@ router.post("/api/payments/admin/overview", async (req, res) => {
         const deliveryFees = deliveries.reduce((sum, delivery) => 
           sum + (delivery.price || 0), 0
         );
-        totalRevenue += deliveryFees;
+        // totalRevenue += deliveryFees;
         totalCommission += calculateCommission(deliveryFees, 0.20);
-      }
+        
+        // For deliveries, we typically don't have payment method split as they're usually cash on delivery
+        // But we can add it if the delivery data has payment method information
+        const deliveryRevenueCreditCard = deliveries
+          .filter(delivery => delivery.paymentMethod === 'CREDITCARD')
+          .reduce((sum, delivery) => sum + (delivery.price || 0), 0);
+        const deliveryRevenueCash = deliveries
+          .filter(delivery => delivery.paymentMethod === 'CASH')
+          .reduce((sum, delivery) => sum + (delivery.price || 0), 0);
+        const deliveryRevenueCreditCardCount = deliveries.filter(delivery => delivery.paymentMethod === 'CREDITCARD').length;
+        const deliveryRevenueCashCount = deliveries.filter(delivery => delivery.paymentMethod === 'CASH').length;
+        
+        totalRevenueCreditCard += deliveryRevenueCreditCard;
+        totalRevenueCash += deliveryRevenueCash;
+        totalRevenueCreditCardCount += deliveryRevenueCreditCardCount;
+        totalRevenueCashCount += deliveryRevenueCashCount;
+        totalRevenueCount += deliveries.length;
     }
     
     res.status(200).json({
@@ -436,6 +475,11 @@ router.post("/api/payments/admin/overview", async (req, res) => {
         totalDeliveries,
         totalCommission,
         netRevenue: totalRevenue - totalCommission,
+        totalRevenueCreditCard,
+        totalRevenueCash,
+        totalRevenueCount,
+        totalRevenueCreditCardCount,
+        totalRevenueCashCount,
         period: period,
         dateRange: {
           start: dateRange.start,
