@@ -43,13 +43,18 @@ async function findAllMatchingDrivers({ appDb, location }) {
   // Filter out drivers that have reached their maxOrdersByAdmin limit
   const availableDrivers = driverOrderCounts?.filter(driver => {
     const maxOrders = driver?.maxOrdersByAdmin !== undefined ? driver?.maxOrdersByAdmin : 10000; // Default to Infinity if not set
-    return driver.activeOrderCount <= maxOrders;
+    return driver?.activeOrderCount <= maxOrders;
   });
+  
+  if(!availableDrivers.length){
+    driverOrderCounts.sort((a, b) => a.activeOrderCount - b.activeOrderCount);
+    console.log("driverOrderCounts", driverOrderCounts);
+    return driverOrderCounts
+  };   
+
+  availableDrivers.sort((a, b) => a.activeOrderCount - b.activeOrderCount);
   console.log("availableDrivers", availableDrivers);
-
-  driverOrderCounts.sort((a, b) => a.activeOrderCount - b.activeOrderCount);
-
-  return driverOrderCounts;
+  return availableDrivers;
 }
 
 async function assignBestDeliveryDriver({ appDb, location }) {
