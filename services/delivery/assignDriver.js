@@ -46,9 +46,10 @@ async function findAllMatchingDrivers({ appDb, location }) {
     return driver.activeOrderCount <= maxOrders;
   });
   console.log("availableDrivers", availableDrivers);
-  availableDrivers.sort((a, b) => a.activeOrderCount - b.activeOrderCount);
 
-  return availableDrivers;
+  driverOrderCounts.sort((a, b) => a.activeOrderCount - b.activeOrderCount);
+
+  return driverOrderCounts;
 }
 
 async function assignBestDeliveryDriver({ appDb, location }) {
