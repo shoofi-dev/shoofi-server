@@ -1489,7 +1489,10 @@ router.get("/api/delivery/order/:id", async (req, res) => {
   const db = req.app.db[appName];
   try {
     const { id } = req.params;
-    const order = await db.bookDelivery.findOne({ _id: getId(id) });
+    const order = await db.bookDelivery.findOne({   $or: [
+      { bookId: id },
+      { _id: getId(id) }
+    ] });
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
@@ -2325,6 +2328,43 @@ router.get("/api/delivery/book/:bookId", async (req, res) => {
     return res
       .status(400)
       .json({ message: "Error getting delivery by bookId" });
+  }
+});
+
+
+
+// Get multiple deliveries by orderIds
+router.post("/api/delivery/orders/batch", async (req, res) => {
+  const appName = "delivery-company";
+  const db = req.app.db[appName];
+  try {
+    const { orderIds } = req.body;
+    
+    if (!orderIds || !Array.isArray(orderIds)) {
+      return res.status(400).json({ message: "orderIds array is required" });
+    }
+    
+    // Find all delivery orders where bookId matches any of the orderIds
+    const deliveries = await db.bookDelivery.find({ 
+      bookId: { $in: orderIds } 
+    }).toArray();
+    
+    // Create a map for easy lookup
+    const deliveryMap = {};
+    deliveries.forEach(delivery => {
+      deliveryMap[delivery.bookId] = delivery;
+    });
+    
+    res.status(200).json({
+      deliveries: deliveryMap,
+      found: deliveries.length,
+      requested: orderIds.length
+    });
+  } catch (ex) {
+    console.info("Error getting batch deliveries by orderIds", ex);
+    return res
+      .status(400)
+      .json({ message: "Error getting batch deliveries by orderIds" });
   }
 });
 
