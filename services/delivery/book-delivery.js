@@ -78,23 +78,6 @@ async function bookDelivery({ deliveryData, appDb }) {
         date: now.date(),
       });
 
-      try {
-      let expectedDeliveryAtTemp2 = moment()
-      .utcOffset(offsetHours)
-      .set({
-        hour: parseInt(pickupTime.split(':')[0]),
-        minute: parseInt(pickupTime.split(':')[1]),
-        second: 0,
-        millisecond: 0
-      })
-      .add(parseInt(result.area?.maxETA), 'minutes').utcOffset(offsetHours, true); // Add maxETA minutes
-      console.log("expectedDeliveryAtTemp2", expectedDeliveryAtTemp2);
-      console.log("expectedDeliveryAtTemp", expectedDeliveryAtTemp);
-      console.log("expectedDeliveryAt2",  expectedDeliveryAtTemp2?.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ"))
-      console.log("expectedDeliveryAt",  expectedDeliveryAtTemp?.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ"))
-      } catch (error) {
-        console.log("error expectedDeliveryAtTemp2", error);
-      }
       
       const bookingData = {
         ...deliveryData,
