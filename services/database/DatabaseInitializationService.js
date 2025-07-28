@@ -40,6 +40,7 @@ class DatabaseInitializationService {
     db.notifications = db.collection('notifications');
     db.storeUsers = db.collection('store-users');
     db.persistentAlerts = db.collection('persistent-alerts');
+    db.shoofiAdminUsers = db.collection('shoofi-admin-users');
 
     return db;
   }

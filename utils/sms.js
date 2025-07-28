@@ -221,6 +221,20 @@ wofLeadAssignedToCourseContent = function (customerName, appleAppLink, androidAp
   + `اندرويد: ${androidAppLink} \n`
 }
 
+getAdminUserTempPasswordContent = function (fullName, tempPassword, lang = "1") {
+  if(lang == "0"){
+    return `مرحبا ${fullName} \u{1F60A} \n` 
+    + `تم إنشاء حسابك بنجاح في نظام إدارة Shoofi \u{2705} \n`
+    + `كلمة المرور المؤقتة: ${tempPassword} \n`
+    + `يرجى تغيير كلمة المرور عند تسجيل الدخول لأول مرة \u{1F4DD}`
+  }else{
+    return `היי ${fullName} \u{1F60A} \n` 
+    + `חשבון נוצר בהצלחה במערכת ניהול Shoofi \u{2705} \n`
+    + `סיסמה זמנית: ${tempPassword} \n`
+    + `אנא שנה את הסיסמה בכניסה הראשונה \u{1F4DD}`
+  }
+}
+
 const smsService = {
     sendSMS: sendSMS,
     getOrderRecivedContent: getOrderRecivedContent,
@@ -234,5 +248,6 @@ const smsService = {
     checkSMSBalance: checkSMSBalance,
     wofLeadRegisterContent: wofLeadRegisterContent,
     wofLeadAssignedToCourseContent: wofLeadAssignedToCourseContent,
+    getAdminUserTempPasswordContent: getAdminUserTempPasswordContent,
 };
 module.exports = smsService;
