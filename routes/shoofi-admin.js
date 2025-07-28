@@ -137,6 +137,14 @@ router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
       Number(lng)
     );
 
+    // Sort by isOpen (open stores first)
+    availableStores.sort((a, b) => {
+      const aIsOpen = a.store?.isOpen || false;
+      const bIsOpen = b.store?.isOpen || false;
+      if (aIsOpen === bIsOpen) return 0;
+      return aIsOpen ? -1 : 1;
+    });
+
     res.json(availableStores);
   } catch (error) {
     console.error('Error getting available stores:', error);
@@ -852,7 +860,15 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       .filter(category => storesByCategory[category._id])
       .map(category => ({
         category: category,
-        stores: storesByCategory[category._id] || []
+        stores: (storesByCategory[category._id] || []).sort((a, b) => {
+          // Sort by isOpen status (open stores first)
+          const aIsOpen = a.storeData?.isOpen || false;
+          const bIsOpen = b.storeData?.isOpen || false;
+          if (aIsOpen !== bIsOpen) {
+            return bIsOpen ? 1 : -1; // Open stores come first
+          }
+          return 0;
+        })
       }))
       .filter(item => item.stores.length > 0) // Only include categories with stores
       .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
