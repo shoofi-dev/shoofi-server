@@ -81,6 +81,7 @@ const globalSearchRoutes = require('./routes/global-search');
 const couponRoutes = require('./routes/coupon');
 const creditCardRoutes = require('./routes/creditCard');
 const payments = require('./routes/payments');
+const shoofiAdminUsers = require('./routes/shoofi-admin-users');
 
 firebaseAdmin.initializeApp({
   credential: firebaseAdmin.credential.cert(serviceAccount),
@@ -144,6 +145,7 @@ app.use("/", globalSearchRoutes);
 app.use("/", couponRoutes);
 app.use("/", creditCardRoutes);
 app.use("/", payments);
+app.use("/", shoofiAdminUsers);
 
 // Add order monitoring routes
 const orderMonitoringRoutes = require('./routes/admin/order-monitoring');
@@ -240,12 +242,12 @@ initDb(async (err, db) => {
   global.app = app;
 
 
-cron.schedule("0 0 * * *", function () {
-  console.log("---------------------");
-  console.log("running a task every 1 day");
- // smsService.checkSMSBalance(app.db);
+// cron.schedule("0 0 * * *", function () {
+//   console.log("---------------------");
+//   console.log("running a task every 1 day");
+//  // smsService.checkSMSBalance(app.db);
 
-});
+// });
 
 // Start persistent alerts cron jobs
 console.log(colors.blue("Starting persistent alerts cron jobs..."));
