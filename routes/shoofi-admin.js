@@ -13,6 +13,7 @@ const { MongoClient } = require("mongodb");
 const DatabaseInitializationService = require('../services/database/DatabaseInitializationService');
 const adsRouter = require("./ads");
 const websocketService = require('../services/websocket/websocket-service');
+const storeService = require('../utils/store-service');
 
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -464,6 +465,145 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
     res.status(201).json(newStore);
   } catch (err) {
     res.status(500).json({ message: 'Failed to add store', error: err.message });
+  }
+});
+
+router.get("/api/shoofiAdmin/store/status", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search;
+    const filter = req.query.filter; // 'all', 'should-be-open', 'closed', 'busy'
+    
+    // Build search query
+    let searchQuery = {};
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i');
+      searchQuery = {
+        $or: [
+          { name_ar: searchRegex },
+          { name_he: searchRegex },
+          { appName: searchRegex },
+          { descriptionAR: searchRegex },
+          { descriptionHE: searchRegex }
+        ]
+      };
+    }
+    
+    // Get all stores from admin database
+    const stores = await dbAdmin.stores.find(searchQuery).toArray();
+    
+    // Get detailed status for each store
+    const storesWithStatus = await Promise.all(stores.map(async (store) => {
+      try {
+        const db = req.app.db[store.appName];
+        const storeData = await db.store.findOne({ id: 1 });
+        
+        if (!storeData) {
+          return {
+            ...store,
+            status: {
+              isOpen: false,
+              isBusy: false,
+              isStoreClose: true,
+              shouldBeOpen: false,
+              openHours: null,
+              workingHours: null,
+              status: 'no-data'
+            }
+          };
+        }
+        
+        // Check if store should be open based on openHours
+        const storeStatus = storeService.isStoreOpenNow(storeData.openHours);
+        const shouldBeOpen = storeStatus.isOpen;
+        const isOpen = shouldBeOpen && !storeData.isStoreClose;
+        
+        let status = 'open';
+        if (storeData.isStoreClose) {
+          status = 'closed';
+        } else if (storeData.isBusy) {
+          status = 'busy';
+        } else if (!shouldBeOpen) {
+          status = 'outside-hours';
+        } else if (shouldBeOpen && !isOpen) {
+          status = 'should-be-open';
+        }
+        
+        return {
+          ...store,
+          status: {
+            isOpen,
+            isBusy: storeData.isBusy || false,
+            isStoreClose: storeData.isStoreClose || false,
+            shouldBeOpen,
+            openHours: storeData.openHours,
+            workingHours: storeStatus.workingHours,
+            status
+          }
+        };
+      } catch (error) {
+        console.error(`Error getting status for store ${store.appName}:`, error);
+        return {
+          ...store,
+          status: {
+            isOpen: false,
+            isBusy: false,
+            isStoreClose: true,
+            shouldBeOpen: false,
+            openHours: null,
+            workingHours: null,
+            status: 'error'
+          }
+        };
+      }
+    }));
+    
+    // Apply filters
+    let filteredStores = storesWithStatus;
+    if (filter && filter !== 'all') {
+      switch (filter) {
+        case 'should-be-open':
+          filteredStores = storesWithStatus.filter(store => 
+            store.status.shouldBeOpen && !store.status.isOpen || store.status.shouldBeOpen && store.status.isBusy
+          );
+          break;
+        case 'closed':
+          filteredStores = storesWithStatus.filter(store => 
+            store.status.isStoreClose
+          );
+          break;
+        case 'busy':
+          filteredStores = storesWithStatus.filter(store => 
+            store.status.isBusy
+          );
+          break;
+        case 'outside-hours':
+          filteredStores = storesWithStatus.filter(store => 
+            !store.status.shouldBeOpen && !store.status.isStoreClose
+          );
+          break;
+      }
+    }
+    
+    // Apply pagination
+    const total = filteredStores.length;
+    const paginatedStores = filteredStores.slice(skip, skip + limit);
+    
+    res.status(200).json({
+      stores: paginatedStores,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalItems: total,
+        itemsPerPage: limit
+      }
+    });
+  } catch (err) {
+    console.error("Error fetching stores status:", err);
+    res.status(500).json({ message: 'Failed to fetch stores status', error: err.message });
   }
 });
 
@@ -955,6 +1095,8 @@ router.post("/api/shoofiAdmin/explore/debug-area", async (req, res) => {
     res.status(500).json({ error: 'Failed to debug area lookup' });
   }
 });
+
+
 
 router.use("/api/ads", adsRouter);
 
