@@ -1028,6 +1028,43 @@ router.post(
   }
 );
 
+// Get all employees with active orders count
+router.get("/api/delivery/company/employees", async (req, res) => {
+  try {
+    const db = req.app.db["delivery-company"];
+    const employees = await db.customers.find({}).toArray();
+    
+    // Get active orders count and company info for each employee
+    const employeesWithOrderCounts = await Promise.all(
+      employees.map(async (employee) => {
+        const activeOrderCount = await db.bookDelivery.countDocuments({
+          "driver._id": employee._id,
+          status: { $in: ["1", "2", "3"] } // Active order statuses
+        });
+        
+        // Get company information
+        const company = await db.store.findOne({ _id: getId(employee.companyId) });
+        
+        return {
+          ...employee,
+          activeOrderCount,
+          company: company ? {
+            nameHE: company.nameHE,
+            nameAR: company.nameAR,
+            name: company.name
+          } : null
+        };
+      })
+    );
+    
+    res.status(200).json(employeesWithOrderCounts);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch employees with order counts", error: err.message });
+  }
+});
+
 router.get("/api/delivery/company/:id", async (req, res) => {
   try {
     const db = req.app.db["delivery-company"];
@@ -1198,6 +1235,44 @@ router.get("/api/delivery/companies/by-city/:cityId", async (req, res) => {
         message: "Failed to fetch companies by city",
         error: err.message,
       });
+  }
+});
+
+// Get employees with active orders count for specific company
+router.get("/api/delivery/company/:companyId/employees-with-orders", async (req, res) => {
+  try {
+    const db = req.app.db["delivery-company"];
+    const { companyId } = req.params;
+    const employees = await db.customers.find({ companyId }).toArray();
+    
+    // Get company information
+    const company = await db.store.findOne({ _id: getId(companyId) });
+    
+    // Get active orders count for each employee
+    const employeesWithOrderCounts = await Promise.all(
+      employees.map(async (employee) => {
+        const activeOrderCount = await db.bookDelivery.countDocuments({
+          "driver._id": employee._id,
+          status: { $in: ["1", "2", "3"] } // Active order statuses
+        });
+        
+        return {
+          ...employee,
+          activeOrderCount,
+          company: company ? {
+            nameHE: company.nameHE,
+            nameAR: company.nameAR,
+            name: company.name
+          } : null
+        };
+      })
+    );
+    
+    res.status(200).json(employeesWithOrderCounts);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch employees with order counts", error: err.message });
   }
 });
 
