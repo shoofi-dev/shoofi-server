@@ -467,12 +467,12 @@ router.post(
       if (req.body.isOrderLaterSupport) {
         filterBy = {
           ...filterBy,
-          orderDate: { $gte: start.format(), $lt: end.format() },
+          orderDate: { $gte: start.format(), $lt: end.add(1, 'hour').format() },
         };
       } else {
         filterBy = {
           ...filterBy,
-          datetime: { $gte: start.format(), $lt: end.format() },
+          orderDate: { $gte: start.format(), $lt: end.add(1, 'hour').format() },
         };
       }
 
