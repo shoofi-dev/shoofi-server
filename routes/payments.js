@@ -52,7 +52,10 @@ router.post("/api/payments/partner/summary", async (req, res) => {
     }
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).utcOffset(offsetHours).format(), end: moment(endDate).utcOffset(offsetHours).format() }
+      ? { 
+          start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
+          end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
+        }
       : getDateRange(period);
     
     // Get orders for this partner (excluding canceled orders)
@@ -152,7 +155,10 @@ router.post("/api/payments/partner/details", async (req, res) => {
     }
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     const skip = (page - 1) * limit;
@@ -220,7 +226,10 @@ router.post("/api/payments/driver/summary", async (req, res) => {
     }
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     // Get completed deliveries for this driver
@@ -306,7 +315,10 @@ router.post("/api/payments/driver/details", async (req, res) => {
     }
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     const skip = (page - 1) * limit;
@@ -369,7 +381,10 @@ router.post("/api/payments/admin/overview", async (req, res) => {
     const { period = 'month', startDate, endDate, storeId } = req.body;
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     // Get stores list to determine app names
@@ -500,7 +515,10 @@ router.post("/api/payments/admin/partners", async (req, res) => {
     const { period = 'month', startDate, endDate, storeId } = req.body;
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     // Get stores list to find order apps
@@ -588,7 +606,10 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
     const { period = 'month', startDate, endDate, storeId } = req.body;
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     // Get stores list to find delivery apps
@@ -677,7 +698,10 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
     const { period = 'month', startDate, endDate, groupBy = 'day', storeId } = req.body;
     
     const dateRange = startDate && endDate 
-      ? { start: moment(startDate).format(), end: moment(endDate).format() }
+      ? { 
+          start: moment(startDate).startOf('day').format(), 
+          end: moment(endDate).endOf('day').format() 
+        }
       : getDateRange(period);
     
     const format = groupBy === 'day' ? '%Y-%m-%d' : '%Y-%m';
