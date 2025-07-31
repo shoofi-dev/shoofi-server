@@ -241,18 +241,11 @@ router.post("/api/payments/driver/summary", async (req, res) => {
     
     // Calculate totals
     const totalDeliveries = deliveries.length;
-    const totalEarnings = deliveries.reduce((sum, delivery) => {
-      // Calculate driver earnings based on delivery fee or commission
-      const deliveryFee = delivery.price || 0;
-      const commission = calculateCommission(deliveryFee, 0); // 20% commission for drivers
-      return sum + (deliveryFee - commission);
-    }, 0);
-    
     const totalDeliveryFees = deliveries.reduce((sum, delivery) => 
       sum + (Number(delivery.order.shippingPrice) || 0), 0
     );
     
-    const totalCommission = totalDeliveryFees - totalEarnings;
+    const totalEarnings = totalDeliveryFees; // Driver gets full delivery fee
     
     // Group by date for charts
     const dailyData = deliveries.reduce((acc, delivery) => {
@@ -262,18 +255,14 @@ router.post("/api/payments/driver/summary", async (req, res) => {
           date,
           deliveries: 0,
           fees: 0,
-          commission: 0,
           earnings: 0
         };
       }
       const deliveryFee = delivery.order.shippingPrice || 0;
-      const commission = calculateCommission(deliveryFee, 0);
-      const earnings = deliveryFee - commission;
       
       acc[date].deliveries += 1;
       acc[date].fees += deliveryFee;
-      acc[date].commission += commission;
-      acc[date].earnings += earnings;
+      acc[date].earnings += deliveryFee;
       return acc;
     }, {});
     
@@ -285,7 +274,6 @@ router.post("/api/payments/driver/summary", async (req, res) => {
       summary: {
         totalDeliveries,
         totalDeliveryFees,
-        totalCommission,
         totalEarnings,
         period: period,
         dateRange: {
@@ -325,8 +313,8 @@ router.post("/api/payments/driver/details", async (req, res) => {
     
     // Get completed deliveries with pagination
     const deliveries = await db.bookDelivery.find({
-      "driver._id": driverId,
-      status: '0', // Completed deliveries
+      "driver._id": ObjectId(driverId),
+      status: '4', // Completed deliveries
       created: { $gte: dateRange.start, $lte: dateRange.end }
     })
     .sort({ created: -1 })
@@ -334,9 +322,15 @@ router.post("/api/payments/driver/details", async (req, res) => {
     .limit(limit)
     .toArray();
     
+    console.log(`Found ${deliveries.length} deliveries for driver ${driverId}`);
+    console.log('Date range:', dateRange);
+    if (deliveries.length > 0) {
+      console.log('Sample delivery structure:', JSON.stringify(deliveries[0], null, 2));
+    }
+    
     // Get total count for pagination
     const totalDeliveries = await db.bookDelivery.countDocuments({
-      "driver._id": driverId,
+      "driver._id": ObjectId(driverId),
       status: '4',
       created: { $gte: dateRange.start, $lte: dateRange.end }
     });
@@ -344,14 +338,28 @@ router.post("/api/payments/driver/details", async (req, res) => {
     // Add payment calculations to each delivery
     const deliveriesWithPayments = deliveries.map(delivery => {
       const deliveryFee = delivery.order.shippingPrice || 0;
-      const commission = calculateCommission(deliveryFee, 0.20);
-      const earnings = deliveryFee - commission;
+      
+      // Calculate actual driver payment considering coupons and payment method
+      const actualDriverPayment = (() => {
+        if (delivery.order.appliedCoupon && 
+            delivery.order.appliedCoupon.coupon.type === "free_delivery" &&
+            delivery.order.order.payment_method === "CASH") {
+          // For cash payments with free_delivery coupon: driver gets discountAmount from us
+          return delivery.order.appliedCoupon.discountAmount || 0;
+        } else if (delivery.order.order.payment_method === "CREDITCARD") {
+          // For credit card payments: driver gets full shippingPrice from us
+          return deliveryFee;
+        } else {
+          // For cash payments without coupon: driver gets 0 from us (gets full amount from customer)
+          return 0;
+        }
+      })();
       
       return {
         ...delivery,
         deliveryFee,
-        commission,
-        earnings,
+        earnings: deliveryFee,
+        actualDriverPayment,
         paymentStatus: 'paid' // Completed deliveries are considered paid
       };
     });
@@ -600,10 +608,76 @@ router.post("/api/payments/admin/partners", async (req, res) => {
   }
 });
 
+// Get delivery companies list
+router.get("/api/payments/delivery-companies", async (req, res) => {
+  try {
+    const db = req.app.db['delivery-company'];
+    
+    if (!db) {
+      return res.status(500).json({ message: "Delivery company database not found" });
+    }
+    
+    // Get delivery companies from store collection
+    const deliveryCompanies = await db.store.find({
+      status: true
+    }, {
+      projection: {
+        _id: 1,
+        nameAR: 1,
+        nameHE: 1,
+        phone: 1,
+        status: 1
+      }
+    }).sort({ nameHE: 1 }).toArray();
+    
+    res.status(200).json(deliveryCompanies);
+    
+  } catch (error) {
+    console.error("Error getting delivery companies:", error);
+    res.status(500).json({ message: "Error getting delivery companies" });
+  }
+});
+
+// Get drivers for a specific delivery company
+router.post("/api/payments/delivery-company-drivers", async (req, res) => {
+  try {
+    const { deliveryCompanyId } = req.body;
+    
+    if (!deliveryCompanyId) {
+      return res.status(400).json({ message: "Delivery company ID is required" });
+    }
+    
+    const db = req.app.db['delivery-company'];
+    
+    if (!db) {
+      return res.status(500).json({ message: "Delivery company database not found" });
+    }
+    
+    // Get drivers for the specific delivery company from customers collection
+    const drivers = await db.customers.find({
+      role: "driver",
+      companyId: deliveryCompanyId,
+    }, {
+      projection: {
+        _id: 1,
+        fullName: 1,
+        phone: 1,
+        companyId: 1
+      }
+    }).sort({ fullName: 1 }).toArray();
+    
+    res.status(200).json(drivers);
+    
+  } catch (error) {
+    console.error("Error getting delivery company drivers:", error);
+    res.status(500).json({ message: "Error getting delivery company drivers" });
+  }
+});
+
 // Get admin driver payments
 router.post("/api/payments/admin/drivers", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, storeId } = req.body;
+    const { period = 'month', startDate, endDate, deliveryCompanyId, driverId } = req.body;
     
     const dateRange = startDate && endDate 
       ? { 
@@ -612,50 +686,109 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
         }
       : getDateRange(period);
     
-    // Get stores list to find delivery apps
-    const dbAdmin = req.app.db['shoofi'];
-    const storesList = await dbAdmin.stores.find().toArray();
+    // Use delivery-company database directly
+    const db = req.app.db['delivery-company'];
     
-    let allDriverPayments = [];
+    if (!db) {
+      return res.status(500).json({ message: "Delivery company database not found" });
+    }
     
-    // Loop through stores to find delivery apps
-    for (const store of storesList) {
-      const appName = store.appName;
-      if (!appName || !req.app.db[appName]) {
-        continue;
-      }
-      
-      const db = req.app.db[appName];
-      
-      // Check if this app has bookDelivery collection
-      const collections = await db.listCollections().toArray();
-      const collectionNames = collections.map(col => col.name);
-      
-            if (collectionNames.includes('bookDelivery')) {
-        // Build match condition for deliveries
-        const matchCondition = {
-          status: '0', // Completed deliveries
-          created: { $gte: dateRange.start, $lte: dateRange.end }
-        };
-        
-        // If filtering by specific store, add store filter
-        if (storeId) {
-          matchCondition["storeId"] = storeId;
+    // Build match condition for deliveries
+    const matchCondition = {
+      status: '4', // Completed deliveries
+      created: { $gte: dateRange.start, $lte: dateRange.end }
+    };
+    
+    // If filtering by specific delivery company, add company filter
+    if (deliveryCompanyId) {
+      matchCondition["driver.companyId"] = deliveryCompanyId;
+    }
+    
+    // If filtering by specific driver, add driver filter
+    if (driverId) {
+      matchCondition["driver._id"] = ObjectId(driverId);
+    }
+    
+    // Aggregate driver payments from bookDelivery collection
+    const driverPayments = await db.bookDelivery.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $addFields: {
+          // Calculate actual driver payment considering coupons and payment method
+          actualDriverPayment: {
+            $cond: [
+              {
+                $and: [
+                  { $ifNull: ["$order.appliedCoupon", false] },
+                  { $eq: ["$order.appliedCoupon.coupon.type", "free_delivery"] },
+                  { $eq: ["$order.order.payment_method", "CASH"] }
+                ]
+              },
+              // For cash payments with free_delivery coupon: driver gets discountAmount from us
+              { $ifNull: ["$order.appliedCoupon.discountAmount", 0] },
+              // For credit card payments: driver gets full shippingPrice from us
+              {
+                $cond: [
+                  { $eq: ["$order.order.payment_method", "CREDITCARD"] },
+                  "$order.shippingPrice",
+                  // For cash payments without coupon: driver gets 0 from us (gets full amount from customer)
+                  0
+                ]
+              }
+            ]
+          }
         }
-        
-        // Aggregate driver payments for this app
-        const driverPayments = await db.bookDelivery.aggregate([
-          {
-            $match: matchCondition
-          },
+      },
       {
         $group: {
           _id: "$driver._id",
           driverName: { $first: "$driver.fullName" },
           driverPhone: { $first: "$driver.phone" },
+          deliveryCompanyId: { $first: "$driver.companyId" },
           totalDeliveries: { $sum: 1 },
-          totalFees: { $sum: "$price" },
-          totalCommission: { $sum: { $multiply: ["$price", 0.20] } }
+          totalFees: { $sum: "$order.shippingPrice" },
+          totalCommission: { $sum: 0 },
+          // Original earnings (without coupon consideration)
+          earningsByCreditCard: {
+            $sum: {
+              $cond: [
+                { $eq: ["$order.order.payment_method", "CREDITCARD"] },
+                "$order.shippingPrice",
+                0
+              ]
+            }
+          },
+          earningsByCash: {
+            $sum: {
+              $cond: [
+                { $eq: ["$order.order.payment_method", "CASH"] },
+                "$order.shippingPrice",
+                0
+              ]
+            }
+          },
+          // Actual driver payments (with coupon consideration)
+          actualTotalEarnings: { $sum: "$actualDriverPayment" },
+          actualEarningsByCreditCard: {
+            $sum: {
+              $cond: [
+                { $eq: ["$order.order.payment_method", "CREDITCARD"] },
+                "$actualDriverPayment",
+                0
+              ]
+            }
+          },
+          actualEarningsByCash: {
+            $sum: {
+              $cond: [
+                { $eq: ["$order.order.payment_method", "CASH"] },
+                "$actualDriverPayment",
+                0
+              ]
+            }
+          }
         }
       },
       {
@@ -663,28 +796,30 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
           driverId: "$_id",
           driverName: 1,
           driverPhone: 1,
+          deliveryCompanyId: 1,
           totalDeliveries: 1,
           totalFees: 1,
           totalCommission: 1,
-          totalEarnings: { $subtract: ["$totalFees", "$totalCommission"] }
+          totalEarnings: "$totalFees",
+          earningsByCreditCard: 1,
+          earningsByCash: 1,
+          actualTotalEarnings: 1,
+          actualEarningsByCreditCard: 1,
+          actualEarningsByCash: 1
         }
       },
-              {
-          $sort: { totalEarnings: -1 }
-        }
-      ]).toArray();
-      
-      // Add app name to each driver payment
-      const driverPaymentsWithApp = driverPayments.map(payment => ({
-        ...payment,
-        appName: appName
-      }));
-      
-      allDriverPayments = allDriverPayments.concat(driverPaymentsWithApp);
-    }
-  }
-  
-  res.status(200).json(allDriverPayments);
+      {
+        $sort: { totalEarnings: -1 }
+      }
+    ]).toArray();
+    
+    // Add app name to each driver payment (all from delivery-company)
+    const driverPaymentsWithApp = driverPayments.map(payment => ({
+      ...payment,
+      appName: 'delivery-company'
+    }));
+    
+    res.status(200).json(driverPaymentsWithApp);
     
   } catch (error) {
     console.error("Error getting admin driver payments:", error);
@@ -695,7 +830,7 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
 // Get payment analytics for charts
 router.post("/api/payments/admin/analytics", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, groupBy = 'day', storeId } = req.body;
+    const { period = 'month', startDate, endDate, groupBy = 'day', deliveryCompanyId, driverId } = req.body;
     
     const dateRange = startDate && endDate 
       ? { 
@@ -769,49 +904,58 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
         }));
         
         allOrderAnalytics = allOrderAnalytics.concat(orderAnalyticsWithApp);
-      } else if (collectionNames.includes('bookDelivery')) {
-        // Build match condition for deliveries
-        const matchCondition = {
-          status: '0',
-          created: { $gte: dateRange.start, $lte: dateRange.end }
-        };
-        
-        // If filtering by specific store, add store filter
-        if (storeId) {
-          matchCondition["storeId"] = storeId;
-        }
-        
-        // Get delivery analytics for this app
-        const deliveryAnalytics = await db.bookDelivery.aggregate([
-          {
-            $match: matchCondition
-          },
-          {
-            $group: {
-              _id: {
-                $dateToString: {
-                  format: format,
-                  date: { $dateFromString: { dateString: "$created" } }
-                }
-              },
-              deliveries: { $sum: 1 },
-              fees: { $sum: "$price" },
-              commission: { $sum: { $multiply: ["$price", 0.20] } }
-            }
-          },
-          {
-            $sort: { _id: 1 }
-          }
-        ]).toArray();
-        
-        // Add app name to each analytics entry
-        const deliveryAnalyticsWithApp = deliveryAnalytics.map(analytics => ({
-          ...analytics,
-          appName: appName
-        }));
-        
-        allDeliveryAnalytics = allDeliveryAnalytics.concat(deliveryAnalyticsWithApp);
       }
+    }
+    
+    // Get delivery analytics from delivery-company database specifically
+    const deliveryDb = req.app.db['delivery-company'];
+    if (deliveryDb) {
+      // Build match condition for deliveries
+      const deliveryMatchCondition = {
+        status: '4',
+        created: { $gte: dateRange.start, $lte: dateRange.end }
+      };
+      
+      // If filtering by specific delivery company, add company filter
+      if (deliveryCompanyId) {
+        deliveryMatchCondition["driver.companyId"] = deliveryCompanyId;
+      }
+      
+      // If filtering by specific driver, add driver filter
+      if (driverId) {
+        deliveryMatchCondition["driver._id"] = ObjectId(driverId);
+      }
+      
+      // Get delivery analytics from bookDelivery collection
+      const deliveryAnalytics = await deliveryDb.bookDelivery.aggregate([
+        {
+          $match: deliveryMatchCondition
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: format,
+                date: { $dateFromString: { dateString: "$created" } }
+              }
+            },
+            deliveries: { $sum: 1 },
+            fees: { $sum: "$price" },
+            commission: { $sum: 0 }
+          }
+        },
+        {
+          $sort: { _id: 1 }
+        }
+      ]).toArray();
+      
+      // Add app name to each analytics entry
+      const deliveryAnalyticsWithApp = deliveryAnalytics.map(analytics => ({
+        ...analytics,
+        appName: 'delivery-company'
+      }));
+      
+      allDeliveryAnalytics = allDeliveryAnalytics.concat(deliveryAnalyticsWithApp);
     }
     
     res.status(200).json({
