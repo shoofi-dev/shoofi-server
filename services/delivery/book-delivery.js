@@ -78,7 +78,6 @@ async function bookDelivery({ deliveryData, appDb }) {
         date: now.date(),
       });
 
-      try {
         let expectedDeliveryAtTemp2 = moment()
         .utcOffset(offsetHours)
         .set({
@@ -92,9 +91,7 @@ async function bookDelivery({ deliveryData, appDb }) {
         console.log("expectedDeliveryAtTemp", expectedDeliveryAtTemp);
         console.log("expectedDeliveryAt2",  expectedDeliveryAtTemp2?.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ"))
         console.log("expectedDeliveryAt",  expectedDeliveryAtTemp?.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ"))
-        } catch (error) {
-          console.log("error expectedDeliveryAtTemp2", error);
-        }
+
 
       
       const bookingData = {
@@ -110,7 +107,7 @@ async function bookDelivery({ deliveryData, appDb }) {
         appName: deliveryData.appName || 'shoofi-app',
         // Include coupon data if present
         appliedCoupon: deliveryData.appliedCoupon || null,
-        expectedDeliveryAt: expectedDeliveryAtTemp.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ")
+        expectedDeliveryAt: expectedDeliveryAtTemp2.utcOffset(offsetHours).format("YYYY-MM-DDTHH:mm:ssZ")
       };
 
   
