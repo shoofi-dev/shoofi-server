@@ -74,6 +74,7 @@ const moment = require("moment");
 const router = express.Router();
 const deliveryService = require("../services/delivery/book-delivery");
 const websocketService = require('../services/websocket/websocket-service');
+const { DELIVERY_STATUS, ORDER_STATUS } = require("../consts/consts");
 const generateUniqueOrderId = () => {
   const timestamp = Date.now();
   const randomKey = Math.random().toString(36).substring(2, 8);
@@ -1609,38 +1610,38 @@ router.post("/api/order/update", auth.required, async (req, res) => {
         let notificationType = "order";
         
         switch (updateobj.status) {
-          case "1": // IN_PROGRESS
+          case ORDER_STATUS.IN_PROGRESS: // "1"
             notificationTitle = "طلبك قيد التحضير";
             notificationBody = `طلبك قيد التحضير الآن.`;
             break;
-          case "2": // COMPLETED
+          case ORDER_STATUS.COMPLETED: // "2"
               notificationTitle = "طلبك جاهز للاستلام";
               notificationBody = `طلبك جاهز للاستلام من المطعم.`;
             break;
-          case "3": // WAITING_FOR_DRIVER
+          case ORDER_STATUS.WAITING_FOR_DRIVER: // "3"
             notificationTitle = "في انتظار السائق";
             notificationBody = `طلبك جاهز وفي انتظار السائق.`;
             break;
-          case "4": // CANCELLED
+          case ORDER_STATUS.CANCELLED: // "4"
             notificationTitle = "تم إلغاء طلبك";
             notificationBody = `طلبك تم إلغاؤه. إذا كان لديك أي استفسار، يرجى التواصل معنا.`;
             notificationType = "order_cancelled";
             break;
-          case "5": // REJECTED
+          case ORDER_STATUS.REJECTED: // "5"
             notificationTitle = "تم رفض طلبك";
             notificationBody = `عذراً، تم رفض طلبك. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "order_rejected";
             break;
-          // case "6": // PENDING
+          // case ORDER_STATUS.PENDING: // "6"
           //   notificationTitle = "تم استلام طلبك";
           //   notificationBody = `طلبك رقم #${order.orderId} تم استلامه وهو قيد المراجعة.`;
           //   break;
-          case "7": // CANCELLED_BY_ADMIN
+          case ORDER_STATUS.CANCELLED_BY_ADMIN: // "7"
             notificationTitle = "تم إلغاء طلبك من قبل الإدارة";
             notificationBody = `طلبك تم إلغاؤه من قبل الإدارة. يرجى التواصل معنا للمزيد من المعلومات.`;
             notificationType = "order_cancelled_admin";
             break;
-          case "8": // CANCELLED_BY_CUSTOMER
+          case ORDER_STATUS.CANCELLED_BY_CUSTOMER: // "8"
             notificationTitle = "تم إلغاء طلبك";
             notificationBody = `طلبك تم إلغاؤه بنجاح.`;
             notificationType = "order_cancelled_customer";
@@ -1707,7 +1708,7 @@ router.post("/api/order/update", auth.required, async (req, res) => {
     }
 
     // Send driver notification when order is ready for pickup (status = "3")
-    if (updateobj?.status === "3" && order.order.receipt_method === "DELIVERY") {
+    if (updateobj?.status === ORDER_STATUS.WAITING_FOR_DRIVER && order.order.receipt_method === "DELIVERY") {
       try {
         // Find the delivery record for this order
         const deliveryDB = req.app.db["delivery-company"];
@@ -1757,6 +1758,85 @@ router.post("/api/order/update", auth.required, async (req, res) => {
       } catch (driverNotificationError) {
         console.error("Failed to send driver notification:", driverNotificationError);
         // Don't fail the order update if driver notification fails
+      }
+    }
+
+    // Update delivery order status when main order is cancelled (status 4, 7, or 8)
+    if ((updateobj?.status === ORDER_STATUS.CANCELLED || updateobj?.status === ORDER_STATUS.CANCELLED_BY_ADMIN || updateobj?.status === ORDER_STATUS.CANCELLED_BY_CUSTOMER) && order.order.receipt_method === "DELIVERY") {
+      try {
+        // Find the delivery record for this order
+        const deliveryDB = req.app.db["delivery-company"];
+        const deliveryRecord = await deliveryDB.bookDelivery.findOne({
+          bookId: order.orderId
+        });
+
+        if (deliveryRecord) {
+          // Update delivery record status to cancelled by admin (-3)
+          await deliveryDB.bookDelivery.updateOne(
+            { bookId: order.orderId },
+            { 
+              $set: { 
+                status: DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+                cancelledAt: new Date(),
+                cancelReason: updateobj.updateReason || "Order cancelled",
+                cancelledBy: "admin"
+              }
+            }
+          );
+
+          // Track delivery status change centrally
+          await centralizedFlowMonitor.trackOrderFlowEvent({
+            orderId: deliveryRecord._id,
+            orderNumber: deliveryRecord.bookId,
+            sourceApp: "delivery-company",
+            eventType: "delivery_cancelled_by_order_cancellation",
+            status: DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+            actor: req.user?.fullName || "System",
+            actorId: req.user?._id || "system",
+            actorType: req.user?.role || "system",
+            metadata: {
+              previousStatus: deliveryRecord.status,
+              statusChange: `${deliveryRecord.status} → ${DELIVERY_STATUS.CANCELLED_BY_ADMIN}`,
+              cancelReason: updateobj.updateReason || "Order cancelled",
+              cancelledBy: "admin",
+              orderStatus: updateobj.status,
+              orderId: order._id,
+              orderNumber: order.orderId
+            }
+          });
+
+          // Send notification to the assigned driver if exists
+          if (deliveryRecord.driver?._id) {
+            await notificationService.sendNotification({
+              recipientId: String(deliveryRecord.driver._id),
+              title: "تم إلغاء الطلب",
+              body: `تم إلغاء الطلب من قبل الإدارة.`,
+              type: "order_cancelled_admin",
+              appName: "delivery-company",
+              appType: "shoofi-shoofir",
+              channels: {
+                websocket: true,
+                push: true,
+                email: false,
+                sms: false
+              },
+              data: {
+                orderId: order._id,
+                bookId: order.orderId,
+                orderStatus: updateobj.status,
+                deliveryStatus: DELIVERY_STATUS.CANCELLED_BY_ADMIN,
+                cancelReason: updateobj.updateReason || "Order cancelled",
+                customerName: customer?.fullName || "العميل",
+                storeName: order.storeName || "المطعم"
+              },
+              req: req,
+              soundType: 'driver.wav'
+            });
+          }
+        }
+      } catch (deliveryUpdateError) {
+        console.error("Failed to update delivery order status:", deliveryUpdateError);
+        // Don't fail the order update if delivery update fails
       }
     }
 

@@ -379,6 +379,131 @@ router.post("/api/analytics/orders-daily", async (req, res) => {
   }
 });
 
+// Orders hourly analytics - count and price per hour
+router.post("/api/analytics/orders-hourly", async (req, res) => {
+  const { startDate, endDate } = req.body;
+
+  let match = {};
+  if (startDate && endDate) {
+    const offsetHours = utcTimeService.getUTCOffset();
+    var start = moment(startDate).utcOffset(offsetHours);
+    start.set({ hour: 0, minute: 0, second: 0, millisecond: 0 });
+
+    var end = moment(endDate).utcOffset(offsetHours);
+    end.set({ hour: 23, minute: 59, second: 59, millisecond: 999 });
+    
+    // Since created is a string, we need to match against string format
+    match.created = { 
+      $gte: start.format(), 
+      $lte: end.format() 
+    };
+  }
+  // Only count completed orders
+  match.status = { $in: ["2","3","10","11","12"] };
+
+  try {
+    // Get all stores from shoofi database
+    const shoofiDb = req.app.db['shoofi'];
+    const stores = await shoofiDb.stores.find({}).toArray();
+    
+    let allResults = [];
+
+    // Aggregate data from each store
+    for (const store of stores) {
+      try {
+        const storeDb = req.app.db[store.appName];
+        if (!storeDb) {
+          console.warn(`Store database not found for appName: ${store.appName}`);
+          continue;
+        }
+
+        // First, let's check if we have any orders in this store
+        const totalOrders = await storeDb.orders.countDocuments(match);
+        console.log(`Store ${store.appName}: Found ${totalOrders} orders matching criteria`);
+
+        const result = await storeDb.orders.aggregate([
+          { $match: match },
+          {
+            $addFields: {
+              dateStr: {
+                $substr: ["$created", 0, 10] // Extract YYYY-MM-DD from ISO string
+              },
+              hourStr: {
+                $substr: ["$created", 11, 2] // Extract HH from ISO string
+              }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                date: "$dateStr",
+                hour: "$hourStr"
+              },
+              orderCount: { $sum: 1 },
+              totalSales: { $sum: "$orderPrice" },
+              avgOrderValue: { $avg: "$orderPrice" }
+            }
+          },
+          {
+            $project: {
+              _id: 0,
+              date: { $dateFromString: { dateString: "$_id.date" } },
+              hour: { $toInt: "$_id.hour" },
+              orderCount: 1,
+              totalSales: 1,
+              avgOrderValue: 1
+            }
+          }
+        ]).toArray();
+
+        console.log(`Store ${store.appName}: Aggregated ${result.length} hour groups`);
+        allResults = allResults.concat(result);
+      } catch (error) {
+        console.error(`Error processing store ${store.appName}:`, error);
+      }
+    }
+
+    // Combine results by date and hour
+    const combinedResults = {};
+    allResults.forEach(item => {
+      const dateKey = moment(item.date).format('YYYY-MM-DD');
+      const hourKey = `${dateKey}-${item.hour.toString().padStart(2, '0')}`;
+      
+      if (!combinedResults[hourKey]) {
+        combinedResults[hourKey] = {
+          date: item.date,
+          hour: item.hour,
+          orderCount: 0,
+          totalSales: 0,
+          avgOrderValue: 0,
+          totalOrders: 0
+        };
+      }
+      combinedResults[hourKey].orderCount += item.orderCount;
+      combinedResults[hourKey].totalSales += item.totalSales;
+      combinedResults[hourKey].totalOrders += item.orderCount;
+    });
+
+    // Calculate average order value for each hour
+    Object.values(combinedResults).forEach(item => {
+      if (item.totalOrders > 0) {
+        item.avgOrderValue = item.totalSales / item.totalOrders;
+      }
+    });
+
+    // Convert to array and sort by date and hour
+    const finalResult = Object.values(combinedResults).sort((a, b) => {
+      const dateComparison = moment(a.date).diff(moment(b.date));
+      if (dateComparison !== 0) return dateComparison;
+      return a.hour - b.hour;
+    });
+
+    res.status(200).json(finalResult);
+  } catch (ex) {
+    res.status(400).json({ message: "Failed to get hourly orders analytics", error: ex });
+  }
+});
+
 // Orders comparison between specific days
 router.post("/api/analytics/orders-comparison", async (req, res) => {
   const { dates } = req.body; // dates should be an array of date strings
