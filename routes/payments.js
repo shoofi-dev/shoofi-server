@@ -146,7 +146,7 @@ router.post("/api/payments/partner/summary", async (req, res) => {
 router.post("/api/payments/partner/details", async (req, res) => {
   const appName = req.headers['app-name'];
   const db = req.app.db[appName];
-  
+  const offsetHours = utcTimeService.getUTCOffset()
   try {
     const { partnerId, period = 'month', startDate, endDate, page = 1, limit = 20 } = req.body;
     
@@ -156,8 +156,8 @@ router.post("/api/payments/partner/details", async (req, res) => {
     
     const dateRange = startDate && endDate 
       ? { 
-          start: moment(startDate).startOf('day').format(), 
-          end: moment(endDate).endOf('day').format() 
+          start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
+          end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
       : getDateRange(period);
     
@@ -217,6 +217,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
 router.post("/api/payments/driver/summary", async (req, res) => {
   const appName = 'delivery-company';
   const db = req.app.db[appName];
+  const offsetHours = utcTimeService.getUTCOffset()
   
   try {
     const { driverId, period = 'month', startDate, endDate } = req.body;
@@ -227,8 +228,8 @@ router.post("/api/payments/driver/summary", async (req, res) => {
     
     const dateRange = startDate && endDate 
       ? { 
-          start: moment(startDate).startOf('day').format(), 
-          end: moment(endDate).endOf('day').format() 
+          start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
+          end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
       : getDateRange(period);
     
@@ -247,15 +248,26 @@ router.post("/api/payments/driver/summary", async (req, res) => {
     
     const totalEarnings = totalDeliveryFees; // Driver gets full delivery fee
     
+    // Calculate earnings by payment method
+    const totalEarningsByCreditCard = deliveries
+      .filter(delivery => delivery.order?.order?.payment_method === 'CREDITCARD')
+      .reduce((sum, delivery) => sum + (Number(delivery.order.shippingPrice) || 0), 0);
+    
+    const totalEarningsByCash = deliveries
+      .filter(delivery => delivery.order?.order?.payment_method === 'CASH')
+      .reduce((sum, delivery) => sum + (Number(delivery.order.shippingPrice) || 0), 0);
+    
     // Group by date for charts
     const dailyData = deliveries.reduce((acc, delivery) => {
-      const date = moment(delivery.created).format('YYYY-MM-DD');
+      const date = moment(delivery.created).utcOffset(offsetHours).format('YYYY-MM-DD');
       if (!acc[date]) {
         acc[date] = {
           date,
           deliveries: 0,
           fees: 0,
-          earnings: 0
+          earnings: 0,
+          earningsByCreditCard: 0,
+          earningsByCash: 0
         };
       }
       const deliveryFee = delivery.order.shippingPrice || 0;
@@ -263,6 +275,14 @@ router.post("/api/payments/driver/summary", async (req, res) => {
       acc[date].deliveries += 1;
       acc[date].fees += deliveryFee;
       acc[date].earnings += deliveryFee;
+      
+      // Add earnings by payment method to daily data
+      if (delivery.order?.order?.payment_method === 'CREDITCARD') {
+        acc[date].earningsByCreditCard += deliveryFee;
+      } else if (delivery.order?.order?.payment_method === 'CASH') {
+        acc[date].earningsByCash += deliveryFee;
+      }
+      
       return acc;
     }, {});
     
@@ -275,6 +295,8 @@ router.post("/api/payments/driver/summary", async (req, res) => {
         totalDeliveries,
         totalDeliveryFees,
         totalEarnings,
+        totalEarningsByCreditCard,
+        totalEarningsByCash,
         period: period,
         dateRange: {
           start: dateRange.start,
@@ -294,7 +316,7 @@ router.post("/api/payments/driver/summary", async (req, res) => {
 router.post("/api/payments/driver/details", async (req, res) => {
   const appName = 'delivery-company';
   const db = req.app.db[appName];
-  
+  const offsetHours = utcTimeService.getUTCOffset()
   try {
     const { driverId, period = 'month', startDate, endDate, page = 1, limit = 20 } = req.body;
     
@@ -304,8 +326,8 @@ router.post("/api/payments/driver/details", async (req, res) => {
     
     const dateRange = startDate && endDate 
       ? { 
-          start: moment(startDate).startOf('day').format(), 
-          end: moment(endDate).endOf('day').format() 
+          start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
+          end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
       : getDateRange(period);
     

@@ -12,6 +12,26 @@
             "minLength": 3,
             "maxLength": 20
         },
+        "name": {
+            "type": "string",   
+            "maxLength": 100
+        },
+        "nameForStore": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "nameForCheckout": {    
+            "type": "string",
+            "maxLength": 100
+        },
+        "nameForPartner": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "nameForShoofir": {
+            "type": "string",
+            "maxLength": 100
+        },
         "type": {
             "type": "string",
             "enum": [
@@ -19,6 +39,14 @@
                 "fixed_amount",
                 "free_delivery"
             ]
+        },
+        "discountType": {
+            "type": "string",
+            "enum": [
+                "order_items",
+                "delivery"
+            ],
+            "default": "order_items"
         },
         "value": {
             "type": "number",
@@ -68,6 +96,12 @@
                     "items": {
                         "type": "string"
                     }
+                },
+                "supportedAreas": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -84,8 +118,31 @@
         "isAutoApply": {
             "type": "boolean"
         }
+    
     },
     "required": [
-        "couponId"
-    ]
+        "couponId",
+        "code",
+        "name",
+        "type",
+        "value",
+        "usageLimit",
+        "usagePerUser",
+        "start",
+        "end"
+    ],
+    "errorMessage": {
+        "properties": {
+            "couponId": "Coupon ID must be a valid ObjectId",
+            "code": "Coupon code must be between 3 and 20 characters",
+            "name": "Coupon name is required and must be between 1 and 100 characters",
+            "type": "Invalid coupon type",
+            "value": "Value must be a positive number",
+            "maxDiscount": "Maximum discount must be a positive number",
+            "minOrderAmount": "Minimum order amount must be a positive number",
+            "usageLimit": "Usage limit must be a positive number",
+            "usagePerUser": "Usage per user must be a positive number",
+            "customerId": "Customer ID must be a valid ObjectId"
+        }
+    }
 } 

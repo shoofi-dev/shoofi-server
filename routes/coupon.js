@@ -4,6 +4,9 @@ const moment = require('moment');
 const momentTZ = require('moment-timezone');
 const { validateJson } = require('../lib/schema');
 const { getId } = require('../lib/common');
+const { uploadFile, deleteImages } = require('./product');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -68,6 +71,46 @@ router.post('/api/coupons/apply', async (req, res) => {
         });
     }
 
+    // Check if coupon is applicable to the current store/category/area
+    if (coupon.applicableTo) {
+        let isApplicable = true;
+        
+        // Check stores restriction (now using appName instead of storeId)
+        if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) {
+            if (!req.body.appName || !coupon.applicableTo.stores.includes(req.body.appName)) {
+                isApplicable = false;
+            }
+        }
+        
+        // Check categories restriction
+        if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) {
+            if (!req.body.categoryIds || !req.body.categoryIds.some(catId => coupon.applicableTo.categories.includes(catId))) {
+                isApplicable = false;
+            }
+        }
+        
+        // Check products restriction
+        if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) {
+            if (!req.body.productIds || !req.body.productIds.some(prodId => coupon.applicableTo.products.includes(prodId))) {
+                isApplicable = false;
+            }
+        }
+        
+        // Check supported areas restriction
+        if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
+            const requestAreaIds = req.body.areaIds ? (Array.isArray(req.body.areaIds) ? req.body.areaIds : [req.body.areaIds]) : [];
+            if (requestAreaIds.length === 0 || !requestAreaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
+                isApplicable = false;
+            }
+        }
+        
+        if (!isApplicable) {
+            return res.status(400).json({
+                message: 'This coupon is not applicable to the current order'
+            });
+        }
+    }
+
     // Check usage limits
     const totalUsage = await db.couponUsages.countDocuments({ couponCode: coupon.code });
     if (totalUsage >= coupon.usageLimit) {
@@ -108,6 +151,7 @@ router.post('/api/coupons/apply', async (req, res) => {
         coupon: {
             _id: coupon._id,
             code: coupon.code,
+            name: coupon.name,
             type: coupon.type,
             value: coupon.value,
             maxDiscount: coupon.maxDiscount,
@@ -162,10 +206,146 @@ router.post('/api/coupons/redeem', async (req, res) => {
     }
 });
 
-// Get available coupons
+// Get all active and valid coupons (by date)
+router.get('/api/coupons/active', async (req, res) => {
+    const appName ='shoofi';
+    const db = req.app.db[appName];
+    const { page = 1, limit = 50, includeExpired = false, storeAppName } = req.query;
+
+    try {
+        // Use the same timezone handling as coupon creation
+        const offsetHours = getUTCOffset();
+        const currentTime = moment().utcOffset(offsetHours).toDate();
+        
+        console.log('Current time for query:', currentTime);
+        console.log('Current time ISO string:', currentTime.toISOString());
+        console.log('Offset hours:', offsetHours);
+        
+        // Build query for active coupons - check for both boolean and string values
+        let query = { 
+            $or: [
+                { isActive: true },
+                { isActive: "true" }
+            ]
+        };
+        
+        if (!includeExpired) {
+            // Only include coupons that are currently valid (not expired)
+            query = {
+                ...query,
+                start: { $lte: currentTime },
+                end: { $gte: currentTime }
+            };
+        } else {
+            // Include all active coupons regardless of date
+            query = {
+                ...query,
+                end: { $gte: currentTime } // Only exclude fully expired coupons
+            };
+        }
+        
+                console.log('Final query:', JSON.stringify(query, null, 2));
+        
+        // Debug: Check all coupons and their dates
+        const allActiveCoupons = await db.coupons.find({ 
+            $or: [
+                { isActive: true },
+                { isActive: "true" }
+            ]
+        }).toArray();
+        console.log('All active coupons count:', allActiveCoupons.length);
+        
+        // Debug: Check ALL coupons regardless of isActive status
+        const allCoupons = await db.coupons.find({}).toArray();
+        console.log('Total coupons in database:', allCoupons.length);
+        
+        if (allCoupons.length > 0) {
+            console.log('All coupons in database:');
+            allCoupons.forEach((coupon, index) => {
+                console.log(`Coupon ${index + 1}:`, {
+                    code: coupon.code,
+                    isActive: coupon.isActive,
+                    isActiveType: typeof coupon.isActive,
+                    start: coupon.start,
+                    end: coupon.end,
+                    startType: typeof coupon.start,
+                    endType: typeof coupon.end
+                });
+            });
+        }
+        
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        
+        // Get coupons with pagination
+        let coupons = await db.coupons.find(query)
+            .skip(skip)
+            .limit(parseInt(limit))
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        // Filter coupons by store if storeAppName is provided
+        if (storeAppName) {
+            coupons = coupons.filter(coupon => {
+                // If coupon has no store restrictions, it applies to all stores
+                if (!coupon.applicableTo || !coupon.applicableTo.stores || coupon.applicableTo.stores.length === 0) {
+                    return true;
+                }
+                // Check if the store is in the applicable stores list
+                return coupon.applicableTo.stores.includes(storeAppName);
+            });
+        }
+
+        console.log('Found coupons count:', coupons.length);
+        if (coupons.length > 0) {
+            console.log('Sample coupon dates:', {
+                start: coupons[0].start,
+                end: coupons[0].end,
+                startType: typeof coupons[0].start,
+                endType: typeof coupons[0].end
+            });
+        }
+
+        // Get total count for pagination
+        const total = await db.coupons.countDocuments(query);
+
+        // Add usage statistics for each coupon
+        const couponsWithUsage = await Promise.all(coupons.map(async (coupon) => {
+            const usageCount = await db.couponUsages.countDocuments({ 
+                couponCode: coupon.code 
+            });
+            
+            return {
+                ...coupon,
+                usageCount: usageCount,
+                isUsed: usageCount > 0
+            };
+        }));
+
+        return res.status(200).json({
+            coupons: couponsWithUsage,
+            pagination: {
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / parseInt(limit)),
+                totalItems: total,
+                itemsPerPage: parseInt(limit)
+            }
+        });
+    } catch (err) {
+        console.error('Error fetching active coupons:', err);
+        return res.status(500).json({
+            message: 'Failed to fetch active coupons'
+        });
+    }
+});
+
+// Get available coupons (filtered by restrictions)
 router.get('/api/coupons/available', async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
+    const requestAppName = req.query.appName;
+    const categoryIds = req.query.categoryIds ? req.query.categoryIds.split(',') : [];
+    const productIds = req.query.productIds ? req.query.productIds.split(',') : [];
+    const areaIds = req.query.areaIds ? req.query.areaIds.split(',') : [];
 
     try {
         const offsetHours = getUTCOffset();
@@ -176,7 +356,44 @@ router.get('/api/coupons/available', async (req, res) => {
             end: { $gte: currentTime }
         }).toArray();
 
-        return res.status(200).json(coupons);
+        // Filter coupons based on applicableTo restrictions
+        const filteredCoupons = coupons.filter(coupon => {
+            if (!coupon.applicableTo) {
+                return true; // No restrictions, apply to all
+            }
+            
+            // Check stores restriction
+            if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) {
+                if (!storeId || !coupon.applicableTo.stores.includes(storeId)) {
+                    return false;
+                }
+            }
+            
+            // Check categories restriction
+            if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) {
+                if (categoryIds.length === 0 || !categoryIds.some(catId => coupon.applicableTo.categories.includes(catId))) {
+                    return false;
+                }
+            }
+            
+            // Check products restriction
+            if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) {
+                if (productIds.length === 0 || !productIds.some(prodId => coupon.applicableTo.products.includes(prodId))) {
+                    return false;
+                }
+            }
+            
+            // Check supported areas restriction
+            if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
+                if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+
+        return res.status(200).json(filteredCoupons);
     } catch (err) {
         return res.status(400).json({
             message: 'Failed to fetch available coupons'
@@ -189,6 +406,10 @@ router.get('/api/coupons/customer/:customerId/available', async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
     const customerId = req.params.customerId;
+    const requestAppName = req.query.appName;
+    const categoryIds = req.query.categoryIds ? req.query.categoryIds.split(',') : [];
+    const productIds = req.query.productIds ? req.query.productIds.split(',') : [];
+    const areaIds = req.query.areaIds ? req.query.areaIds.split(',') : [];
 
     try {
         const offsetHours = getUTCOffset();
@@ -206,7 +427,44 @@ router.get('/api/coupons/customer/:customerId/available', async (req, res) => {
             ]
         }).toArray();
 
-        return res.status(200).json(coupons);
+        // Filter coupons based on applicableTo restrictions
+        const filteredCoupons = coupons.filter(coupon => {
+            if (!coupon.applicableTo) {
+                return true; // No restrictions, apply to all
+            }
+            
+            // Check stores restriction
+            if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) {
+                if (!requestAppName || !coupon.applicableTo.stores.includes(requestAppName)) {
+                    return false;
+                }
+            }
+            
+            // Check categories restriction
+            if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) {
+                if (categoryIds.length === 0 || !categoryIds.some(catId => coupon.applicableTo.categories.includes(catId))) {
+                    return false;
+                }
+            }
+            
+            // Check products restriction
+            if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) {
+                if (productIds.length === 0 || !productIds.some(prodId => coupon.applicableTo.products.includes(prodId))) {
+                    return false;
+                }
+            }
+            
+            // Check supported areas restriction
+            if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
+                if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+
+        return res.status(200).json(filteredCoupons);
     } catch (err) {
         return res.status(400).json({
             message: 'Failed to fetch customer coupons'
@@ -237,6 +495,11 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
     const appName ='shoofi';
     const db = req.app.db[appName];
     const customerId = req.params.customerId;
+    const requestAppName = req.query.storeId;
+    const orderAmount = parseFloat(req.query.orderAmount) || 0;
+    const categoryIds = req.query.categoryIds ? req.query.categoryIds.split(',') : [];
+    const productIds = req.query.productIds ? req.query.productIds.split(',') : [];
+    const areaIds = req.query.areaIds ? req.query.areaIds.split(',') : [];
 
     try {
         const offsetHours = getUTCOffset();
@@ -246,6 +509,11 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
         console.log('Current time (with offset):', currentTime);
         console.log('App name:', appName);
         console.log('Customer ID:', customerId);
+        console.log('Store ID:', requestAppName);
+        console.log('Order amount:', orderAmount, 'Type:', typeof orderAmount);
+        console.log('Category IDs:', categoryIds);
+        console.log('Product IDs:', productIds);
+        console.log('Area IDs:', areaIds);
         
         const autoApplyCoupons = await db.coupons.find({
             isActive: true,
@@ -261,10 +529,139 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
             ]
         }).toArray();
 
-        console.log('Found auto-apply coupons:', autoApplyCoupons.length);
-        console.log('Coupons:', autoApplyCoupons);
+        console.log('=== FILTERING COUPONS ===');
+        console.log('Total coupons before filtering:', autoApplyCoupons.length);
+        
+        // Filter coupons based on applicableTo restrictions and minimum order amount
+        const filteredCoupons = autoApplyCoupons.filter(coupon => {
+            console.log(`\nChecking coupon ${coupon.code}:`);
+            console.log(`  - Original minOrderAmount: ${coupon.minOrderAmount} (${typeof coupon.minOrderAmount})`);
+            
+            // Check minimum order amount first - ensure both are numbers
+            const couponMinOrderAmount = parseFloat(coupon.minOrderAmount) || 0;
+            console.log(`  - Parsed minOrderAmount: ${couponMinOrderAmount} (${typeof couponMinOrderAmount})`);
+            console.log(`  - Order amount: ${orderAmount} (${typeof orderAmount})`);
+            
+            if (couponMinOrderAmount > 0 && orderAmount < couponMinOrderAmount) {
+                console.log(`  ❌ FILTERED OUT: ${orderAmount} < ${couponMinOrderAmount}`);
+                return false;
+            }
+            
+            console.log(`  ✅ PASSED minOrderAmount check: ${orderAmount} >= ${couponMinOrderAmount || 'none'}`);
+            
+            if (!coupon.applicableTo) {
+                return true; // No restrictions, apply to all
+            }
+            
+            // Check stores restriction
+            if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) {
+                if (!requestAppName || !coupon.applicableTo.stores.includes(requestAppName)) {
+                    return false;
+                }
+            }
+            
+            // Check categories restriction
+            if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) {
+                if (categoryIds.length === 0 || !categoryIds.some(catId => coupon.applicableTo.categories.includes(catId))) {
+                    return false;
+                }
+            }
+            
+            // Check products restriction
+            if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) {
+                if (productIds.length === 0 || !productIds.some(prodId => coupon.applicableTo.products.includes(prodId))) {
+                    return false;
+                }
+            }
+            
+            // Check supported areas restriction
+            if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
+                if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
+                    return false;
+                }
+            }
+            
+            return true;
+        });
 
-        return res.status(200).json(autoApplyCoupons);
+        console.log(`\n=== FILTERING COMPLETE ===`);
+        console.log(`Coupons after filtering: ${filteredCoupons.length}`);
+        filteredCoupons.forEach(coupon => {
+            console.log(`  - ${coupon.code}: minOrderAmount=${coupon.minOrderAmount}`);
+        });
+
+        // Score and select the best coupon
+        const scoredCoupons = filteredCoupons.map(coupon => {
+            let score = 0;
+            
+            // Calculate discount amount for scoring
+            let discountAmount = 0;
+            switch (coupon.type) {
+                case 'percentage':
+                    discountAmount = (orderAmount * coupon.value) / 100;
+                    if (coupon.maxDiscount) {
+                        discountAmount = Math.min(discountAmount, coupon.maxDiscount);
+                    }
+                    break;
+                case 'fixed_amount':
+                    discountAmount = coupon.value;
+                    break;
+                case 'free_delivery':
+                    discountAmount = req.query.deliveryFee ? parseFloat(req.query.deliveryFee) : 0;
+                    break;
+            }
+            
+            // Primary scoring: Higher minimum order amount (better deal when order qualifies)
+            const couponMinOrderAmount = parseFloat(coupon.minOrderAmount) || 0;
+            if (couponMinOrderAmount > 0) {
+                // Higher min order amount gets higher score (better deal)
+                score += couponMinOrderAmount * 1000;
+            } else {
+                // No minimum order amount gets base score
+                score += 0;
+            }
+            
+            // Secondary scoring: Higher discount amount
+            score += discountAmount * 100;
+            
+            // Tertiary scoring: Customer-specific coupons get priority
+            if (coupon.isCustomerSpecific) {
+                score += 10000;
+            }
+            
+            // Quaternary scoring: More specific restrictions (more targeted = better)
+            let restrictionCount = 0;
+            if (coupon.applicableTo) {
+                if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) restrictionCount++;
+                if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) restrictionCount++;
+                if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) restrictionCount++;
+                if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) restrictionCount++;
+            }
+            score += restrictionCount * 10;
+            
+            return {
+                ...coupon,
+                score: score,
+                discountAmount: discountAmount
+            };
+        });
+        
+        // Sort by score (highest first) and return only the best match
+        scoredCoupons.sort((a, b) => b.score - a.score);
+        
+        const bestCoupon = scoredCoupons.length > 0 ? scoredCoupons[0] : null;
+        
+        console.log('Found auto-apply coupons:', filteredCoupons.length);
+        console.log('Scored coupons:', scoredCoupons.map(c => ({ code: c.code, score: c.score, discountAmount: c.discountAmount })));
+        console.log('Best coupon:', bestCoupon ? { code: bestCoupon.code, score: bestCoupon.score, discountAmount: bestCoupon.discountAmount } : null);
+
+        // Return only the best coupon (remove score and discountAmount from response)
+        if (bestCoupon) {
+            const { score, discountAmount, ...couponResponse } = bestCoupon;
+            return res.status(200).json([couponResponse]);
+        }
+        
+        return res.status(200).json([]);
     } catch (err) {
         console.error('Error fetching auto-apply coupons:', err);
         return res.status(400).json({
@@ -305,48 +702,122 @@ router.get('/api/admin/coupons',  async (req, res) => {
 });
 
 // Create coupon
-router.post('/api/admin/coupon/create',  async (req, res) => {
+router.post('/api/admin/coupon/create', upload.array("img"), async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
-    const exists = await db.coupons.findOne({ code: req.body.code.toUpperCase() });
+    
+    // Debug: Log what's being received
+    console.log('Create coupon request body:', req.body);
+    console.log('Create coupon request files:', req.files);
+    
+    // Handle file upload if present
+    let image = null;
+    if (req.files && req.files.length > 0) {
+        try {
+            const images = await uploadFile(req.files, req, "coupons");
+            image = images.length > 0 ? images[0] : null;
+        } catch (uploadError) {
+            console.error('File upload error:', uploadError);
+            return res.status(400).json({
+                message: 'Failed to upload image'
+            });
+        }
+    }
+    
+    // Handle fields that might come as arrays due to FormData duplication
+    const code = Array.isArray(req.body.code) ? req.body.code[0] : req.body.code;
+    
+    // Helper function to safely extract field values
+    const getFieldValue = (fieldName) => {
+        const value = req.body[fieldName];
+        return Array.isArray(value) ? value[0] : value;
+    };
+    
+    // Validate required fields
+    const requiredFields = ['name', 'type', 'value', 'usageLimit', 'usagePerUser', 'start', 'end'];
+    const missingFields = requiredFields.filter(field => !getFieldValue(field));
+    
+    // Check code separately
+    if (!code) {
+        return res.status(400).json({
+            message: 'Missing required field: code'
+        });
+    }
+    
+    if (missingFields.length > 0) {
+        return res.status(400).json({
+            message: `Missing required fields: ${missingFields.join(', ')}`
+        });
+    }
+    
+    const exists = await db.coupons.findOne({ code: code.toUpperCase() });
     if(exists){
         return res.status(400).json({
             message: 'Coupon code already exists'
         });
     }
     
+    // Parse boolean values from FormData
+    const isCustomerSpecific = getFieldValue('isCustomerSpecific') === 'true' || getFieldValue('isCustomerSpecific') === true;
+    const isAutoApply = getFieldValue('isAutoApply') === 'true' || getFieldValue('isAutoApply') === true;
+    const isActive = getFieldValue('isActive') === 'true' || getFieldValue('isActive') === true;
+    
     // Validate customer-specific coupon
-    if (req.body.isCustomerSpecific && !req.body.customerId) {
+    if (isCustomerSpecific && !getFieldValue('customerId')) {
         return res.status(400).json({
             message: 'Customer ID is required for customer-specific coupons'
         });
     }
     
     const offsetHours = getUTCOffset();
+    
+    // Parse arrays from JSON strings if they come from FormData
+    const parseArrayField = (field) => {
+        if (typeof field === 'string') {
+            try {
+                return JSON.parse(field);
+            } catch (e) {
+                return [];
+            }
+        }
+        return field || [];
+    };
+    
     const couponDoc = {
-        code: req.body.code.toUpperCase(),
-        type: req.body.type,
-        value: parseFloat(req.body.value),
-        maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
-        minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
-        usageLimit: parseInt(req.body.usageLimit),
-        usagePerUser: parseInt(req.body.usagePerUser),
-        start: moment.tz(req.body.start, 'Asia/Jerusalem').toDate(),
-        end: moment.tz(req.body.end, 'Asia/Jerusalem').toDate(),
+        code: code.toUpperCase(),
+        name: getFieldValue('name'),
+        nameForStore: getFieldValue('nameForStore') || '',
+        subNameForStore: getFieldValue('subNameForStore') || '',
+        storeTagName: getFieldValue('storeTagName') || '',
+        nameForCheckout: getFieldValue('nameForCheckout') || '',
+        nameForPartner: getFieldValue('nameForPartner') || '',
+        nameForShoofir: getFieldValue('nameForShoofir') || '',
+        type: getFieldValue('type'),
+        discountType: getFieldValue('discountType') || 'order_items',
+        value: parseFloat(getFieldValue('value')),
+        maxDiscount: getFieldValue('type') === 'free_delivery' ? null : (getFieldValue('maxDiscount') ? parseFloat(getFieldValue('maxDiscount')) : null),
+        minOrderAmount: getFieldValue('type') === 'free_delivery' ? null : (getFieldValue('minOrderAmount') ? parseFloat(getFieldValue('minOrderAmount')) : null),
+        usageLimit: parseInt(getFieldValue('usageLimit')),
+        usagePerUser: parseInt(getFieldValue('usagePerUser')),
+        start: moment.tz(getFieldValue('start'), 'Asia/Jerusalem').toDate(),
+        end: moment.tz(getFieldValue('end'), 'Asia/Jerusalem').toDate(),
         applicableTo: {
-            categories: req.body.categories || [],
-            products: req.body.products || [],
-            stores: req.body.stores || []
+            categories: parseArrayField(req.body.categories),
+            products: parseArrayField(req.body.products),
+            stores: parseArrayField(req.body.stores),
+            supportedAreas: parseArrayField(req.body.supportedAreas)
         },
-        isActive: true,
-        isCustomerSpecific: req.body.isCustomerSpecific || false,
-        customerId: req.body.isCustomerSpecific ? req.body.customerId : null,
-        isAutoApply: req.body.isAutoApply || false
+        isActive: isActive,
+        isCustomerSpecific: isCustomerSpecific,
+        customerId: isCustomerSpecific ? getFieldValue('customerId') : null,
+        isAutoApply: isAutoApply,
+        color: getFieldValue('color') || 'white',
+        image: image
     };
 
     // Validate schema - only include customerId in validation if isCustomerSpecific is true
     const validationDoc = { ...couponDoc };
-    if (!req.body.isCustomerSpecific) {
+    if (!isCustomerSpecific) {
         delete validationDoc.customerId;
     }
     
@@ -389,57 +860,175 @@ router.post('/api/admin/coupon/create',  async (req, res) => {
 });
 
 // Update coupon
-router.post('/api/admin/coupon/update',  async (req, res) => {
+router.post('/api/admin/coupon/update', upload.array("img"), async (req, res) => {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
 
+    // Debug: Log what's being received
+    console.log('Update coupon request body:', req.body);
+    console.log('Update coupon request files:', req.files);
+
+    // Handle file upload if present
+    let image = null;
+    if (req.files && req.files.length > 0) {
+        try {
+            const images = await uploadFile(req.files, req, "coupons");
+            image = images.length > 0 ? images[0] : null;
+        } catch (uploadError) {
+            console.error('File upload error:', uploadError);
+            return res.status(400).json({
+                message: 'Failed to upload image'
+            });
+        }
+    }
+
+    // Handle fields that might come as arrays due to FormData duplication
+    const couponId = Array.isArray(req.body.couponId) ? req.body.couponId[0] : req.body.couponId;
+    const code = Array.isArray(req.body.code) ? req.body.code[0] : req.body.code;
+    
+    // Helper function to safely extract field values
+    const getFieldValue = (fieldName) => {
+        const value = req.body[fieldName];
+        return Array.isArray(value) ? value[0] : value;
+    };
+    
+    // Validate required fields
+    const requiredFields = ['name', 'type', 'value', 'usageLimit', 'usagePerUser', 'start', 'end'];
+    const missingFields = requiredFields.filter(field => !getFieldValue(field));
+    
+    // Check couponId and code separately
+    if (!couponId) {
+        return res.status(400).json({
+            message: 'Missing required field: couponId'
+        });
+    }
+    
+    if (!code) {
+        return res.status(400).json({
+            message: 'Missing required field: code'
+        });
+    }
+    
+    if (missingFields.length > 0) {
+        return res.status(400).json({
+            message: `Missing required fields: ${missingFields.join(', ')}`
+        });
+    }
+    
+    // Parse boolean values from FormData
+    const isCustomerSpecific = getFieldValue('isCustomerSpecific') === 'true' || getFieldValue('isCustomerSpecific') === true;
+    const isAutoApply = getFieldValue('isAutoApply') === 'true' || getFieldValue('isAutoApply') === true;
+    const isActive = getFieldValue('isActive') === 'true' || getFieldValue('isActive') === true;
+    
     // Validate customer-specific coupon
-    if (req.body.isCustomerSpecific && !req.body.customerId) {
+    if (isCustomerSpecific && !getFieldValue('customerId')) {
         return res.status(400).json({
             message: 'Customer ID is required for customer-specific coupons'
         });
     }
 
+    // Get existing coupon to handle image updates
+    const currentCoupon = await db.coupons.findOne({ _id: getId(couponId) });
+    if (!currentCoupon) {
+        return res.status(404).json({
+            message: 'Coupon not found'
+        });
+    }
+
+    // Handle image update
+    let finalImage = currentCoupon.image;
+    
+    // Check if user wants to remove the image
+    const shouldRemoveImage = getFieldValue('removeImage') === 'true';
+    
+    if (shouldRemoveImage) {
+        // User wants to remove the image
+        finalImage = null;
+        
+        // Delete old image if it exists
+        if (currentCoupon.image) {
+            await deleteImages([currentCoupon.image], req);
+        }
+    } else if (req.files && req.files.length > 0) {
+        // New image uploaded
+        finalImage = image;
+        
+        // Delete old image if it exists
+        if (currentCoupon.image) {
+            await deleteImages([currentCoupon.image], req);
+        }
+    }
+    
+    // Debug: Log the final image structure
+    console.log('Final image structure:', finalImage);
+
     const offsetHours = getUTCOffset();
+    // Parse arrays from JSON strings if they come from FormData
+    const parseArrayField = (field) => {
+        if (typeof field === 'string') {
+            try {
+                return JSON.parse(field);
+            } catch (e) {
+                return [];
+            }
+        }
+        return field || [];
+    };
+
     const couponDoc = {
-        couponId: req.body.couponId,
-        code: req.body.code.toUpperCase(),
-        type: req.body.type,
-        value: parseFloat(req.body.value),
-        maxDiscount: req.body.type === 'free_delivery' ? null : (req.body.maxDiscount ? parseFloat(req.body.maxDiscount) : null),
-        minOrderAmount: req.body.type === 'free_delivery' ? null : (req.body.minOrderAmount ? parseFloat(req.body.minOrderAmount) : null),
-        usageLimit: parseInt(req.body.usageLimit),
-        usagePerUser: parseInt(req.body.usagePerUser),
-        start: moment.tz(req.body.start, 'Asia/Jerusalem').toDate(),
-        end: moment.tz(req.body.end, 'Asia/Jerusalem').toDate(),
+        couponId: couponId,
+        code: code.toUpperCase(),
+        name: getFieldValue('name'),
+        nameForStore: getFieldValue('nameForStore') || '',
+        subNameForStore: getFieldValue('subNameForStore') || '',
+        storeTagName: getFieldValue('storeTagName') || '',
+        nameForCheckout: getFieldValue('nameForCheckout') || '',
+        nameForPartner: getFieldValue('nameForPartner') || '',
+        nameForShoofir: getFieldValue('nameForShoofir') || '',
+        type: getFieldValue('type'),
+        discountType: getFieldValue('discountType') || 'order_items',
+        value: parseFloat(getFieldValue('value')),
+        maxDiscount: getFieldValue('type') === 'free_delivery' ? null : (getFieldValue('maxDiscount') ? parseFloat(getFieldValue('maxDiscount')) : null),
+        minOrderAmount: getFieldValue('type') === 'free_delivery' ? null : (getFieldValue('minOrderAmount') ? parseFloat(getFieldValue('minOrderAmount')) : null),
+        usageLimit: parseInt(getFieldValue('usageLimit')),
+        usagePerUser: parseInt(getFieldValue('usagePerUser')),
+        start: moment.tz(getFieldValue('start'), 'Asia/Jerusalem').toDate(),
+        end: moment.tz(getFieldValue('end'), 'Asia/Jerusalem').toDate(),
         applicableTo: {
-            categories: req.body.categories || [],
-            products: req.body.products || [],
-            stores: req.body.stores || []
+            categories: parseArrayField(req.body.categories),
+            products: parseArrayField(req.body.products),
+            stores: parseArrayField(req.body.stores),
+            supportedAreas: parseArrayField(req.body.supportedAreas)
         },
-        isActive: req.body.isActive,
-        isCustomerSpecific: req.body.isCustomerSpecific || false,
-        customerId: req.body.isCustomerSpecific ? req.body.customerId : null,
-        isAutoApply: req.body.isAutoApply || false
+        isActive: isActive,
+        isCustomerSpecific: isCustomerSpecific,
+        customerId: isCustomerSpecific ? getFieldValue('customerId') : null,
+        isAutoApply: isAutoApply,
+        color: getFieldValue('color') || 'white',
+        image: finalImage
     };
 
     // Validate schema - only include customerId in validation if isCustomerSpecific is true
     const validationDoc = { ...couponDoc };
-    if (!req.body.isCustomerSpecific) {
+    if (!isCustomerSpecific) {
         delete validationDoc.customerId;
     }
     
+    // Debug: Log the validation document
+    console.log('Validation document:', JSON.stringify(validationDoc, null, 2));
+    
     const schemaValidate = validateJson('editCoupon', validationDoc);
     if (!schemaValidate.result) {
+        console.log('Schema validation errors:', schemaValidate.errors);
         return res.status(400).json(schemaValidate.errors);
     }
 
     // Check if code exists (excluding current coupon)
-    const existingCoupon = await db.coupons.findOne({
+    const duplicateCoupon = await db.coupons.findOne({
         code: couponDoc.code,
         _id: { $ne: getId(couponDoc.couponId) }
     });
-    if (existingCoupon) {
+    if (duplicateCoupon) {
         return res.status(400).json({
             message: 'Coupon code already exists'
         });
