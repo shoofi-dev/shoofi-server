@@ -3,7 +3,7 @@ const APP_CONSTS = require("../consts/consts");
 const { expressjwt } = require("express-jwt");
 const jwt = require("jsonwebtoken");
 const { getId } = require("../lib/common");
-const shoofiAdminFakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6IjA1NDI0NTQzNjIiLCJpZCI6IjY1N2RhODVmNDE4ZTAwNTZlMDcwYTAwMCIsImV4cCI6MTc1NDkyNzQ3OCwiaWF0IjoxNzIzODIzNDc4fQ.aVmYgx_MJkfpWYBFI6TDI4YfZSAhEhBBz_R3S7K9l3M";
+const shoofiAdminFakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZSI6IjA1Mjg2MDIxMjEiLCJpZCI6IjY4NzY4MTFhM2M1M2EyMDAwZGQ2NTc2MiIsImV4cCI6MTg4NDUxNzY5NCwiaWF0IjoxNzU0OTE3Njk0fQ.T8VRn0rd-dkQ6Ei7PZ_dQtdVQcdrGcmmA8IojLI_6EU";
 const getTokenFromHeaders = async (req, res) => {
   const appType = req.headers['app-type'];
 
