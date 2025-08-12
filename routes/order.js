@@ -922,44 +922,67 @@ router.post("/api/order/updateCCPayment", async (req, res, next) => {
         // Send notifications for successful payment
         await sendStoreOwnerNotifications(orderDoc, req, appName);
         
-        // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
-        try {
-          const docId = response.data.ZCreditInvoiceReceiptResponse?.DocumentID;
-          if (docId) {
+        // Invoice mail handling - completely non-blocking for better UX
+        const docId = response.data.ZCreditInvoiceReceiptResponse?.DocumentID;
+        if (docId) {
+          // Queue invoice processing in background without blocking response
+          setImmediate(async () => {
             try {
-              await invoiceMailService.saveInvoice(docId, req);
+              console.log(`Processing invoice for docId: ${docId} in background`);
+              const invoiceResult = await invoiceMailService.saveInvoice(docId, req);
               
-              // Only attempt URL shortening if invoice save was successful
-              try {
-                const shortenedUrl = await turl.shorten(
-                  `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
-                );
-                
-                // Update order with shortened URL - non-critical update
+              if (invoiceResult) {
+                // Invoice was processed successfully, update order with URL
                 try {
+                  const shortenedUrl = await turl.shorten(
+                    `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                  );
+                  
                   await db.orders.updateOne(
-                    { _id: getId(orderDoc._id) },
+                    { _id: getId(orderId) },
                     {
                       $set: {
-                        "ccPaymentRefData.url": shortenedUrl
+                        "ccPaymentRefData.url": shortenedUrl,
+                        "ccPaymentRefData.invoiceStatus": "completed",
+                        "ccPaymentRefData.processedAt": new Date()
                       },
                     },
                     { multi: false }
                   );
-                } catch (urlUpdateError) {
-                  console.error("Failed to update order with invoice URL:", urlUpdateError);
+                  
+                  console.log(`Successfully updated order ${orderId} with invoice URL`);
+                } catch (urlError) {
+                  console.error("Failed to process invoice URL for order:", urlError);
                 }
-              } catch (urlError) {
-                console.error("Failed to shorten invoice URL:", urlError);
+              } else {
+                // Invoice not found, queue for background processing
+                console.log(`Invoice not found for docId: ${docId}, queuing for background processing`);
+                invoiceMailService.queueInvoiceForProcessing(docId, req);
+                
+                // Update order to indicate invoice is pending
+                try {
+                  await db.orders.updateOne(
+                    { _id: getId(orderId) },
+                    {
+                      $set: {
+                        "ccPaymentRefData.invoiceStatus": "pending",
+                        "ccPaymentRefData.docId": docId
+                      },
+                    },
+                    { multi: false }
+                  );
+                } catch (updateError) {
+                  console.error("Failed to update order with invoice status:", updateError);
+                }
               }
-            } catch (saveError) {
-              console.error("Failed to save invoice:", saveError);
+            } catch (error) {
+              console.error("Background invoice processing error:", error);
+              // Queue for background processing as fallback
+              invoiceMailService.queueInvoiceForProcessing(docId, req);
             }
-          } else {
-            console.error("No document ID in invoice response:", response.data.ZCreditInvoiceReceiptResponse);
-          }
-        } catch (invoiceError) {
-          console.error("Invoice processing error:", invoiceError);
+          });
+        } else {
+          console.error("No document ID in invoice response:", response.data.ZCreditInvoiceReceiptResponse);
         }
 
         res.status(200).json({ errorMessage: "valid invoice doc" });
@@ -1269,52 +1292,68 @@ router.post(
                     }
                   });
                   
-                  // Invoice mail handling - wrapped in try-catch to continue order processing even if invoice fails
-                  try {
-                    const docId = paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse?.DocumentID;
-                    if (docId) {
+                  // Invoice mail handling - completely non-blocking for better UX
+                  const docId = paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse?.DocumentID;
+                  if (docId) {
+                    // Queue invoice processing in background without blocking response
+                    setImmediate(async () => {
                       try {
-                        await invoiceMailService.saveInvoice(docId, req);
+                        console.log(`Processing invoice for docId: ${docId} in background`);
+                        const invoiceResult = await invoiceMailService.saveInvoice(docId, req);
                         
-                        // Only attempt URL shortening if invoice save was successful
-                        try {
-                          const shortenedUrl = await turl.shorten(
-                            `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
-                          );
+                        if (invoiceResult) {
+                          // Invoice was processed successfully, update order with URL
+                          try {
+                            const shortenedUrl = await turl.shorten(
+                              `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                            );
+                            
+                            await db.orders.updateOne(
+                              { _id: getId(orderId) },
+                              {
+                                $set: {
+                                  "ccPaymentRefData.url": shortenedUrl,
+                                  "ccPaymentRefData.invoiceStatus": "completed",
+                                  "ccPaymentRefData.processedAt": new Date()
+                                },
+                              },
+                              { multi: false }
+                            );
+                            
+                            console.log(`Successfully updated order ${orderId} with invoice URL`);
+                          } catch (urlError) {
+                            console.error("Failed to process invoice URL for order:", urlError);
+                          }
+                        } else {
+                          // Invoice not found, queue for background processing
+                          console.log(`Invoice not found for docId: ${docId}, queuing for background processing`);
+                          invoiceMailService.queueInvoiceForProcessing(docId, req);
                           
-                          // Update order with shortened URL - non-critical update
+                          // Update order to indicate invoice is pending
                           try {
                             await db.orders.updateOne(
                               { _id: getId(orderId) },
                               {
                                 $set: {
-                                  "ccPaymentRefData.url": shortenedUrl
+                                  "ccPaymentRefData.invoiceStatus": "pending",
+                                  "ccPaymentRefData.docId": docId
                                 },
                               },
                               { multi: false }
                             );
-                          } catch (urlUpdateError) {
-                            console.error("Failed to update order with invoice URL:", urlUpdateError);
+                          } catch (updateError) {
+                            console.error("Failed to update order with invoice status:", updateError);
                           }
-                        } catch (urlError) {
-                          console.error("Failed to shorten invoice URL:", urlError);
                         }
-                      } catch (saveError) {
-                        console.error("Failed to save invoice:", saveError);
+                      } catch (error) {
+                        console.error("Background invoice processing error:", error);
+                        // Queue for background processing as fallback
+                        invoiceMailService.queueInvoiceForProcessing(docId, req);
                       }
-                    } else {
-                      console.error("No document ID in invoice response:", paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse);
-                    }
-                  } catch (invoiceError) {
-                    console.error("Invoice processing error:", invoiceError);
+                    });
+                  } else {
+                    console.error("No document ID in invoice response:", paymentResult?.paymentData?.ZCreditInvoiceReceiptResponse);
                   }
-      
-                  res.status(200).json({
-                    message: "Order created and payment processed successfully",
-                    orderId,
-                    paymentStatus: "success",
-                  });
-                  return;
                 } else {
                   // Track payment failure centrally
                   await centralizedFlowMonitor.trackOrderFlowEvent({
