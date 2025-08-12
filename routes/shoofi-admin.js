@@ -900,11 +900,20 @@ router.get('/admin/websocket/connections', async (req, res) => {
 });
 
 // New endpoint for explore screen with server-side filtering and area-based caching
+// Features:
+// - Random store sorting within each category while keeping open stores first
+// - Area-based caching for performance with fresh random ordering each time
+// - Seeded randomization for consistent ordering when needed
+//
+// Query parameters:
+// - location: JSON string with lat/lng or coordinates array
+// - seed: optional random seed for consistent store ordering
 router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) => {
   try {
     
     const dbAdmin = req.app.db['shoofi'];
     const location = req.query.location ? JSON.parse(req.query.location) : null;
+    const randomSeed = req.query.seed || Date.now(); // Use provided seed or current timestamp
     
     // Require location parameter
     if (!location || (location.lat === undefined && location.coordinates === undefined)) {
@@ -952,11 +961,52 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       cacheKey = `explore_categories_no_area_${lat}_${lng}`;
     }
     
+    // Helper function to apply random sorting to stores
+    const applyRandomSorting = (categoriesData) => {
+      return categoriesData.map(categoryData => {
+        const stores = categoryData.stores || [];
+        
+        // Separate open and closed stores
+        const openStores = stores.filter(store => store.storeData?.isOpen);
+        const closedStores = stores.filter(store => !store.storeData?.isOpen);
+        
+        // Create seeded random function for consistent shuffling
+        const seededRandom = (seed) => {
+          const x = Math.sin(seed) * 10000;
+          return x - Math.floor(x);
+        };
+        
+        // Randomly shuffle open stores using seeded random
+        const shuffledOpenStores = openStores.sort(() => {
+          const randomValue = seededRandom(randomSeed + openStores.length);
+          return randomValue - 0.5;
+        });
+        
+        // Randomly shuffle closed stores using seeded random
+        const shuffledClosedStores = closedStores.sort(() => {
+          const randomValue = seededRandom(randomSeed + closedStores.length + 1000);
+          return randomValue - 0.5;
+        });
+        
+        // Combine: open stores first (randomly sorted), then closed stores (randomly sorted)
+        const randomlySortedStores = [...shuffledOpenStores, ...shuffledClosedStores];
+        
+        return {
+          ...categoryData,
+          stores: randomlySortedStores
+        };
+      });
+    };
+
+    // Check cache first
     const cachedData = await getExploreCache(cacheKey);
     console.log(`Cache lookup for key: ${cacheKey}, found: ${cachedData ? 'yes' : 'no'}`);
+    
     if (cachedData) {
-      console.log('Explore categories served from cache');
-      return res.status(200).json(cachedData);
+      console.log('Explore categories found in cache - applying random sorting');
+      const updatedCachedData = applyRandomSorting(cachedData);
+      console.log(`Random sorting applied to cached data with seed: ${randomSeed}`);
+      return res.status(200).json(updatedCachedData);
     }
 
     // Get available stores using the same service as available-stores endpoint
@@ -998,27 +1048,34 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     // Create categories with stores data
     const categoriesWithStores = allCategories
       .filter(category => storesByCategory[category._id])
-      .map(category => ({
-        category: category,
-        stores: (storesByCategory[category._id] || []).sort((a, b) => {
-          // Sort by isOpen status (open stores first)
-          const aIsOpen = a.storeData?.isOpen || false;
-          const bIsOpen = b.storeData?.isOpen || false;
-          if (aIsOpen !== bIsOpen) {
-            return bIsOpen ? 1 : -1; // Open stores come first
-          }
-          return 0;
-        })
-      }))
+      .map(category => {
+        const stores = storesByCategory[category._id] || [];
+        
+        // Log store counts for debugging
+        if (stores.length > 0) {
+          const openCount = stores.filter(store => store.storeData?.isOpen).length;
+          const closedCount = stores.filter(store => !store.storeData?.isOpen).length;
+          console.log(`Category ${category.name}: ${openCount} open stores, ${closedCount} closed stores`);
+        }
+        
+        return {
+          category: category,
+          stores: stores
+        };
+      })
       .filter(item => item.stores.length > 0) // Only include categories with stores
       .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
+
+    // Apply random sorting to the fresh data
+    const randomlySortedCategories = applyRandomSorting(categoriesWithStores);
 
     // Cache the result (shorter TTL for store status changes)
     await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
     console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
+    console.log(`Random sorting applied with seed: ${randomSeed}`);
 
-    res.status(200).json(categoriesWithStores);
+    res.status(200).json(randomlySortedCategories);
 
   } catch (error) {
     console.error('Error fetching explore categories:', error);
