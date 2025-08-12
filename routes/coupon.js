@@ -7,6 +7,7 @@ const { getId } = require('../lib/common');
 const { uploadFile, deleteImages } = require('./product');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const auth = require('./auth');
 
 const getUTCOffset = () => {
   const israelTimezone = "Asia/Jerusalem";
@@ -226,7 +227,8 @@ router.get('/api/coupons/active', async (req, res) => {
             $or: [
                 { isActive: true },
                 { isActive: "true" }
-            ]
+            ],
+            isCustomerSpecific: { $ne: true }
         };
         
         if (!includeExpired) {
@@ -500,6 +502,9 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
     const categoryIds = req.query.categoryIds ? req.query.categoryIds.split(',') : [];
     const productIds = req.query.productIds ? req.query.productIds.split(',') : [];
     const areaIds = req.query.areaIds ? req.query.areaIds.split(',') : [];
+    
+    // Verify that the authenticated user is requesting their own auto-apply coupons
+
 
     try {
         const offsetHours = getUTCOffset();
@@ -532,11 +537,40 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
         console.log('=== FILTERING COUPONS ===');
         console.log('Total coupons before filtering:', autoApplyCoupons.length);
         
+        const customerSpecificCoupon = autoApplyCoupons.find(coupon => 
+            coupon.isCustomerSpecific && coupon.customerId === customerId && orderAmount >= coupon.minOrderAmount
+        );
+        
+        if (customerSpecificCoupon) {
+            // Check usage limits for customer-specific coupon
+            const usageCount = await db.couponUsages.countDocuments({ 
+                couponCode: customerSpecificCoupon.code 
+            });
+            
+            const userUsageCount = await db.couponUsages.countDocuments({ 
+                couponCode: customerSpecificCoupon.code,
+                userId: customerId
+            });
+            
+            // Check if coupon has reached its total usage limit
+            if (customerSpecificCoupon.usageLimit && usageCount >= customerSpecificCoupon.usageLimit) {
+                console.log('Customer-specific coupon reached total usage limit:', customerSpecificCoupon.code);
+                // Continue to general coupons instead of returning empty
+            } else if (customerSpecificCoupon.usagePerUser && userUsageCount >= customerSpecificCoupon.usagePerUser) {
+                console.log('Customer-specific coupon reached per-user usage limit:', customerSpecificCoupon.code);
+                // Continue to general coupons instead of returning empty
+            } else {
+                console.log('Found valid customer-specific coupon:', customerSpecificCoupon.code);
+                return res.status(200).json([customerSpecificCoupon]);
+            }
+        }
         // Filter coupons based on applicableTo restrictions and minimum order amount
-        const filteredCoupons = autoApplyCoupons.filter(coupon => {
+        const filteredCoupons = [];
+        
+        for (const coupon of autoApplyCoupons) {
             console.log(`\nChecking coupon ${coupon.code}:`);
             console.log(`  - Original minOrderAmount: ${coupon.minOrderAmount} (${typeof coupon.minOrderAmount})`);
-            
+        
             // Check minimum order amount first - ensure both are numbers
             const couponMinOrderAmount = parseFloat(coupon.minOrderAmount) || 0;
             console.log(`  - Parsed minOrderAmount: ${couponMinOrderAmount} (${typeof couponMinOrderAmount})`);
@@ -544,45 +578,73 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
             
             if (couponMinOrderAmount > 0 && orderAmount < couponMinOrderAmount) {
                 console.log(`  ❌ FILTERED OUT: ${orderAmount} < ${couponMinOrderAmount}`);
-                return false;
+                continue;
             }
             
             console.log(`  ✅ PASSED minOrderAmount check: ${orderAmount} >= ${couponMinOrderAmount || 'none'}`);
             
+            // Check usage limits
+            const usageCount = await db.couponUsages.countDocuments({ 
+                couponCode: coupon.code 
+            });
+            
+            const userUsageCount = await db.couponUsages.countDocuments({ 
+                couponCode: coupon.code,
+                userId: customerId
+            });
+            
+            // Check if coupon has reached its total usage limit
+            if (coupon.usageLimit && usageCount >= coupon.usageLimit) {
+                console.log(`  ❌ FILTERED OUT: Reached total usage limit (${usageCount}/${coupon.usageLimit})`);
+                continue;
+            }
+            
+            // Check if user has reached their per-user usage limit
+            if (coupon.usagePerUser && userUsageCount >= coupon.usagePerUser) {
+                console.log(`  ❌ FILTERED OUT: Reached per-user usage limit (${userUsageCount}/${coupon.usagePerUser})`);
+                continue;
+            }
+            
             if (!coupon.applicableTo) {
-                return true; // No restrictions, apply to all
+                filteredCoupons.push(coupon); // No restrictions, apply to all
+                continue;
             }
             
             // Check stores restriction
             if (coupon.applicableTo.stores && coupon.applicableTo.stores.length > 0) {
                 if (!requestAppName || !coupon.applicableTo.stores.includes(requestAppName)) {
-                    return false;
+                    console.log(`  ❌ FILTERED OUT: Store restriction (${requestAppName} not in ${coupon.applicableTo.stores})`);
+                    continue;
                 }
             }
             
             // Check categories restriction
             if (coupon.applicableTo.categories && coupon.applicableTo.categories.length > 0) {
                 if (categoryIds.length === 0 || !categoryIds.some(catId => coupon.applicableTo.categories.includes(catId))) {
-                    return false;
+                    console.log(`  ❌ FILTERED OUT: Category restriction (${categoryIds} not matching ${coupon.applicableTo.categories})`);
+                    continue;
                 }
             }
             
             // Check products restriction
             if (coupon.applicableTo.products && coupon.applicableTo.products.length > 0) {
                 if (productIds.length === 0 || !productIds.some(prodId => coupon.applicableTo.products.includes(prodId))) {
-                    return false;
+                    console.log(`  ❌ FILTERED OUT: Product restriction (${productIds} not matching ${coupon.applicableTo.products})`);
+                    continue;
                 }
             }
             
             // Check supported areas restriction
             if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
                 if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
-                    return false;
+                    console.log(`  ❌ FILTERED OUT: Area restriction (${areaIds} not matching ${coupon.applicableTo.supportedAreas})`);
+                    continue;
                 }
             }
             
-            return true;
-        });
+            console.log(`  ✅ PASSED all checks, adding to filtered coupons`);
+            filteredCoupons.push(coupon);
+        }
 
         console.log(`\n=== FILTERING COMPLETE ===`);
         console.log(`Coupons after filtering: ${filteredCoupons.length}`);
@@ -590,7 +652,10 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
             console.log(`  - ${coupon.code}: minOrderAmount=${coupon.minOrderAmount}`);
         });
 
-        // Score and select the best coupon
+        // Check if there's a customer-specific coupon first
+  
+        
+        // If no customer-specific coupon, score and select the best general coupon
         const scoredCoupons = filteredCoupons.map(coupon => {
             let score = 0;
             
@@ -623,11 +688,6 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
             
             // Secondary scoring: Higher discount amount
             score += discountAmount * 100;
-            
-            // Tertiary scoring: Customer-specific coupons get priority
-            if (coupon.isCustomerSpecific) {
-                score += 10000;
-            }
             
             // Quaternary scoring: More specific restrictions (more targeted = better)
             let restrictionCount = 0;
