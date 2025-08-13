@@ -537,33 +537,12 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
         console.log('=== FILTERING COUPONS ===');
         console.log('Total coupons before filtering:', autoApplyCoupons.length);
         
-        const customerSpecificCoupon = autoApplyCoupons.find(coupon => 
-            coupon.isCustomerSpecific && coupon.customerId === customerId && orderAmount >= coupon.minOrderAmount
+        // Check for customer-specific coupons and mark them for priority scoring
+        const customerSpecificCoupons = autoApplyCoupons.filter(coupon => 
+            coupon.isCustomerSpecific && coupon.customerId === customerId
         );
         
-        if (customerSpecificCoupon) {
-            // Check usage limits for customer-specific coupon
-            const usageCount = await db.couponUsages.countDocuments({ 
-                couponCode: customerSpecificCoupon.code 
-            });
-            
-            const userUsageCount = await db.couponUsages.countDocuments({ 
-                couponCode: customerSpecificCoupon.code,
-                userId: customerId
-            });
-            
-            // Check if coupon has reached its total usage limit
-            if (customerSpecificCoupon.usageLimit && usageCount >= customerSpecificCoupon.usageLimit) {
-                console.log('Customer-specific coupon reached total usage limit:', customerSpecificCoupon.code);
-                // Continue to general coupons instead of returning empty
-            } else if (customerSpecificCoupon.usagePerUser && userUsageCount >= customerSpecificCoupon.usagePerUser) {
-                console.log('Customer-specific coupon reached per-user usage limit:', customerSpecificCoupon.code);
-                // Continue to general coupons instead of returning empty
-            } else {
-                console.log('Found valid customer-specific coupon:', customerSpecificCoupon.code);
-                return res.status(200).json([customerSpecificCoupon]);
-            }
-        }
+        console.log(`Found ${customerSpecificCoupons.length} customer-specific coupons`);
         // Filter coupons based on applicableTo restrictions and minimum order amount
         const filteredCoupons = [];
         
@@ -634,11 +613,16 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
                 }
             }
             
-            // Check supported areas restriction
+            // Check supported areas restriction (skip for customer-specific coupons that are not delivery-related)
             if (coupon.applicableTo.supportedAreas && coupon.applicableTo.supportedAreas.length > 0) {
-                if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
-                    console.log(`  ❌ FILTERED OUT: Area restriction (${areaIds} not matching ${coupon.applicableTo.supportedAreas})`);
-                    continue;
+                // Skip area check for customer-specific coupons that are not delivery-related
+                if (coupon.isCustomerSpecific && coupon.customerId === customerId && coupon.discountType !== 'delivery' && !areaIds.length) {
+                    console.log(`  ✅ SKIPPING area check for customer-specific non-delivery coupon: ${coupon.code}`);
+                } else {
+                    if (areaIds.length === 0 || !areaIds.some(areaId => coupon.applicableTo.supportedAreas.includes(areaId))) {
+                        console.log(`  ❌ FILTERED OUT: Area restriction (${areaIds} not matching ${coupon.applicableTo.supportedAreas})`);
+                        continue;
+                    }
                 }
             }
             
@@ -649,13 +633,14 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
         console.log(`\n=== FILTERING COMPLETE ===`);
         console.log(`Coupons after filtering: ${filteredCoupons.length}`);
         filteredCoupons.forEach(coupon => {
-            console.log(`  - ${coupon.code}: minOrderAmount=${coupon.minOrderAmount}`);
+            const isCustomerSpecific = coupon.isCustomerSpecific && coupon.customerId === customerId;
+            console.log(`  - ${coupon.code}: minOrderAmount=${coupon.minOrderAmount}${isCustomerSpecific ? ' (CUSTOMER-SPECIFIC)' : ''}`);
         });
 
-        // Check if there's a customer-specific coupon first
+        // All coupons (including customer-specific) are now processed through the unified scoring system
   
         
-        // If no customer-specific coupon, score and select the best general coupon
+        // Score and select the best coupon (customer-specific coupons get priority)
         const scoredCoupons = filteredCoupons.map(coupon => {
             let score = 0;
             
@@ -674,6 +659,12 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
                 case 'free_delivery':
                     discountAmount = req.query.deliveryFee ? parseFloat(req.query.deliveryFee) : 0;
                     break;
+            }
+            
+            // PRIORITY SCORING: Customer-specific coupons get highest priority
+            if (coupon.isCustomerSpecific && coupon.customerId === customerId) {
+                score += 1000000; // Very high priority for customer-specific coupons
+                console.log(`Customer-specific coupon ${coupon.code} gets priority score boost`);
             }
             
             // Primary scoring: Higher minimum order amount (better deal when order qualifies)
@@ -712,8 +703,18 @@ router.get('/api/coupons/auto-apply/:customerId', async (req, res) => {
         const bestCoupon = scoredCoupons.length > 0 ? scoredCoupons[0] : null;
         
         console.log('Found auto-apply coupons:', filteredCoupons.length);
-        console.log('Scored coupons:', scoredCoupons.map(c => ({ code: c.code, score: c.score, discountAmount: c.discountAmount })));
-        console.log('Best coupon:', bestCoupon ? { code: bestCoupon.code, score: bestCoupon.score, discountAmount: bestCoupon.discountAmount } : null);
+        console.log('Scored coupons:', scoredCoupons.map(c => ({ 
+            code: c.code, 
+            score: c.score, 
+            discountAmount: c.discountAmount,
+            isCustomerSpecific: c.isCustomerSpecific && c.customerId === customerId
+        })));
+        console.log('Best coupon:', bestCoupon ? { 
+            code: bestCoupon.code, 
+            score: bestCoupon.score, 
+            discountAmount: bestCoupon.discountAmount,
+            isCustomerSpecific: bestCoupon.isCustomerSpecific && bestCoupon.customerId === customerId
+        } : null);
 
         // Return only the best coupon (remove score and discountAmount from response)
         if (bestCoupon) {
