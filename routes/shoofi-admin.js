@@ -138,13 +138,74 @@ router.post('/api/shoofiAdmin/available-stores', async (req, res) => {
       Number(lng)
     );
 
-    // Sort by isOpen (open stores first)
+    // Sort by status priority: open, busy, coming soon, closed
+    // Define priority order: 1=open, 2=busy, 3=coming soon, 4=closed
+    const getPriority = (isOpen, isBusy, isCoomingSoon) => {
+      if (isCoomingSoon) return 3;
+      if (!isOpen) return 4;
+      if (isBusy) return 2;
+      return 1; // open
+    };
+    
+    // First sort by priority
     availableStores.sort((a, b) => {
-      const aIsOpen = a.store?.isOpen || false;
-      const bIsOpen = b.store?.isOpen || false;
-      if (aIsOpen === bIsOpen) return 0;
-      return aIsOpen ? -1 : 1;
+      const storeA = a.store;
+      const storeB = b.store;
+      
+      // Get status values for store A
+      const isCoomingSoonA = storeA?.isCoomingSoon || false;
+      const isOpenA = storeA?.isOpen !== false && !isCoomingSoonA;
+      const isBusyA = storeA?.isBusy && isOpenA || false;
+      
+      // Get status values for store B
+      const isCoomingSoonB = storeB?.isCoomingSoon || false;
+      const isOpenB = storeB?.isOpen !== false && !isCoomingSoonB;
+      const isBusyB = storeB?.isBusy && isOpenB || false;
+      
+      const priorityA = getPriority(isOpenA, isBusyA, isCoomingSoonA);
+      const priorityB = getPriority(isOpenB, isBusyB, isCoomingSoonB);
+      
+      return priorityA - priorityB;
     });
+    
+    // Then randomly shuffle stores within each status group
+    const shuffledStores = [];
+    let currentPriority = null;
+    let currentGroup = [];
+    
+    // Group stores by priority and shuffle each group
+    availableStores.forEach(store => {
+      const storeData = store.store;
+      const isCoomingSoon = storeData?.isCoomingSoon || false;
+      const isOpen = storeData?.isOpen !== false && !isCoomingSoon;
+      const isBusy = storeData?.isBusy && isOpen || false;
+      
+      const priority = getPriority(isOpen, isBusy, isCoomingSoon);
+      
+      if (currentPriority === null) {
+        currentPriority = priority;
+        currentGroup = [store];
+      } else if (priority === currentPriority) {
+        currentGroup.push(store);
+      } else {
+        // Shuffle the current group and add to result
+        const shuffledGroup = currentGroup.sort(() => Math.random() - 0.5);
+        shuffledStores.push(...shuffledGroup);
+        
+        // Start new group
+        currentPriority = priority;
+        currentGroup = [store];
+      }
+    });
+    
+    // Don't forget to shuffle and add the last group
+    if (currentGroup.length > 0) {
+      const shuffledGroup = currentGroup.sort(() => Math.random() - 0.5);
+      shuffledStores.push(...shuffledGroup);
+    }
+    
+    // Replace the original array with shuffled stores
+    availableStores.splice(0, availableStores.length, ...shuffledStores);
 
     res.json(availableStores);
   } catch (error) {
@@ -913,7 +974,7 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     
     const dbAdmin = req.app.db['shoofi'];
     const location = req.query.location ? JSON.parse(req.query.location) : null;
-    const randomSeed = req.query.seed || Date.now(); // Use provided seed or current timestamp
+
     
     // Require location parameter
     if (!location || (location.lat === undefined && location.coordinates === undefined)) {
@@ -961,39 +1022,79 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       cacheKey = `explore_categories_no_area_${lat}_${lng}`;
     }
     
-    // Helper function to apply random sorting to stores
-    const applyRandomSorting = (categoriesData) => {
+    // Helper function to sort stores by status priority and then randomly shuffle within each status group
+    const applyStatusBasedSortingWithShuffling = (categoriesData) => {
+      // Define priority order: 1=open, 2=busy, 3=coming soon, 4=closed
+      const getPriority = (isOpen, isBusy, isCoomingSoon) => {
+        if (isCoomingSoon) return 3;
+        if (!isOpen) return 4;
+        if (isBusy) return 2;
+        return 1; // open
+      };
+      
       return categoriesData.map(categoryData => {
         const stores = categoryData.stores || [];
         
-        // Separate open and closed stores
-        const openStores = stores.filter(store => store.storeData?.isOpen);
-        const closedStores = stores.filter(store => !store.storeData?.isOpen);
-        
-        // Create seeded random function for consistent shuffling
-        const seededRandom = (seed) => {
-          const x = Math.sin(seed) * 10000;
-          return x - Math.floor(x);
-        };
-        
-        // Randomly shuffle open stores using seeded random
-        const shuffledOpenStores = openStores.sort(() => {
-          const randomValue = seededRandom(randomSeed + openStores.length);
-          return randomValue - 0.5;
+        // First, sort stores by status priority
+        const sortedStores = stores.sort((a, b) => {
+          const storeA = a.storeData || a.store;
+          const storeB = b.storeData || b.store;
+          
+          // Get status values for store A
+          const isCoomingSoonA = storeA.isCoomingSoon || false;
+          const isOpenA = storeA.isOpen !== false && !isCoomingSoonA;
+          const isBusyA = storeA.isBusy && isOpenA || false;
+          
+          // Get status values for store B
+          const isCoomingSoonB = storeB.isCoomingSoon || false;
+          const isOpenB = storeB.isOpen !== false && !isCoomingSoonB;
+          const isBusyB = storeB.isBusy && isOpenB || false;
+          
+          const priorityA = getPriority(isOpenA, isBusyA, isCoomingSoonA);
+          const priorityB = getPriority(isOpenB, isBusyB, isCoomingSoonB);
+          
+          return priorityA - priorityB;
         });
         
-        // Randomly shuffle closed stores using seeded random
-        const shuffledClosedStores = closedStores.sort(() => {
-          const randomValue = seededRandom(randomSeed + closedStores.length + 1000);
-          return randomValue - 0.5;
+        // Then, randomly shuffle stores within each status group
+        const shuffledStores = [];
+        let currentPriority = null;
+        let currentGroup = [];
+        
+        // Group stores by priority and shuffle each group
+        sortedStores.forEach(store => {
+          const storeData = store.storeData || store.store;
+          const isCoomingSoon = storeData.isCoomingSoon || false;
+          const isOpen = storeData.isOpen !== false && !isCoomingSoon;
+          const isBusy = storeData.isBusy && isOpen || false;
+          
+          const priority = getPriority(isOpen, isBusy, isCoomingSoon);
+          
+          if (currentPriority === null) {
+            currentPriority = priority;
+            currentGroup = [store];
+          } else if (priority === currentPriority) {
+            currentGroup.push(store);
+          } else {
+            // Shuffle the current group and add to result
+            const shuffledGroup = currentGroup.sort(() => Math.random() - 0.5);
+            shuffledStores.push(...shuffledGroup);
+            
+            // Start new group
+            currentPriority = priority;
+            currentGroup = [store];
+          }
         });
         
-        // Combine: open stores first (randomly sorted), then closed stores (randomly sorted)
-        const randomlySortedStores = [...shuffledOpenStores, ...shuffledClosedStores];
+        // Don't forget to shuffle and add the last group
+        if (currentGroup.length > 0) {
+          const shuffledGroup = currentGroup.sort(() => Math.random() - 0.5);
+          shuffledStores.push(...shuffledGroup);
+        }
         
         return {
           ...categoryData,
-          stores: randomlySortedStores
+          stores: shuffledStores
         };
       });
     };
@@ -1003,9 +1104,9 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
     console.log(`Cache lookup for key: ${cacheKey}, found: ${cachedData ? 'yes' : 'no'}`);
     
     if (cachedData) {
-      console.log('Explore categories found in cache - applying random sorting');
-      const updatedCachedData = applyRandomSorting(cachedData);
-      console.log(`Random sorting applied to cached data with seed: ${randomSeed}`);
+      console.log('Explore categories found in cache - applying status-based sorting with random shuffling');
+      const updatedCachedData = applyStatusBasedSortingWithShuffling(cachedData);
+      console.log(`Status-based sorting with random shuffling applied to cached data`);
       return res.status(200).json(updatedCachedData);
     }
 
@@ -1066,16 +1167,16 @@ router.get("/api/shoofiAdmin/explore/categories-with-stores", async (req, res) =
       .filter(item => item.stores.length > 0) // Only include categories with stores
       .sort((a, b) => (a.category.order || 0) - (b.category.order || 0)); // Sort by category order
 
-    // Apply random sorting to the fresh data
-    const randomlySortedCategories = applyRandomSorting(categoriesWithStores);
+    // Apply status-based sorting with random shuffling to the fresh data
+    const statusSortedCategories = applyStatusBasedSortingWithShuffling(categoriesWithStores);
 
     // Cache the result (shorter TTL for store status changes)
     await setExploreCache(cacheKey, categoriesWithStores, 5 * 60 * 1000); // 5 minutes
 
     console.log(`Explore categories generated with ${categoriesWithStores.length} categories and ${availableStores.length} available stores for area: ${area ? area.name : 'no area'}`);
-    console.log(`Random sorting applied with seed: ${randomSeed}`);
+    console.log(`Status-based sorting with random shuffling applied`);
 
-    res.status(200).json(randomlySortedCategories);
+    res.status(200).json(statusSortedCategories);
 
   } catch (error) {
     console.error('Error fetching explore categories:', error);
