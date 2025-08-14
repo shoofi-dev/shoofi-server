@@ -112,7 +112,7 @@ const processCreditCardPayment = async (paymentData, orderDoc, req, customerName
       ZipCode: "",
       PhoneNum: paymentData.phone,
       FaxNum: "",
-      TaxRate: "17",
+      TaxRate: "18",
       Comment: "",
       ReceipientEmail: "customerinvoices@shoofi.app",
       EmailDocumentToReceipient: true,
