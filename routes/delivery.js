@@ -1401,13 +1401,6 @@ router.get("/api/delivery/areas/by-city/:cityId", async (req, res) => {
 router.post("/api/delivery/available-drivers", async (req, res) => {
   try {
     const { location, storeLocation } = req.body;
-    const appName = req.headers["app-name"];
-    if(appName === 'b-fresh' || appName === 'i-bar'){
-      return res.json({
-        available: false,
-        reason: "Store is not supported.",
-      });
-    }
     if (
       !location ||
       typeof location.lat !== "number" ||
