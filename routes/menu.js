@@ -99,7 +99,9 @@ router.get("/api/menu", async (req, res, next) => {
           descriptionHE: 1,
           order: 1,
           img: 1,
-          products: 1
+          products: 1,
+          supportedGeneralCategoryIds: 1,
+          isHidden: 1,
         }
       }
     ];
@@ -138,10 +140,42 @@ router.get("/api/menu", async (req, res, next) => {
     // Group products by category for categoryImages
     const grouped = _.groupBy(allProducts, 'categoryId');
 
+    // Check if generalCategories collection exists and fetch data
+    let generalCategories = null;
+    try {
+      const collections = await db.listCollections({ name: 'general-categories' }).toArray();
+      if (collections.length > 0) {
+        // Fetch general categories
+        const generalCategoriesData = await db.collection('general-categories').find({}).toArray();
+        
+        // Fetch all categories (subcategories) to filter by supportedGeneralCategoryIds
+        const allCategories = await db.collection('categories').find({}).toArray();
+        
+        // Process general categories and add filtered subcategories
+        generalCategories = generalCategoriesData.map(generalCategory => {
+          const subCategories = allCategories.filter(category => 
+            category.supportedGeneralCategoryIds && 
+            category.supportedGeneralCategoryIds.some(id => 
+              id.$oid === generalCategory._id.$oid || id === generalCategory._id.$oid
+            )
+          );
+          
+          return {
+            ...generalCategory,
+            subCategories: subCategories.sort((a, b) => (a.order || 0) - (b.order || 0))
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('Error fetching generalCategories:', error.message);
+      // Continue without generalCategories if there's an error
+    }
+
     const menuData = {
       menu: processedMenu,
       productsImagesList,
-      categoryImages: grouped
+      categoryImages: grouped,
+      ...(generalCategories && { generalCategories })
     };
 
     // Cache the result (only for non-admin apps)
@@ -301,10 +335,42 @@ router.post("/api/menu/refresh", async (req, res, next) => {
 
     const grouped = _.groupBy(allProducts, 'categoryId');
 
+    // Check if generalCategories collection exists and fetch data
+    let generalCategories = null;
+    try {
+      const collections = await db.listCollections({ name: 'general-categories' }).toArray();
+      if (collections.length > 0) {
+        // Fetch general categories
+        const generalCategoriesData = await db.collection('general-categories').find({}).toArray();
+        
+        // Fetch all categories (subcategories) to filter by supportedGeneralCategoryIds
+        const allCategories = await db.collection('categories').find({}).toArray();
+        
+        // Process general categories and add filtered subcategories
+        generalCategories = generalCategoriesData.map(generalCategory => {
+          const subCategories = allCategories.filter(category => 
+            category.supportedGeneralCategoryIds && 
+            category.supportedGeneralCategoryIds.some(id => 
+              id.$oid === generalCategory._id.$oid || id === generalCategory._id.$oid
+            )
+          );
+          
+          return {
+            ...generalCategory,
+            subCategories: subCategories.sort((a, b) => (a.order || 0) - (b.order || 0))
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('Error fetching generalCategories:', error.message);
+      // Continue without generalCategories if there's an error
+    }
+
     const menuData = {
       menu: processedMenu,
       productsImagesList,
-      categoryImages: grouped
+      categoryImages: grouped,
+      ...(generalCategories && { generalCategories })
     };
 
     // Cache the result (only for non-admin apps)

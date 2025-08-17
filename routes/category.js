@@ -28,6 +28,14 @@ router.get("/api/admin/categories/:page?", async (req, res, next) => {
 
 
 // Get all store categories
+
+router.get("/api/category/general/all/by-store", async (req, res) => {
+  const appName = req.headers["app-name"];
+  const db = req.app.db[appName || 'shoofi'];
+  const categories = await db.generalCategories.find().toArray();
+  res.status(200).json(categories);
+});
+// Get all general categories
 router.get("/api/category/general/all", async (req, res) => {
   const db = req.app.db['shoofi'];
   const categories = await db.generalCategories.find().toArray();

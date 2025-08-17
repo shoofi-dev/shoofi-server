@@ -132,6 +132,7 @@ router.post("/api/store/update", async (req, res, next) => {
     currentStore.isBusy !== storeDoc.isBusy ||
     currentStore.business_visible !== storeDoc.business_visible ||
     currentStore.isCoomingSoon !== storeDoc.isCoomingSoon ||
+    currentStore.hasGeneralCategories !== storeDoc.hasGeneralCategories ||
     JSON.stringify(currentStore.openHours) !== JSON.stringify(storeDoc.openHours)
   );
   
@@ -280,7 +281,7 @@ router.post("/api/store-category/add", upload.array("img"), async (req, res) => 
   try {
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
-    const { nameAR, nameHE, order } = req.body;
+    const { nameAR, nameHE, order, supportedGeneralCategoryIds } = req.body;
 
     if (!nameAR || !nameHE) {
       return res.status(400).json({ message: 'nameAR and nameHE are required' });
@@ -296,6 +297,7 @@ router.post("/api/store-category/add", upload.array("img"), async (req, res) => 
       nameHE,
       order: Number(order) || 0,
       img: images,
+      supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds) : [],
       createdAt: new Date(),
     };
 
@@ -313,7 +315,7 @@ router.post("/api/store-category/update/:id", upload.array("img"), async (req, r
     const appName = req.headers['app-name'];
     const db = req.app.db[appName];
     const { id } = req.params;
-    const { nameAR, nameHE, order } = req.body;
+    const { nameAR, nameHE, order, supportedGeneralCategoryIds } = req.body;
 
     let images = [];
     const category = await db.categories.findOne({ _id: getId(id) });
@@ -329,6 +331,7 @@ router.post("/api/store-category/update/:id", upload.array("img"), async (req, r
       nameHE,
       order: Number(order) || 0,
       img: currentImages,
+      supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds) : (category.supportedGeneralCategoryIds || []),
       updatedAt: new Date(),
     };
 

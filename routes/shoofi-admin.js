@@ -460,7 +460,7 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, hasGeneralCategories } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -504,6 +504,7 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : [],
+      hasGeneralCategories: hasGeneralCategories === 'true',
       phone: phone || '',
       address: address || '',
       ...(location ? { location } : {}),
@@ -691,7 +692,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isCoomingSoon } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isCoomingSoon, hasGeneralCategories } = req.body;
 
     if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
       return res.status(400).json({ message: 'All required fields are missing' });
@@ -786,6 +787,7 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       categoryIds: JSON.parse(categoryIds).map(categoryId => getId(categoryId)),
       supportedCities: JSON.parse(supportedCities).map(cityId => getId(cityId)),
       supportedGeneralCategoryIds: supportedGeneralCategoryIds ? JSON.parse(supportedGeneralCategoryIds).map(id => getId(id)) : store.supportedGeneralCategoryIds || [],
+      hasGeneralCategories: hasGeneralCategories !== undefined ? hasGeneralCategories === 'true' : store.hasGeneralCategories,
       phone: phone || store.phone || '',
       address: address || store.address || '',
       ...(location ? { location } : {}),
@@ -798,7 +800,8 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
     // Check if store status is changing
     const isStatusChanging = store && (
       store.business_visible !== updatedStore.business_visible ||
-      store.isCoomingSoon !== updatedStore.isCoomingSoon
+      store.isCoomingSoon !== updatedStore.isCoomingSoon ||
+      store.hasGeneralCategories !== updatedStore.hasGeneralCategories
     );
     
     // If store status is changing, send websocket notification to customers
