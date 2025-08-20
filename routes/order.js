@@ -2719,18 +2719,11 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
       }
     } else {
       // If appName is provided, only fetch from that app's DB
-      const dbAdmin = req.app.db[appName];
-      const storesList = await dbAdmin.stores.find().toArray();
-      // City filter if provided
-      let filteredStores = storesList;
-      if (req.body.cityIds && req.body.cityIds.length > 0) {
-        filteredStores = storesList.filter((store) =>
-          req.body.cityIds.includes(store.cityId)
-        );
-      }
-      for (const store of filteredStores) {
-        const db = req.app.db[store.appName];
-        if (!db) continue;
+
+        const db = req.app.db[appName];
+        const dbShoofi = req.app.db['shoofi'];
+
+        const store = await dbShoofi.stores.findOne({appName: appName});
         const storeOrders = await db.orders
           .find(filterBy)
           .sort({ created: -1 })
@@ -2742,7 +2735,6 @@ router.post("/api/order/admin/all-orders/:page?", async (req, res) => {
           storeAppName: store.appName,
         }));
         allOrders = [...allOrders, ...ordersWithStoreInfo];
-      }
     }
 
     // Sort all orders by creation date

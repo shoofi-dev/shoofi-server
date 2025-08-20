@@ -88,6 +88,7 @@ router.post("/api/shoofiAdmin/store/update", async (req, res, next) => {
     currentStore.isBusy !== storeDoc.isBusy ||
     currentStore.business_visible !== storeDoc.business_visible ||
     currentStore.isCoomingSoon !== storeDoc.isCoomingSoon ||
+    currentStore.isMockStore !== storeDoc.isMockStore ||
     JSON.stringify(currentStore.openHours) !== JSON.stringify(storeDoc.openHours)
   );
   
@@ -273,6 +274,8 @@ router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const search = req.query.search;
+    const onlyMockStores = req.query.onlyMockStores === 'true';
+    const excludeMockStores = req.query.excludeMockStores === 'true';
     
     // Build search query
     let searchQuery = {};
@@ -289,17 +292,34 @@ router.get("/api/shoofiAdmin/store/all", async (req, res, next) => {
       };
     }
     
+    // Build mock filter query
+    let mockFilterQuery = {};
+    if (onlyMockStores) {
+      mockFilterQuery = { isMockStore: true };
+    } else if (excludeMockStores) {
+      mockFilterQuery = { $or: [ { isMockStore: { $ne: true } }, { isMockStore: { $exists: false } } ] };
+    }
+    
+    // Combine search and mock filters
+    const hasSearch = Object.keys(searchQuery).length > 0;
+    const hasMockFilter = Object.keys(mockFilterQuery).length > 0;
+    const finalQuery = hasSearch && hasMockFilter
+      ? { $and: [searchQuery, mockFilterQuery] }
+      : hasMockFilter
+        ? mockFilterQuery
+        : searchQuery;
+    
     let stores, total;
     if (all) {
-      stores = await dbAdmin.stores.find(searchQuery).toArray();
-      total = stores.length;
+      stores = await dbAdmin.stores.find(finalQuery).toArray();
+      total = await dbAdmin.stores.countDocuments(finalQuery);
       res.status(200).json({ stores });
     } else {
-      stores = await dbAdmin.stores.find(searchQuery)
+      stores = await dbAdmin.stores.find(finalQuery)
         .skip(skip)
         .limit(limit)
         .toArray();
-      total = await dbAdmin.stores.countDocuments(searchQuery);
+      total = await dbAdmin.stores.countDocuments(finalQuery);
       res.status(200).json({
         stores,
         pagination: {
@@ -460,9 +480,9 @@ router.post("/api/shoofiAdmin/stores/by-category", async (req, res) => {
 router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, hasGeneralCategories } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, hasGeneralCategories, isMockStore } = req.body;
 
-    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
+    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities || !isMockStore) {
       return res.status(400).json({ message: 'All required fields are missing' });
     }
 
@@ -509,7 +529,8 @@ router.post("/api/shoofiAdmin/store/add", uploadFields, async (req, res) => {
       address: address || '',
       ...(location ? { location } : {}),
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      isMockStore: isMockStore === 'true'
     };
 
     await dbAdmin.stores.insertOne(newStore);
@@ -669,6 +690,52 @@ router.get("/api/shoofiAdmin/store/status", async (req, res, next) => {
   }
 });
 
+// Add mock store endpoints before the parameterized routes
+router.get("/api/shoofiAdmin/store/mock-stores", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get all mock stores
+    const mockStores = await dbAdmin.stores.find({ isMockStore: true }).toArray();
+    
+    res.status(200).json(mockStores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock stores', error: err.message });
+  }
+});
+
+// Add new endpoint to get mock stores by type
+router.get("/api/shoofiAdmin/store/mock-stores/:mockType", async (req, res, next) => {
+  try {
+    const { mockType } = req.params;
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get mock stores by type
+    const mockStores = await dbAdmin.stores.find({ 
+      isMockStore: true, 
+      mockType: mockType 
+    }).toArray();
+    
+    res.status(200).json(mockStores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock stores by type', error: err.message });
+  }
+});
+
+// Add new endpoint to get available mock types
+router.get("/api/shoofiAdmin/store/mock-types", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get unique mock types
+    const mockTypes = await dbAdmin.stores.distinct('mockType', { isMockStore: true });
+    
+    res.status(200).json(mockTypes);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock types', error: err.message });
+  }
+});
+
 router.get("/api/shoofiAdmin/store/:id", async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
@@ -688,13 +755,33 @@ router.get("/api/shoofiAdmin/store/:id", async (req, res) => {
   }
 });
 
+// Add new endpoint to get store by appName
+router.get("/api/shoofiAdmin/store/by-app-name/:appName", async (req, res) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    const { appName } = req.params;
+    const store = await dbAdmin.stores.findOne({ appName });
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+    // If location exists, add lat/lng for frontend compatibility
+    if (store.location && Array.isArray(store.location.coordinates)) {
+      store.lat = store.location.coordinates[1];
+      store.lng = store.location.coordinates[0];
+    }
+    res.status(200).json(store);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch store by app name', error: err.message });
+  }
+});
+
 router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) => {
   try {
     const dbAdmin = req.app.db['shoofi'];
     const { id } = req.params;
-    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isCoomingSoon, hasGeneralCategories } = req.body;
+    const { appName, name_ar, name_he, business_visible, categoryIds, supportedCities, phone, address, supportedGeneralCategoryIds, lat, lng, descriptionAR, descriptionHE, isCoomingSoon, hasGeneralCategories, isMockStore } = req.body;
 
-    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities) {
+    if (!appName || !name_ar || !name_he || !categoryIds || !supportedCities ) {
       return res.status(400).json({ message: 'All required fields are missing' });
     }
 
@@ -792,7 +879,8 @@ router.post("/api/shoofiAdmin/store/update/:id", uploadFields, async (req, res) 
       address: address || store.address || '',
       ...(location ? { location } : {}),
       isCoomingSoon: isCoomingSoon === 'true',
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      isMockStore: isMockStore === 'true'
     };
 
     await dbAdmin.stores.updateOne({ _id: getId(id) }, { $set: updatedStore });
@@ -859,6 +947,8 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
     const search = req.query.search;
+    const onlyMockStores = req.query.onlyMockStores === 'true';
+    const excludeMockStores = req.query.excludeMockStores === 'true';
     const { ObjectId } = require('mongodb');
     
     // Build base query for city filtering
@@ -881,15 +971,24 @@ router.get("/api/shoofiAdmin/store/by-city/:cityId", async (req, res, next) => {
       };
     }
     
-    // Combine city and search queries
-    const combinedQuery = searchQuery.$or ? 
-      { $and: [cityQuery, searchQuery] } : 
-      cityQuery;
+    // Build mock filter query
+    let mockFilterQuery = {};
+    if (onlyMockStores) {
+      mockFilterQuery = { isMockStore: true };
+    } else if (excludeMockStores) {
+      mockFilterQuery = { $or: [ { isMockStore: { $ne: true } }, { isMockStore: { $exists: false } } ] };
+    }
+    
+    // Combine city, search and mock filter queries
+    const parts = [cityQuery];
+    if (Object.keys(searchQuery).length > 0) parts.push(searchQuery);
+    if (Object.keys(mockFilterQuery).length > 0) parts.push(mockFilterQuery);
+    const combinedQuery = parts.length > 1 ? { $and: parts } : cityQuery;
     
     let stores, total;
     if (all) {
       stores = await dbAdmin.stores.find(combinedQuery).toArray();
-      total = stores.length;
+      total = await dbAdmin.stores.countDocuments(combinedQuery);
       res.status(200).json({ stores });
     } else {
       stores = await dbAdmin.stores.find(combinedQuery)
@@ -1257,6 +1356,321 @@ router.post("/api/shoofiAdmin/explore/debug-area", async (req, res) => {
   }
 });
 
+// Add new API endpoints for mock store functionality
+router.post("/api/shoofiAdmin/store/mark-as-mock", async (req, res, next) => {
+  try {
+    const { storeId, mockType } = req.body;
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Mark the store as a mock store with type
+    await dbAdmin.stores.updateOne(
+      { _id: getId(storeId) },
+      { $set: { 
+        isMockStore: true, 
+        mockType: mockType || 'supermarket',
+        updatedAt: new Date() 
+      } }
+    );
+    
+    res.status(200).json({ message: "Store marked as mock store successfully" });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to mark store as mock', error: err.message });
+  }
+});
+
+router.post("/api/shoofiAdmin/store/create-from-mock", async (req, res, next) => {
+  try {
+    const { 
+      mockStoreAppName, 
+      newStoreData,
+      copyProducts = true,
+      copyCategories = true,
+      copyGeneralCategories = true
+    } = req.body;
+    
+
+    
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get the mock store
+    const mockStore = await dbAdmin.stores.findOne({ appName: mockStoreAppName });
+    if (!mockStore || !mockStore.isMockStore) {
+      return res.status(400).json({ message: 'Invalid mock store appName or store is not marked as mock' });
+    }
+    
+    // Generate new app name if not provided
+    let appName = newStoreData.appName;
+    if (!appName) {
+      appName = `${mockStore.appName}-copy-${Date.now()}`;
+    }
+    
+    // Check if app name already exists
+    const existingStore = await dbAdmin.stores.findOne({ appName });
+    if (existingStore) {
+      return res.status(400).json({ message: 'Store with this app name already exists' });
+    }
+    
+    // Create new store record
+    const newStore = {
+      _id: getId(),
+      appName,
+      name_ar: newStoreData.name_ar || `${mockStore.name_ar} - Copy`,
+      name_he: newStoreData.name_he || `${mockStore.name_he} - Copy`,
+      descriptionAR: newStoreData.descriptionAR || mockStore.descriptionAR || '',
+      descriptionHE: newStoreData.descriptionHE || mockStore.descriptionHE || '',
+      business_visible: newStoreData.business_visible !== undefined ? newStoreData.business_visible : mockStore.business_visible,
+      categoryIds: [], // Will be updated after categories are copied
+      supportedCities: newStoreData.supportedCities || mockStore.supportedCities || [],
+      supportedGeneralCategoryIds: copyGeneralCategories ? (newStoreData.supportedGeneralCategoryIds || mockStore.supportedGeneralCategoryIds || []) : [],
+      hasGeneralCategories: newStoreData?.hasGeneralCategories || mockStore.hasGeneralCategories,
+      phone: newStoreData.phone || mockStore.phone || '',
+      address: newStoreData.address || mockStore.address || '',
+      location: newStoreData.location || mockStore.location,
+      isMockStore: false, // New stores are never mock stores
+      mockStoreAppName: mockStoreAppName, // Reference to the original mock store
+      mockType: mockStore.mockType, // Copy the mock type
+      mockTypeSource: mockStoreAppName, // Set the source for this store type
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await dbAdmin.stores.insertOne(newStore);
+    
+    console.log(`Created new store '${appName}' from mock store '${mockStore.appName}'`);
+    console.log(`Store settings copied: hasGeneralCategories=${newStore.hasGeneralCategories}, mockType=${newStore.mockType}`);
+    
+    // Initialize the new store's database
+    const client = new MongoClient(process.env.DB_CONNECTION_STRING, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    
+    // Initialize the new database using the service
+    const db = await DatabaseInitializationService.initializeDatabase(appName, client);
+    
+    // Add the new database to the app's db object
+    req.app.db[appName] = db;
+    
+    // Copy store configuration from mock store
+    const mockStoreDb = req.app.db[mockStore.appName];
+    if (mockStoreDb) {
+      const mockStoreConfig = await mockStoreDb.store.findOne({});
+      if (mockStoreConfig) {
+        // Create new store config without sensitive data
+        const newStoreConfig = {
+          ...mockStoreConfig,
+          _id: getId(),
+          id: 1,
+          name_ar: newStore.name_ar,
+          name_he: newStore.name_he,
+          descriptionAR: newStore.descriptionAR,
+          descriptionHE: newStore.descriptionHE,
+          phone: newStore.phone,
+          address: newStore.address,
+          location: newStore.location,
+          business_visible: newStore.business_visible,
+          hasGeneralCategories: newStore.hasGeneralCategories || mockStoreConfig.hasGeneralCategories,
+          isMockStore: false,
+          mockStoreAppName: mockStoreAppName,
+          mockType: mockStore.mockType,
+          mockTypeSource: mockStoreAppName,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        delete newStoreConfig.credentials; // Don't copy credentials
+        
+        await db.store.insertOne(newStoreConfig);
+      }
+      
+      // Copy categories if requested
+      if (copyCategories) {
+        try {
+          const mockCategories = await mockStoreDb.categories.find({}).toArray();
+          if (mockCategories.length > 0) {
+            const newCategories = mockCategories.map(cat => {
+              // Keep the same ID as the mock store (preserve ObjectId)
+              const newCat = {
+                ...cat,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              // Update supportedGeneralCategoryIds if general categories were copied
+              if (copyGeneralCategories && req.app.generalCategoryIdMapping && cat.supportedGeneralCategoryIds) {
+                newCat.supportedGeneralCategoryIds = cat.supportedGeneralCategoryIds.map(oldGeneralCategoryId => {
+                  const newId = req.app.generalCategoryIdMapping[oldGeneralCategoryId.toString()];
+                  return newId || oldGeneralCategoryId; // Preserve ObjectId if no mapping
+                });
+              }
+              // Keep original supportedGeneralCategoryIds as ObjectIds if not copying general categories
+              
+              return newCat;
+            });
+            
+            await db.categories.insertMany(newCategories);
+            console.log(`Copied ${newCategories.length} categories from mock store`);
+            
+            // Update the store's categoryIds with the same category IDs (preserve ObjectIds)
+            if (copyCategories && mockStore.categoryIds && mockStore.categoryIds.length > 0) {
+              // Keep categoryIds as ObjectIds, don't convert to strings
+              await dbAdmin.stores.updateOne(
+                { _id: newStore._id },
+                { $set: { categoryIds: mockStore.categoryIds } }
+              );
+              console.log(`Updated store categoryIds: ${mockStore.categoryIds.length} categories mapped`);
+            }
+          }
+        } catch (err) {
+          console.error('Error copying categories:', err);
+        }
+      }
+      
+      // Copy general categories if requested
+      if (copyGeneralCategories) {
+        try {
+          const mockGeneralCategories = await mockStoreDb.generalCategories.find({}).toArray();
+          if (mockGeneralCategories.length > 0) {
+            const newGeneralCategories = mockGeneralCategories.map(cat => {
+              // Keep the same ID as the mock store (preserve ObjectId)
+              const newCat = {
+                ...cat,
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              // Update category references if categories were copied
+              if (copyCategories && cat.categoryIds) {
+                // Keep categoryIds as ObjectIds, don't convert to strings
+                newCat.categoryIds = cat.categoryIds;
+              }
+              // Keep original categoryIds as ObjectIds if not copying categories
+              
+              return newCat;
+            });
+            
+            await db.generalCategories.insertMany(newGeneralCategories);
+            console.log(`Copied ${newGeneralCategories.length} general categories from mock store`);
+            
+            // Update the store's supportedGeneralCategoryIds with the same general category IDs (preserve ObjectIds)
+            if (copyGeneralCategories && mockStore.supportedGeneralCategoryIds && mockStore.supportedGeneralCategoryIds.length > 0) {
+              // Keep supportedGeneralCategoryIds as ObjectIds, don't convert to strings
+              await dbAdmin.stores.updateOne(
+                { _id: newStore._id },
+                { $set: { supportedGeneralCategoryIds: mockStore.supportedGeneralCategoryIds } }
+              );
+              console.log(`Updated store supportedGeneralCategoryIds: ${mockStore.supportedGeneralCategoryIds.length} general categories mapped`);
+            }
+          }
+        } catch (err) {
+          console.error('Error copying general categories:', err);
+        }
+      }
+      
+      // Copy products if requested
+      if (copyProducts) {
+        try {
+          const mockProducts = await mockStoreDb.products.find({}).toArray();
+          if (mockProducts.length > 0) {
+            const newProducts = mockProducts.map(product => {
+              // Keep the same ID as the mock store (preserve ObjectId)
+              const newProduct = {
+                ...product,
+                mockStoreAppName: mockStoreAppName,
+                mockProductId: product._id, // Keep reference to original product
+                createdAt: new Date(),
+                updatedAt: new Date()
+              };
+              
+              // Update category IDs if categories were copied
+              if (copyCategories && product.supportedCategoryIds) {
+                // Keep supportedCategoryIds as ObjectIds, don't convert to strings
+                newProduct.supportedCategoryIds = product.supportedCategoryIds;
+              }
+              // Keep original supportedCategoryIds as ObjectIds if not copying categories
+              
+              return newProduct;
+            });
+            
+            await db.products.insertMany(newProducts);
+            console.log(`Copied ${newProducts.length} products from mock store`);
+            
+            // Log that IDs are preserved as ObjectIds
+            console.log(`Product IDs preserved as ObjectIds for proper database relationships`);
+          }
+        } catch (err) {
+          console.error('Error copying products:', err);
+        }
+      }
+    }
+    
+    res.status(201).json(newStore);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to create store from mock', error: err.message });
+  }
+});
+
+
+
+
+
+router.get("/api/shoofiAdmin/store/:storeId/mock-products", async (req, res, next) => {
+  try {
+    const { storeId } = req.params;
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get the store to check if it's a mock store
+    const store = await dbAdmin.stores.findOne({ _id: getId(storeId) });
+    if (!store) {
+      return res.status(404).json({ message: 'Store not found' });
+    }
+    
+    if (!store.isMockStore) {
+      return res.status(400).json({ message: 'Store is not a mock store' });
+    }
+    
+    // Get products from the mock store
+    const mockStoreDb = req.app.db[store.appName];
+    if (!mockStoreDb) {
+      return res.status(500).json({ message: 'Mock store database not accessible' });
+    }
+    
+    const products = await mockStoreDb.products.find({}).toArray();
+    
+    res.status(200).json(products);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock store products', error: err.message });
+  }
+});
+
+// Add mock store endpoints before the parameterized routes
+router.get("/api/shoofiAdmin/store/mock-stores", async (req, res, next) => {
+  try {
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get all mock stores
+    const mockStores = await dbAdmin.stores.find({ isMockStore: true }).toArray();
+    
+    res.status(200).json(mockStores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock stores', error: err.message });
+  }
+});
+
+// Add new endpoint to get mock stores by type
+router.get("/api/shoofiAdmin/store/mock-stores/:mockType", async (req, res, next) => {
+  try {
+    const { mockType } = req.params;
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Get mock stores by type
+    const mockStores = await dbAdmin.stores.find({ 
+      isMockStore: true, 
+      mockType: mockType 
+    }).toArray();
+    
+    res.status(200).json(mockStores);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock stores by type', error: err.message });
+  }
+});
 
 
 router.use("/api/ads", adsRouter);

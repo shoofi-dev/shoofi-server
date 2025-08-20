@@ -21,6 +21,17 @@ const fs = require("fs");
 const path = require("path");
 const router = express.Router();
 const BUCKET_NAME = "shoofi-spaces";
+
+// Function to generate unique barcode ID
+const generateUniqueBarcodeId = (appName = '') => {
+  const timestamp = Date.now(); // Current timestamp in milliseconds
+  const randomStr = Math.random().toString(36).substring(2, 8); // Random 6-char string
+  const storePrefix = appName ? appName.substring(0, 3).toUpperCase() : 'ST';
+  
+  // Format: STORE_TIMESTAMP_RANDOM (e.g., SHO1640995200000ABC123)
+  return `${storePrefix}_${timestamp}_${randomStr}`;
+};
+
 const uploadFile = async (files, req, folderName) => {
   const appName = req.headers["app-name"];
   const db = req.app.db['shoofi'];
@@ -237,6 +248,21 @@ router.post(
     const appName = req.headers["app-name"];
     const db = req.app.db[appName];
     const orderDoc = { ...req.body };
+    
+    // Handle barcodeId - generate unique ID if not provided
+    let barcodeId = req.body.barcodeId;
+    if (!barcodeId || barcodeId.trim() === '') {
+      barcodeId = generateUniqueBarcodeId(appName);
+    } else {
+      // Validate barcodeId format
+      if (barcodeId.length < 3 || barcodeId.length > 100) {
+        return res.status(400).json({ message: "Barcode ID must be between 3 and 100 characters long." });
+      }
+      
+      // No need to check uniqueness since timestamp-based IDs are guaranteed unique
+      // and users can enter any custom ID they want
+    }
+    
     let doc = {
       nameAR: req.body.nameAR,
       nameHE: req.body.nameHE,
@@ -246,6 +272,7 @@ router.post(
       notInStoreDescriptionAR: cleanHtml(req.body.notInStoreDescriptionAR),
       notInStoreDescriptionHE: cleanHtml(req.body.notInStoreDescriptionHE),
       isInStore: req.body.isInStore === "false" ? false : true,
+      barcodeId: barcodeId,
       createdAt: new Date(),
       extras: req.body?.extras && JSON.parse(req.body?.extras),
       others: req.body?.others && JSON.parse(req.body?.others),
@@ -262,11 +289,17 @@ router.post(
     // Calculate order based on supportedCategoryIds
 
 
-    if (req.files && req.files.length > 1) {
-      doc.img = req.body.img.concat(await uploadFile(req.files, req, `stores/${appName}/products`));
-    } else {
-      doc.img = await uploadFile(req.files, req, `stores/${appName}/products`);
+    if(req.body.img){
+      doc.img = req.body?.img && JSON.parse(req.body.img);
+    }else{
+      if (req.files && req.files.length > 1) {
+        doc.img = req.body.img.concat(await uploadFile(req.files, req, `stores/${appName}/products`));
+      } else {
+        doc.img = await uploadFile(req.files, req, `stores/${appName}/products`);
+      }
     }
+
+
     try {
       const newDoc = await db.products.insertOne(doc);
       const newId = newDoc.insertedId;
@@ -307,6 +340,22 @@ router.post(
       res.status(400).json({ message: "Failed to update product" });
       return;
     }
+    
+    // Handle barcodeId update
+    let barcodeId = req.body.barcodeId;
+    if (barcodeId && barcodeId.trim() !== '') {
+      // Validate barcodeId format
+      if (barcodeId.length < 3 || barcodeId.length > 100) {
+        return res.status(400).json({ message: "Barcode ID must be between 3 and 100 characters long." });
+      }
+      
+      // No need to check uniqueness since timestamp-based IDs are guaranteed unique
+      // and users can enter any custom ID they want
+    } else {
+      // If barcodeId is empty/null, keep the existing one or generate new if none exists
+      barcodeId = product.barcodeId || generateUniqueBarcodeId(appName);
+    }
+    
     let productDoc = {
       ...product,
       nameAR: req.body.nameAR,
@@ -317,6 +366,7 @@ router.post(
       notInStoreDescriptionAR: cleanHtml(req.body.notInStoreDescriptionAR),
       notInStoreDescriptionHE: cleanHtml(req.body.notInStoreDescriptionHE),
       isInStore: req.body.isInStore === "false" ? false : true,
+      barcodeId: barcodeId,
       extras: req.body.extras ? JSON.parse(req.body.extras) : [],
       others: req.body.others ? JSON.parse(req.body.others) : [],
       price: req.body.price ? Number(JSON.parse(req.body.price)) : 0,
@@ -333,7 +383,13 @@ router.post(
     if (req.files) {
       if (req.files.length > 0) {
         productDoc.img = await uploadFile(req.files, req, `stores/${appName}/products`);
-        await deleteImages(product.img, req);
+        // Check if product is from a mock store - if so, don't delete the old images
+        if (product.mockStoreAppName || product.mockProductId) {
+          console.log(`Skipping image deletion for mock product update: ${product._id} (from mock store: ${product.mockStoreAppName})`);
+        } else {
+          // Only delete old images for non-mock products
+          await deleteImages(product.img, req);
+        }
       }
     }
 
@@ -774,13 +830,22 @@ router.post("/api/admin/product/delete", async (req, res) => {
     const objectIdsList = req.body.productsIdsList.map((id) => {
       return getId(id);
     });
+    
+    // Get the isStoreMocked flag from the request body
+    const isStoreMocked = req.body.hasMockProducts === true;
 
     const results = await db.products
       .find({ _id: { $in: objectIdsList } })
       .toArray();
 
     await results.forEach(async (product) => {
-      await deleteImages(product.img, req);
+      // Use the flag from frontend to determine if store is mocked
+      if (isStoreMocked) {
+        console.log(`Skipping image deletion for product: ${product._id} (store is mocked)`);
+      } else {
+        // Only delete images for non-mocked stores
+        await deleteImages(product.img, req);
+      }
     });
     await db.products.deleteMany({ _id: { $in: objectIdsList } }, {});
     
@@ -960,6 +1025,128 @@ router.get("/api/admin/product/:id", async (req, res) => {
     res.status(200).json(product);
   } catch (e) {
     res.status(400).json({ message: "Error fetching product", error: e.toString() });
+  }
+});
+
+// Add new API endpoints for mock store product management
+router.post("/api/product/create-from-mock", async (req, res, next) => {
+  try {
+    const appName = req.headers["app-name"];
+    const { mockStoreAppName, productData } = req.body;
+    const db = req.app.db[appName];
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Verify the mock store exists and is marked as mock
+    const mockStore = await dbAdmin.stores.findOne({ appName: mockStoreAppName, isMockStore: true });
+    if (!mockStore) {
+      return res.status(400).json({ message: 'Invalid mock store appName or store is not marked as mock' });
+    }
+    
+    // Get the current store to check if it should use this mock store
+    const currentStore = await dbAdmin.stores.findOne({ appName });
+    if (currentStore && currentStore.mockTypeSource && currentStore.mockTypeSource !== mockStoreAppName) {
+      return res.status(400).json({ 
+        message: 'This store is configured to use a different mock store source' 
+      });
+    }
+    
+    // Get the product from the mock store
+    const mockStoreDb = req.app.db[mockStore.appName];
+    if (!mockStoreDb) {
+      return res.status(500).json({ message: 'Mock store database not accessible' });
+    }
+    
+    const mockProduct = await mockStoreDb.products.findOne({ _id: getId(productData.productId) });
+    if (!mockProduct) {
+      return res.status(404).json({ message: 'Product not found in mock store' });
+    }
+    
+    // Check if product with same barcode already exists in current store
+    if (mockProduct.barcode) {
+      const existingProduct = await db.products.findOne({ barcode: mockProduct.barcode });
+      if (existingProduct) {
+        return res.status(400).json({ message: 'Product with this barcode already exists in this store' });
+      }
+    }
+    
+    // Create new product based on mock product
+    const newProduct = {
+      ...mockProduct,
+      _id: getId(),
+      barcode: mockProduct.barcode, // Preserve the barcode
+      barcodeId: mockProduct.barcodeId || generateUniqueBarcodeId(appName), // Generate unique barcodeId if not exists
+      nameAR: productData.nameAR || mockProduct.nameAR,
+      nameHE: productData.nameHE || mockProduct.nameHE,
+      descriptionAR: productData.descriptionAR || mockProduct.descriptionAR,
+      descriptionHE: productData.descriptionHE || mockProduct.descriptionHE,
+      price: productData.price || mockProduct.price,
+      count: productData.count || mockProduct.count,
+      categoryId: productData.categoryId || mockProduct.categoryId,
+      mockStoreAppName: mockStoreAppName,
+      mockProductId: mockProduct._id,
+      mockType: mockStore.mockType,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    await db.products.insertOne(newProduct);
+    
+    res.status(201).json(newProduct);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to create product from mock', error: err.message });
+  }
+});
+
+router.get("/api/product/mock-store/:mockStoreAppName", async (req, res, next) => {
+  try {
+    const { mockStoreAppName } = req.params;
+    const dbAdmin = req.app.db['shoofi'];
+    
+    // Verify the mock store exists and is marked as mock
+    const mockStore = await dbAdmin.stores.findOne({ appName: mockStoreAppName, isMockStore: true });
+    if (!mockStore) {
+      return res.status(400).json({ message: 'Invalid mock store appName or store is not marked as mock' });
+    }
+    
+    // Get products from the mock store
+    const mockStoreDb = req.app.db[mockStore.appName];
+    if (!mockStoreDb) {
+      return res.status(500).json({ message: 'Mock store database not accessible' });
+    }
+    
+    const products = await mockStoreDb.products.find({}).toArray();
+    
+    res.status(200).json(products);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch mock store products', error: err.message });
+  }
+});
+
+router.post("/api/product/update-barcode", async (req, res, next) => {
+  try {
+    const appName = req.headers["app-name"];
+    const { productId, barcode } = req.body;
+    const db = req.app.db[appName];
+    
+    // Check if barcode already exists in this store
+    const existingProduct = await db.products.findOne({ 
+      barcode: barcode,
+      _id: { $ne: getId(productId) }
+    });
+    
+    if (existingProduct) {
+      return res.status(400).json({ message: 'Product with this barcode already exists in this store' });
+    }
+    
+    // Update the product barcode
+    await db.products.updateOne(
+      { _id: getId(productId) },
+      { $set: { barcode: barcode, updatedAt: new Date() } }
+    );
+    
+    res.status(200).json({ message: 'Product barcode updated successfully' });
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to update product barcode', error: err.message });
   }
 });
 

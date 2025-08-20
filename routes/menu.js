@@ -388,6 +388,242 @@ router.post("/api/menu/refresh", async (req, res, next) => {
   }
 });
 
+// Mock menu route - returns mock store menu filtered by current store products
+router.get("/api/menu/mock", async (req, res, next) => {
+  try {
+    console.time('mockMenuQueryTime');
+    
+    // Get store ID from request (you may need to adjust this based on your auth setup)
+    const storeId = req.headers['app-name'] || req.query.storeId || 'default';
+    
+    // Determine the database name - this should match your store's appName
+    const dbName = req.headers['app-name'] || req.headers['db-name'] || req.query.dbName || 'shoofi';
+    
+    // Get app type to determine if we should show hidden products
+    const appType = req.headers['app-type'] || 'shoofi-app';
+    const shouldShowHiddenProducts = appType === 'shoofi-partner' || appType === 'shoofi-admin';
+    const isAdminApp = appType === 'shoofi-partner' || appType === 'shoofi-admin';
+    
+    // Use aggregation pipeline for better performance
+    const db = req.app.db[dbName];
+    
+    // Validate database connection
+    if (!db) {
+      throw new Error(`Database '${dbName}' not available. Available databases: ${Object.keys(req.app.db || {}).join(', ')}`);
+    }
+
+    // Get the mock store appName from the current store's configuration
+    let mockStoreAppName = null;
+    try {
+      const storeConfig = await db.collection('store').findOne({});
+      if (storeConfig && storeConfig.mockStoreAppName) {
+        mockStoreAppName = storeConfig.mockStoreAppName;
+      }
+    } catch (error) {
+      console.warn('Could not find mock store configuration:', error.message);
+    }
+
+    // If no mock store is configured, return empty menu
+    if (!mockStoreAppName) {
+      console.log(`No mock store configured for store: ${storeId}`);
+      return res.status(200).json({
+        menu: [],
+        productsImagesList: [],
+        categoryImages: {},
+        generalCategories: []
+      });
+    }
+
+    // Get mock store database
+    const mockDb = req.app.db[mockStoreAppName];
+    if (!mockDb) {
+      throw new Error(`Mock store database '${mockStoreAppName}' not available`);
+    }
+
+    // Build aggregation pipeline for mock store menu
+    const mockAggregationPipeline = [
+      // Match only non-hidden categories (unless it's admin app)
+      ...(shouldShowHiddenProducts ? [] : [{ $match: { isHidden: { $ne: true } } }]),
+      
+      // Sort categories by order
+      { $sort: { order: 1 } },
+      
+      // Lookup products for each category
+      {
+        $lookup: {
+          from: 'products',
+          let: { categoryId: { $toString: '$_id' } },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $in: ['$$categoryId', '$supportedCategoryIds'] },
+                    ...(shouldShowHiddenProducts ? [] : [{ $ne: ['$isHidden', true] }]) // Only non-hidden products (unless it's admin app)
+                  ]
+                }
+              }
+            },
+            // Sort products by order (legacy field)
+            { $sort: { order: 1 } },
+            // Project only needed fields
+            {
+              $project: {
+                _id: 1,
+                nameAR: 1,
+                nameHE: 1,
+                descriptionAR: 1,
+                descriptionHE: 1,
+                price: 1,
+                img: 1,
+                order: 1,
+                categoryOrders: 1,
+                isInStore: 1,
+                count: 1,
+                supportedCategoryIds: 1,
+                categoryId: 1,
+                extras: 1,
+                isHidden: 1,
+                barcode: 1,
+                barcodeId: 1
+              }
+            }
+          ],
+          as: 'products'
+        }
+      },
+      
+      // Project only needed category fields
+      {
+        $project: {
+          _id: 1,
+          nameAR: 1,
+          nameHE: 1,
+          descriptionAR: 1,
+          descriptionHE: 1,
+          order: 1,
+          img: 1,
+          products: 1,
+          supportedGeneralCategoryIds: 1,
+          isHidden: 1,
+        }
+      }
+    ];
+
+    const mockMenuAggregation = await mockDb.collection('categories').aggregate(mockAggregationPipeline).toArray();
+
+    // Get current store products to filter out duplicates
+    const currentStoreProducts = await db.collection('products').find({}, {
+      projection: { 
+        _id: 1, 
+        barcode: 1, 
+        barcodeId: 1,
+        nameAR: 1,
+        nameHE: 1
+      }
+    }).toArray();
+
+    // Create sets for faster lookup
+    const currentStoreBarcodes = new Set(currentStoreProducts.map(p => p.barcode).filter(Boolean));
+    const currentStoreBarcodeIds = new Set(currentStoreProducts.map(p => p.barcodeId).filter(Boolean));
+    const currentStoreNames = new Set([
+      ...currentStoreProducts.map(p => p.nameAR).filter(Boolean),
+      ...currentStoreProducts.map(p => p.nameHE).filter(Boolean)
+    ]);
+
+    // Filter out products that already exist in current store
+    const filteredMockMenu = mockMenuAggregation.map(category => {
+      if (category.products && category.products.length > 0) {
+        const filteredProducts = category.products.filter(product => {
+          // Check if product already exists by barcode, barcodeId, or name
+          const hasBarcode = product.barcode && currentStoreBarcodes.has(product.barcode);
+          const hasBarcodeId = product.barcodeId && currentStoreBarcodeIds.has(product.barcodeId);
+          const hasName = (product.nameAR && currentStoreNames.has(product.nameAR)) ||
+                         (product.nameHE && currentStoreNames.has(product.nameHE));
+          
+          // Return true if product doesn't exist in current store
+          return  !hasBarcodeId && !hasName;
+        });
+
+        // Sort products by categoryOrders if available, otherwise by order
+        const sortedProducts = filteredProducts.sort((a, b) => {
+          const orderA = a.categoryOrders?.[category._id] ?? a.order ?? 999999;
+          const orderB = b.categoryOrders?.[category._id] ?? b.order ?? 999999;
+          return orderA - orderB;
+        });
+        
+        return {
+          ...category,
+          products: sortedProducts
+        };
+      }
+      return category;
+    });
+
+    // Extract products for images list
+    const allProducts = filteredMockMenu.reduce((acc, category) => {
+      return acc.concat(category.products || []);
+    }, []);
+
+    // Create products images list
+    const productsImagesList = allProducts
+      .filter(product => product.img && product.img.length > 0)
+      .map(product => product.img[0]?.uri)
+      .filter(Boolean);
+
+    // Group products by category for categoryImages
+    const grouped = _.groupBy(allProducts, 'categoryId');
+
+    // Check if generalCategories collection exists and fetch data from mock store
+    let generalCategories = null;
+    try {
+      const collections = await mockDb.listCollections({ name: 'general-categories' }).toArray();
+      if (collections.length > 0) {
+        // Fetch general categories
+        const generalCategoriesData = await mockDb.collection('general-categories').find({}).toArray();
+        
+        // Fetch all categories (subcategories) to filter by supportedGeneralCategoryIds
+        const allCategories = await mockDb.collection('categories').find({}).toArray();
+        
+        // Process general categories and add filtered subcategories
+        generalCategories = generalCategoriesData.map(generalCategory => {
+          const subCategories = allCategories.filter(category => 
+            category.supportedGeneralCategoryIds && 
+            category.supportedGeneralCategoryIds.some(id => 
+              id.$oid === generalCategory._id.$oid || id === generalCategory._id.$oid
+            )
+          );
+          
+          return {
+            ...generalCategory,
+            subCategories: subCategories.sort((a, b) => (a.order || 0) - (b.order || 0))
+          };
+        });
+      }
+    } catch (error) {
+      console.warn('Error fetching generalCategories from mock store:', error.message);
+      // Continue without generalCategories if there's an error
+    }
+
+    const menuData = {
+      menu: filteredMockMenu,
+      productsImagesList,
+      categoryImages: grouped,
+      ...(generalCategories && { generalCategories })
+    };
+
+    console.timeEnd('mockMenuQueryTime');
+    console.log(`Mock menu generated for store: ${storeId} from mock store: ${mockStoreAppName}`);
+
+    res.status(200).json(menuData);
+
+  } catch (error) {
+    console.error('Error fetching mock menu:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to fetch mock menu', details: error.message });
+  }
+});
+
 // Search products across all stores and return matching stores
 router.post("/api/menu/search", async (req, res) => {
   try {

@@ -887,4 +887,150 @@ router.post('/admin/searchall', restrict, async (req, res, next) => {
     });
 });
 
+// Invoice management endpoints
+router.get("/api/admin/invoices/pending", restrict, async (req, res) => {
+  try {
+    const invoiceMailService = require("../utils/invoice-mail");
+    const pendingCount = invoiceMailService.getPendingInvoicesCount();
+    
+    res.json({
+      success: true,
+      pendingCount,
+      message: `There are ${pendingCount} invoices pending processing`
+    });
+  } catch (error) {
+    console.error("Error getting pending invoices count:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get pending invoices count",
+      error: error.message
+    });
+  }
+});
+
+router.post("/api/admin/invoices/retry", restrict, async (req, res) => {
+  try {
+    const { docId } = req.body;
+    
+    if (!docId) {
+      return res.status(400).json({
+        success: false,
+        message: "docId is required"
+      });
+    }
+    
+    const invoiceMailService = require("../utils/invoice-mail");
+    
+    // Check if invoice is already pending
+    if (invoiceMailService.isInvoicePending(docId)) {
+      return res.json({
+        success: false,
+        message: `Invoice ${docId} is already queued for processing`
+      });
+    }
+    
+    // Add to processing queue
+    invoiceMailService.queueInvoiceForProcessing(docId, req);
+    
+    res.json({
+      success: true,
+      message: `Invoice ${docId} has been queued for processing`
+    });
+  } catch (error) {
+    console.error("Error queuing invoice for retry:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to queue invoice for retry",
+      error: error.message
+    });
+  }
+});
+
+router.post("/api/admin/invoices/process-all", restrict, async (req, res) => {
+  try {
+    const invoiceMailService = require("../utils/invoice-mail");
+    
+    // Get all orders with pending invoice status
+    const appName = req.headers["app-name"] || "shoofi";
+    const db = req.app.db[appName];
+    
+    const pendingOrders = await db.orders.find({
+      "ccPaymentRefData.invoiceStatus": "pending",
+      "ccPaymentRefData.docId": { $exists: true }
+    }).toArray();
+    
+    let processedCount = 0;
+    let queuedCount = 0;
+    
+    for (const order of pendingOrders) {
+      const docId = order.ccPaymentRefData.docId;
+      
+      if (docId && !invoiceMailService.isInvoicePending(docId)) {
+        invoiceMailService.queueInvoiceForProcessing(docId, req);
+        queuedCount++;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Processed ${pendingOrders.length} pending orders, queued ${queuedCount} for invoice processing`,
+      totalPending: pendingOrders.length,
+      newlyQueued: queuedCount
+    });
+  } catch (error) {
+    console.error("Error processing all pending invoices:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process pending invoices",
+      error: error.message
+    });
+  }
+});
+
+router.post("/api/admin/invoices/webhook", async (req, res) => {
+  try {
+    const { docId, secret } = req.body;
+    
+    // Simple webhook authentication (you can enhance this)
+    if (!secret || secret !== process.env.INVOICE_WEBHOOK_SECRET) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized webhook call"
+      });
+    }
+    
+    if (!docId) {
+      return res.status(400).json({
+        success: false,
+        message: "docId is required"
+      });
+    }
+    
+    const invoiceMailService = require("../utils/invoice-mail");
+    
+    // Create a minimal req object for the service
+    const minimalReq = {
+      app: req.app,
+      headers: req.headers
+    };
+    
+    const result = await invoiceMailService.triggerInvoiceProcessing(docId, minimalReq);
+    
+    res.json({
+      success: true,
+      message: result ? 
+        `Invoice ${docId} processed successfully` : 
+        `Invoice ${docId} queued for background processing`,
+      processed: result
+    });
+  } catch (error) {
+    console.error("Error processing webhook for invoice:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process invoice webhook",
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
