@@ -1420,7 +1420,7 @@ router.post("/api/shoofiAdmin/store/create-from-mock", async (req, res, next) =>
       descriptionHE: newStoreData.descriptionHE || mockStore.descriptionHE || '',
       business_visible: newStoreData.business_visible !== undefined ? newStoreData.business_visible : mockStore.business_visible,
       categoryIds: [], // Will be updated after categories are copied
-      supportedCities: newStoreData.supportedCities || mockStore.supportedCities || [],
+      supportedCities: (newStoreData.supportedCities).map(cityId => getId(cityId)) || mockStore.supportedCities || [],
       supportedGeneralCategoryIds: copyGeneralCategories ? (newStoreData.supportedGeneralCategoryIds || mockStore.supportedGeneralCategoryIds || []) : [],
       hasGeneralCategories: newStoreData?.hasGeneralCategories || mockStore.hasGeneralCategories,
       phone: newStoreData.phone || mockStore.phone || '',
