@@ -468,12 +468,12 @@ router.post(
       if (req.body.isOrderLaterSupport) {
         filterBy = {
           ...filterBy,
-          orderDate: { $gte: start.format(), $lt: end.add(1, 'hour').format() },
+          orderDate: { $gte: start.format(), $lt: end.add(3, 'hour').format() },
         };
       } else {
         filterBy = {
           ...filterBy,
-          orderDate: { $gte: start.format(), $lt: end.add(1, 'hour').format() },
+          orderDate: { $gte: start.format(), $lt: end.add(3, 'hour').format() },
         };
       }
 
