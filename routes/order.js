@@ -379,7 +379,7 @@ const getBusinessDayBoundaries = async (targetDate, req, appName) => {
       const yesterdayEndMinutes = timeToMinutes(yesterdayHours.end);
       
       // If current time is before yesterday's end time (overnight), use yesterday's business day
-      if (currentTimeMinutes < yesterdayEndMinutes) {
+      if (currentTimeMinutes < yesterdayEndMinutes + 90) {
         console.log('Using yesterday overnight hours logic - still within yesterday business day');
         businessStart = parseTime(yesterdayHours.start, targetDay.clone().subtract(1, 'day'));
         businessEnd = parseTime(yesterdayHours.end, targetDay);
