@@ -249,37 +249,37 @@ initDb(async (err, db) => {
 
 // });
 
-// Start persistent alerts cron jobs
-console.log(colors.blue("Starting persistent alerts cron jobs..."));
-persistentAlertsCron.startPersistentAlertsCron(app.db);
-persistentAlertsCron.startCleanupCron(app.db);
-console.log(colors.green("Persistent alerts cron jobs started successfully"));
+// // Start persistent alerts cron jobs
+// console.log(colors.blue("Starting persistent alerts cron jobs..."));
+// persistentAlertsCron.startPersistentAlertsCron(app.db);
+// persistentAlertsCron.startCleanupCron(app.db);
+// console.log(colors.green("Persistent alerts cron jobs started successfully"));
 
-// Start store auto-close cron job
-console.log(colors.blue("Starting store auto-close cron job..."));
-storeAutoCloseCron.startStoreAutoCloseCron(app.db);
-console.log(colors.green("Store auto-close cron job started successfully"));
+// // Start store auto-close cron job
+// console.log(colors.blue("Starting store auto-close cron job..."));
+// storeAutoCloseCron.startStoreAutoCloseCron(app.db);
+// console.log(colors.green("Store auto-close cron job started successfully"));
 
-// Start store open reminder cron job
-console.log(colors.blue("Starting store open reminder cron job..."));
-storeOpenReminderCron.startStoreOpenReminderCron(app.db);
-console.log(colors.green("Store open reminder cron job started successfully"));
+// // Start store open reminder cron job
+// console.log(colors.blue("Starting store open reminder cron job..."));
+// storeOpenReminderCron.startStoreOpenReminderCron(app.db);
+// console.log(colors.green("Store open reminder cron job started successfully"));
 
-// Start order overdue checker cron job
-console.log(colors.blue("Starting order overdue checker cron job..."));
-orderOverdueCheckerCron.startOrderOverdueCheckerCron(app.db);
-console.log(colors.green("Order overdue checker cron job started successfully"));
+// // Start order overdue checker cron job
+// console.log(colors.blue("Starting order overdue checker cron job..."));
+// orderOverdueCheckerCron.startOrderOverdueCheckerCron(app.db);
+// console.log(colors.green("Order overdue checker cron job started successfully"));
 
-// Start delivery pickup delay checker cron job
-console.log(colors.blue("Starting delivery pickup delay checker cron job..."));
-deliveryPickupCheckerCron.startDeliveryPickupCheckerCron(app.db);
-console.log(colors.green("Delivery pickup delay checker cron job started successfully"));
+// // Start delivery pickup delay checker cron job
+// console.log(colors.blue("Starting delivery pickup delay checker cron job..."));
+// deliveryPickupCheckerCron.startDeliveryPickupCheckerCron(app.db);
+// console.log(colors.green("Delivery pickup delay checker cron job started successfully"));
 
-// Start delivery completion delay checker cron job
-console.log(colors.blue("Starting delivery completion delay checker cron job..."));
-const deliveryCompletionDelayCheckerCron = require("./utils/crons/delivery-completion-delay-checker");
-deliveryCompletionDelayCheckerCron.startDeliveryCompletionDelayCheckerCron(app.db);
-console.log(colors.green("Delivery completion delay checker cron job started successfully"));
+// // Start delivery completion delay checker cron job
+// console.log(colors.blue("Starting delivery completion delay checker cron job..."));
+// const deliveryCompletionDelayCheckerCron = require("./utils/crons/delivery-completion-delay-checker");
+// deliveryCompletionDelayCheckerCron.startDeliveryCompletionDelayCheckerCron(app.db);
+// console.log(colors.green("Delivery completion delay checker cron job started successfully"));
 
 
 // cron.schedule('*/1 * * * *', function () {

@@ -1,0 +1,32 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAM_ID.com.shoofi.shopping",
+        "paths": [
+          "/api/store/open/*"
+        ]
+      },
+      {
+        "appID": "TEAM_ID.com.shoofi.partners",
+        "paths": [
+          "/api/store/open/*"
+        ]
+      },
+      {
+        "appID": "TEAM_ID.com.shoofi.shoofir",
+        "paths": [
+          "/api/store/open/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAM_ID.com.shoofi.shopping",
+      "TEAM_ID.com.shoofi.partners",
+      "TEAM_ID.com.shoofi.shoofir"
+    ]
+  }
+}
