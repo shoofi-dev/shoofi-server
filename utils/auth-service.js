@@ -23,6 +23,7 @@ generateJWT = async function (user,req) {
             resolve(token);
     });
 }
+
 const toAuthJSON = async function (user, req) {
     return new Promise(function (resolve, reject) {
         generateJWT(user, req).then((result) => {
@@ -34,36 +35,45 @@ const toAuthJSON = async function (user, req) {
 
     });
 };
+
 const refreshToken = function(req, res, next) {
     const appName = req.headers['app-name'];
     const customerDB = getCustomerAppName(req, appName);
 
     let token = req.headers['x-access-token'] || req.headers['authorization']; // Express headers are auto converted to lowercase test
-    if (token.startsWith('Token ')) {
+    
+    // Standardized Bearer token handling
+    if (token && token.startsWith('Bearer ')) {
       // Remove Bearer from string
-      token = token.slice(6, token.length);
+      token = token.slice(7, token.length);
     
       customerDB.customers.findOne({ token: token })
-  .then((result) => {
-    if (!result) {
-        return res.status(422).json({
-          errors: {
-            email: 'is required',
-          },
+        .then((result) => {
+          if (!result) {
+            return res.status(422).json({
+              errors: {
+                email: 'is required',
+              },
+            });
+          } else {
+            generateJWT(result, req).then((newToken) => {
+              res.setHeader('Authorization', 'Bearer ' + newToken);
+              next();
+            });
+          }
         });
-      }else{
-        generateJWT(result).then((result) => {
-            res.setHeader('Token', result);
-            next();
-         });
-      }
-       
-    });
+    } else {
+      return res.status(401).json({
+        errors: {
+          authorization: 'Bearer token is required',
+        },
+      });
     }
-      // user is authenticated
-  };
+};
+
 const auth = {
     toAuthJSON: toAuthJSON,
     refreshToken: refreshToken
 };
+
 module.exports = auth;

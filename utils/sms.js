@@ -235,6 +235,20 @@ getAdminUserTempPasswordContent = function (fullName, tempPassword, lang = "1") 
   }
 }
 
+getAdminUserResetCodeContent = function (fullName, resetCode, lang = "1") {
+  if(lang == "0"){
+    return `مرحبا ${fullName} \u{1F60A} \n` 
+    + `تم إرسال رمز إعادة تعيين كلمة المرور \u{2705} \n`
+    + `رمز إعادة التعيين: ${resetCode} \n`
+    + `هذا الرمز صالح لمدة 15 دقيقة فقط \u{23F2}`
+  }else{
+    return `היי ${fullName} \u{1F60A} \n` 
+    + `נשלח קוד לאיפוס סיסמה \u{2705} \n`
+    + `קוד האיפוס: ${resetCode} \n`
+    + `הקוד תקף ל-15 דקות בלבד \u{23F2}`
+  }
+}
+
 const smsService = {
     sendSMS: sendSMS,
     getOrderRecivedContent: getOrderRecivedContent,
@@ -249,5 +263,6 @@ const smsService = {
     wofLeadRegisterContent: wofLeadRegisterContent,
     wofLeadAssignedToCourseContent: wofLeadAssignedToCourseContent,
     getAdminUserTempPasswordContent: getAdminUserTempPasswordContent,
+    getAdminUserResetCodeContent: getAdminUserResetCodeContent,
 };
 module.exports = smsService;
