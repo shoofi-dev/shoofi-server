@@ -6,6 +6,7 @@ const { mongoSanitize } = require("../lib/common");
 const smsService = require("../utils/sms");
 const adminAuthService = require("../utils/admin-auth-service");
 const auth = require("../routes/auth");
+const jwt = require("jsonwebtoken"); // Added for manual token decoding
 
 // Generate random password
 function generatePassword() {
@@ -587,7 +588,7 @@ router.post("/api/admin/users/reset-password", async (req, res) => {
 });
 
 // Refresh access token
-router.post("/api/admin/users/refresh-token", auth.required, async (req, res) => {
+router.post("/api/admin/users/refresh-token", async (req, res) => {
   try {
     const db = req.app.db['shoofi'];
     const { token } = req.body;
@@ -596,18 +597,41 @@ router.post("/api/admin/users/refresh-token", auth.required, async (req, res) =>
       return res.status(400).json({ message: "Token is required" });
     }
     
-    // Verify the user is requesting to refresh their own token
-    const decodedToken = adminAuthService.verifyAccessToken(token);
-    if (!decodedToken || decodedToken.id !== req.auth.id) {
-      return res.status(403).json({ message: "Can only refresh your own token" });
+    // Manually decode the token to get user ID (even if expired)
+    let decodedToken;
+    try {
+      // Decode without verification to get payload
+      decodedToken = jwt.decode(token);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid token format" });
     }
     
-    // Refresh the access token
-    const newToken = await adminAuthService.refreshAccessToken(token, db);
-    
-    if (!newToken) {
-      return res.status(401).json({ message: "Invalid or expired token" });
+    if (!decodedToken || !decodedToken.id) {
+      return res.status(400).json({ message: "Invalid token payload" });
     }
+    
+    // Check if user still exists and is active
+    const user = await db.shoofiAdminUsers.findOne({
+      _id: new ObjectId(decodedToken.id),
+      roles: { $exists: true, $ne: [] }
+    });
+    
+    if (!user) {
+      return res.status(401).json({ message: "User not found or inactive" });
+    }
+    
+    // Generate new access token directly
+    const newToken = adminAuthService.generateAccessToken(user);
+    
+    // Update last token refresh timestamp
+    await db.shoofiAdminUsers.updateOne(
+      { _id: user._id },
+      { 
+        $set: { 
+          lastTokenRefresh: new Date()
+        } 
+      }
+    );
     
     res.json({
       token: newToken,

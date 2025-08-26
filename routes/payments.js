@@ -7,7 +7,8 @@ const utcTimeService = require("../utils/utc-time");
 
 // Helper function to get date range
 const getDateRange = (period) => {
-  const now = moment();
+  const offsetHours = utcTimeService.getUTCOffset()
+  const now = moment().utcOffset(offsetHours);
   let start, end;
   
   switch (period) {
@@ -61,7 +62,7 @@ router.post("/api/payments/partner/summary", async (req, res) => {
     // Get orders for this partner (excluding canceled orders)
     const orders = await db.orders.find({
       status: { $in: ["2","3","10","11","12"] },
-      orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+      created: { $gte: dateRange.start, $lte: dateRange.end }
     }).toArray();
     
     // Calculate totals
@@ -83,7 +84,7 @@ router.post("/api/payments/partner/summary", async (req, res) => {
     
     // Group by date for charts
     const dailyData = orders.reduce((acc, order) => {
-      const date = moment(order.orderDate).utcOffset(offsetHours).format('YYYY-MM-DD');
+      const date = moment(order.created).utcOffset(offsetHours).format('YYYY-MM-DD');
       if (!acc[date]) {
         acc[date] = {
           date,
@@ -167,9 +168,9 @@ router.post("/api/payments/partner/details", async (req, res) => {
     const orders = await db.orders.find({
       status: { $in: ["2","3","10","11","12"] },
       "orderProducts.storeId": partnerId,
-      orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+      created: { $gte: dateRange.start, $lte: dateRange.end }
     })
-    .sort({ orderDate: -1 })
+    .sort({ created: -1 })
     .skip(skip)
     .limit(limit)
     .toArray();
@@ -178,7 +179,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
     const totalOrders = await db.orders.countDocuments({
       status: { $in: ["2","3","10","11","12"] },
       "orderProducts.storeId": partnerId,
-      orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+      created: { $gte: dateRange.start, $lte: dateRange.end }
     });
     
     // Add payment calculations to each order
@@ -409,11 +410,11 @@ router.post("/api/payments/driver/details", async (req, res) => {
 router.post("/api/payments/admin/overview", async (req, res) => {
   try {
     const { period = 'month', startDate, endDate, storeId } = req.body;
-    
+    const offsetHours = utcTimeService.getUTCOffset()
     const dateRange = startDate && endDate 
       ? { 
-          start: moment(startDate).startOf('day').format(), 
-          end: moment(endDate).endOf('day').format() 
+          start: moment(startDate).utcOffset(offsetHours).startOf('day').format(), 
+          end: moment(endDate).utcOffset(offsetHours).endOf('day').format() 
         }
       : getDateRange(period);
     
@@ -453,7 +454,7 @@ router.post("/api/payments/admin/overview", async (req, res) => {
         // This is an order app (like shoofi-app)
         const ordersQuery = {
           status: { $in: ["2","3","10","11","12"] },
-          orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+          created: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
         const orders = await db.orders.find(ordersQuery).toArray();
@@ -574,7 +575,7 @@ router.post("/api/payments/admin/partners", async (req, res) => {
         // Build match condition
         const matchCondition = {
           status: { $in: ["2","3","10","11","12"] },
-          orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+          created: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
         // If filtering by specific store, add store filter
@@ -862,7 +863,7 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
       : getDateRange(period);
     
     const format = groupBy === 'day' ? '%Y-%m-%d' : '%Y-%m';
-    const dateField = groupBy === 'day' ? 'orderDate' : 'orderDate';
+    const dateField = groupBy === 'day' ? 'created' : 'created';
     
     // Get stores list to find apps
     const dbAdmin = req.app.db['shoofi'];
@@ -888,7 +889,7 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
         // Build match condition for orders
         const matchCondition = {
           status: { $in: ["2","3","10","11","12"] },
-          orderDate: { $gte: dateRange.start, $lte: dateRange.end }
+          created: { $gte: dateRange.start, $lte: dateRange.end }
         };
         
         // If filtering by specific store, add store filter
@@ -906,7 +907,7 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
               _id: {
                 $dateToString: {
                   format: format,
-                  date: { $dateFromString: { dateString: "$orderDate" } }
+                  date: { $dateFromString: { dateString: "$created" } }
                 }
               },
               orders: { $sum: 1 },
