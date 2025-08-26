@@ -992,4 +992,89 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
   }
 });
 
+// Get store-wise payment data for Excel export
+router.post("/api/payments/admin/stores-export", async (req, res) => {
+  try {
+    const { period = 'month', startDate, endDate } = req.body;
+    const offsetHours = utcTimeService.getUTCOffset()
+    const dateRange = startDate && endDate 
+      ? { 
+          start: moment(startDate).utcOffset(offsetHours).startOf('day').format(), 
+          end: moment(endDate).utcOffset(offsetHours).endOf('day').format() 
+        }
+      : getDateRange(period);
+    
+    // Get stores list to determine app names
+    const dbAdmin = req.app.db['shoofi'];
+    const storesList = await dbAdmin.stores.find().toArray();
+    
+    let storesData = [];
+    
+    // Loop through stores to get app names
+    for (const store of storesList) {
+      const appName = store.appName;
+      if (!appName || !req.app.db[appName]) {
+        continue; // Skip if no appName or database doesn't exist
+      }
+      
+      const db = req.app.db[appName];
+      
+      // Check if this is a delivery app or order app based on collections
+      const collections = await db.listCollections().toArray();
+      const collectionNames = collections.map(col => col.name);
+      
+      if (collectionNames.includes('orders')) {
+        // This is an order app (like shoofi-app)
+        const ordersQuery = {
+          status: { $in: ["2","3","10","11","12"] },
+          created: { $gte: dateRange.start, $lte: dateRange.end }
+        };
+        
+        const orders = await db.orders.find(ordersQuery).toArray();
+        
+        // Calculate totals for this store
+        const totalOrders = orders.length;
+        const totalRevenue = orders.reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+        
+        // Calculate revenue by payment method for orders
+        const totalRevenueCreditCard = orders
+          .filter(order => order.order?.payment_method === 'CREDITCARD')
+          .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+        const totalRevenueCash = orders
+          .filter(order => order.order?.payment_method === 'CASH')
+          .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
+        
+        // Calculate total applied coupons sum
+        const totalAppliedCouponsSum = orders
+          .filter(order => order.appliedCoupon && order.appliedCoupon.discountAmount)
+          .reduce((sum, order) => sum + (order.appliedCoupon.discountAmount || 0), 0);
+        
+        storesData.push({
+          storeNameHe: store.name_he || 'לא ידוע',
+          storeNameAr: store.name_ar || 'غير معروف',
+          appName: appName,
+          totalRevenue: totalRevenue,
+          totalRevenueCreditCard: totalRevenueCreditCard,
+          totalRevenueCash: totalRevenueCash,
+          totalAppliedCouponsSum: totalAppliedCouponsSum,
+          totalOrders: totalOrders
+        });
+      }
+    }
+    
+    res.status(200).json({
+      storesData: storesData,
+      period: period,
+      dateRange: {
+        start: dateRange.start,
+        end: dateRange.end
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error getting stores export data:", error);
+    res.status(500).json({ message: "Error getting stores export data" });
+  }
+});
+
 module.exports = router; 
