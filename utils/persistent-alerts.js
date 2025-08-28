@@ -233,20 +233,18 @@ class PersistentAlertsService {
       const offsetHours = getUTCOffset();
 
       const now = moment().utcOffset(offsetHours);
+      const oneMinuteAgo = moment().subtract(1, 'minute').toDate(); // Convert to Date object
 
-      // Find alerts that need reminders
       const alertsNeedingReminders = await shoofiDB.persistentAlerts.find({
-        status: "pending",
-        $or: [
-          { lastReminderSent: null },
-          {
-            lastReminderSent: {
-              $lt: now.subtract(1, 'minutes').toDate() // 1 minute ago
-            }
-          }
-        ],
-        reminderCount: { $lt: 5 } // Max 5 reminders
-      }).toArray();
+        status: 'pending',
+        reminderCount: { $lt: 5 },
+        // $or: [
+        //   { lastReminderSent: { $exists: false } },
+        //   { lastReminderSent: null },
+        // { "lastReminderSent._d": { $lt: oneMinuteAgo } }
+        // ]
+      })
+      .toArray();
 
       for (const alert of alertsNeedingReminders) {
         const storeUsers = alert.storeUsers.filter(user => user.notified);

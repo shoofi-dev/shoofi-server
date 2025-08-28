@@ -1878,7 +1878,10 @@ router.post("/api/order/update", auth.required, async (req, res) => {
         // Don't fail the order update if delivery update fails
       }
     }
-
+        // Update delivery order status when main order is cancelled (status 4, 7, or 8)
+    if (updateobj?.status === ORDER_STATUS.CANCELLED || updateobj?.status === ORDER_STATUS.CANCELLED_BY_ADMIN || updateobj?.status === ORDER_STATUS.CANCELLED_BY_CUSTOMER) {
+       await persistentAlertsService.clearPersistentAlert(order._id, req, appName);
+    }
     return res.status(200).json({ message: "Order successfully updated" });
   } catch (ex) {
     console.info("Error updating order", ex);
