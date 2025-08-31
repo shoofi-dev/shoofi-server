@@ -1018,6 +1018,7 @@ router.post("/api/payments/admin/stores-export", async (req, res) => {
       }
       
       const db = req.app.db[appName];
+      const couponDb = req.app.db['shoofi'];
       
       // Check if this is a delivery app or order app based on collections
       const collections = await db.listCollections().toArray();
@@ -1045,9 +1046,44 @@ router.post("/api/payments/admin/stores-export", async (req, res) => {
           .reduce((sum, order) => sum + (order.orderPrice || 0), 0);
         
         // Calculate total applied coupons sum
-        const totalAppliedCouponsSum = orders
-          .filter(order => order.appliedCoupon && order.appliedCoupon.discountAmount)
-          .reduce((sum, order) => sum + (order.appliedCoupon.discountAmount || 0), 0);
+        const totalAppliedCouponsSum = await orders
+          .filter(order => order.appliedCoupon)
+          .reduce(async (sumPromise, order) => {
+            const sum = await sumPromise;
+            const appliedCoupon = order.appliedCoupon;
+            let discountAmount = 0;
+            
+            // Try to get storeDiscount from appliedCoupon first
+            let storeDiscount = appliedCoupon.storeDiscount;
+            let couponType = appliedCoupon.type;
+            
+            // If storeDiscount doesn't exist, fetch from coupons collection
+            if (storeDiscount === undefined || storeDiscount === null) {
+              try {
+                const originalCoupon = await couponDb.coupons.findOne({ 
+                  _id: getId(appliedCoupon.coupon?._id) || getId(appliedCoupon._id) 
+                });
+                if (originalCoupon) {
+                  storeDiscount = originalCoupon.storeDiscount;
+                  couponType = originalCoupon.type;
+                }
+              } catch (error) {
+                console.error('Error fetching original coupon:', error);
+              }
+            }
+            
+            if (storeDiscount) {
+              if (couponType === 'percentage') {
+                // For percentage coupons, calculate actual discount amount
+                discountAmount = (storeDiscount / 100) * (order.orderPrice || 0);
+              } else {
+                // For fixed value coupons, use storeDiscount directly
+                discountAmount = storeDiscount;
+              }
+            }
+            
+            return sum + discountAmount;
+          }, Promise.resolve(0));
         
         storesData.push({
           storeNameHe: store.name_he || 'לא ידוע',

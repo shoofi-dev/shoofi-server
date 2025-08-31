@@ -20,6 +20,14 @@
             "type": "string",
             "maxLength": 100
         },
+        "subNameForStore": {
+            "type": "string",
+            "maxLength": 100
+        },
+        "storeTagName": {
+            "type": "string",
+            "maxLength": 100
+        },
         "nameForCheckout": {    
             "type": "string",
             "maxLength": 100
@@ -50,6 +58,14 @@
         },
         "value": {
             "type": "number",
+            "minimum": 0
+        },
+        "shoofiDiscount": {
+            "type": ["number", "null"],
+            "minimum": 0
+        },
+        "storeDiscount": {
+            "type": ["number", "null"],
             "minimum": 0
         },
         "maxDiscount": {
@@ -117,6 +133,10 @@
         },
         "isAutoApply": {
             "type": "boolean"
+        },
+        "color": {
+            "type": "string",
+            "enum": ["white", "black"]
         }
     
     },
