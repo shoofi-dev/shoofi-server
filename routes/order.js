@@ -1044,6 +1044,7 @@ router.post(
     const config = req.app.config;
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
+    const paymentProvider = parsedBodey.order.payment_provider;
 
 
     // Prevent order duplication using Redis lock or in-memory fallback
@@ -1147,7 +1148,39 @@ router.post(
       );
     }
     const offsetHours = getUTCOffset();
-
+    let orderStatus = isCreditCardPay ? "0" : "6"; // Start with pending for credit card
+    let ccPaymentRefDataDigitalPayment = undefined;
+    if(paymentProvider === 'APPLEPAY') {
+      orderStatus = parsedBodey.order?.status; // Start with pending in case apple pay was failed
+      if (parsedBodey.order?.status === "0" && parsedBodey.order?.error_message) {
+        ccPaymentRefDataDigitalPayment = {
+          success: false,
+          error: parsedBodey.order?.error_message,
+        }
+      }
+      // If Apple Pay was successful (status === "6"), check session status
+      if (parsedBodey.order?.status === "6" && parsedBodey.order?.sessionId) {
+        try {
+          const sessionStatusResponse = await axios.post(
+            "https://pci.zcredit.co.il/webcheckout/api/WebCheckout/GetSessionStatus",
+            {
+              "Key": "952ad5fd3a963d4fec9d2e13dacb148144c04bfd5729cdbf5b6bee31a3468d6a",
+              "SessionId": parsedBodey.order.sessionId
+            }
+          );
+          
+          // Store the session status response in paymentData
+          const sessionData = sessionStatusResponse?.data?.CallBackJSON;
+          ccPaymentRefDataDigitalPayment = sessionData && JSON.parse(sessionData);
+          
+          console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
+        } catch (sessionError) {
+          console.error("Failed to check Apple Pay session status:", sessionError.message);
+          // If session check fails, set to undefined so order can still be created
+          ccPaymentRefDataDigitalPayment = undefined;
+        }
+      }
+    }
     const orderDoc = {
       ...parsedBodey,
       order: {
@@ -1165,7 +1198,7 @@ router.post(
       customerId,
       orderId: newOrderId,
       originalOrderId: generatedOrderId,
-      status: isCreditCardPay ? "0" : "6", // Start with pending for credit card
+      status: orderStatus,
       isPrinted: false,
       isViewd: false,
       isViewdAdminAll: false,
@@ -1173,6 +1206,7 @@ router.post(
       appName: appName,
       // Add coupon data if present
       appliedCoupon: parsedBodey.appliedCoupon || null,
+      ccPaymentRefData: ccPaymentRefDataDigitalPayment
     };
 
     // Debug log for coupon data
@@ -1225,7 +1259,7 @@ router.post(
         { multi: false, returnOriginal: false }
       );
 
-      if (!isCreditCardPay) {
+      if (!isCreditCardPay || (isCreditCardPay && paymentProvider === 'APPLEPAY' &&  parsedBodey.order.status === "6")) {
         // Send notification to store owners
         await sendStoreOwnerNotifications(orderDoc, req, appName);
       }
@@ -1245,11 +1279,12 @@ router.post(
           total: orderDoc.total,
           itemsCount: orderDoc.order.items?.length || 0,
           paymentMethod: orderDoc.order.payment_method,
-          isCreditCardPay
+          isCreditCardPay,
+          paymentProvider,
         }
       });
             // Handle credit card payment server-side
-            if (isCreditCardPay && parsedBodey.paymentData) {
+            if (isCreditCardPay && paymentProvider !== 'APPLEPAY' && parsedBodey.paymentData) {
               try {
                 const paymentResult = await processCreditCardPayment(
                   parsedBodey.paymentData,
