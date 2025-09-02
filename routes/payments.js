@@ -6,7 +6,7 @@ const { ObjectId } = require("mongodb");
 const utcTimeService = require("../utils/utc-time");
 
 // Helper function to get date range
-const getDateRange = (period) => {
+const getDateRange = (period, month = null) => {
   const offsetHours = utcTimeService.getUTCOffset()
   const now = moment().utcOffset(offsetHours);
   let start, end;
@@ -21,8 +21,16 @@ const getDateRange = (period) => {
       end = now.clone().endOf('week');
       break;
     case 'month':
-      start = now.clone().startOf('month');
-      end = now.clone().endOf('month');
+      if (month) {
+        // Use the provided month (format: YYYY-MM)
+        const monthMoment = moment(month, 'YYYY-MM').utcOffset(offsetHours);
+        start = monthMoment.clone().startOf('month');
+        end = monthMoment.clone().endOf('month');
+      } else {
+        // Default to current month
+        start = now.clone().startOf('month');
+        end = now.clone().endOf('month');
+      }
       break;
     default:
       start = now.clone().subtract(30, 'days');
@@ -46,7 +54,7 @@ router.post("/api/payments/partner/summary", async (req, res) => {
   const offsetHours = utcTimeService.getUTCOffset();
 
   try {
-    const { partnerId, period = 'month', startDate, endDate } = req.body;
+    const { partnerId, period = 'month', startDate, endDate, month } = req.body;
     
     if (!partnerId) {
       return res.status(400).json({ message: "Partner ID is required" });
@@ -57,7 +65,7 @@ router.post("/api/payments/partner/summary", async (req, res) => {
           start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
           end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Get orders for this partner (excluding canceled orders)
     const orders = await db.orders.find({
@@ -149,7 +157,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
   const db = req.app.db[appName];
   const offsetHours = utcTimeService.getUTCOffset()
   try {
-    const { partnerId, period = 'month', startDate, endDate, page = 1, limit = 20 } = req.body;
+    const { partnerId, period = 'month', startDate, endDate, month, page = 1, limit = 20 } = req.body;
     
     if (!partnerId) {
       return res.status(400).json({ message: "Partner ID is required" });
@@ -160,7 +168,7 @@ router.post("/api/payments/partner/details", async (req, res) => {
           start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
           end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     const skip = (page - 1) * limit;
     
@@ -221,7 +229,7 @@ router.post("/api/payments/driver/summary", async (req, res) => {
   const offsetHours = utcTimeService.getUTCOffset()
   
   try {
-    const { driverId, period = 'month', startDate, endDate } = req.body;
+    const { driverId, period = 'month', startDate, endDate, month } = req.body;
     
     if (!driverId) {
       return res.status(400).json({ message: "Driver ID is required" });
@@ -232,7 +240,7 @@ router.post("/api/payments/driver/summary", async (req, res) => {
           start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
           end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Get completed deliveries for this driver
     const deliveries = await db.bookDelivery.find({
@@ -319,7 +327,7 @@ router.post("/api/payments/driver/details", async (req, res) => {
   const db = req.app.db[appName];
   const offsetHours = utcTimeService.getUTCOffset()
   try {
-    const { driverId, period = 'month', startDate, endDate, page = 1, limit = 20 } = req.body;
+    const { driverId, period = 'month', startDate, endDate, month, page = 1, limit = 20 } = req.body;
     
     if (!driverId) {
       return res.status(400).json({ message: "Driver ID is required" });
@@ -330,7 +338,7 @@ router.post("/api/payments/driver/details", async (req, res) => {
           start: moment(startDate).startOf('day').utcOffset(offsetHours).format(), 
           end: moment(endDate).endOf('day').utcOffset(offsetHours).format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     const skip = (page - 1) * limit;
     
@@ -409,14 +417,14 @@ router.post("/api/payments/driver/details", async (req, res) => {
 // Get admin payment overview
 router.post("/api/payments/admin/overview", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, storeId } = req.body;
+    const { period = 'month', startDate, endDate, month, storeId } = req.body;
     const offsetHours = utcTimeService.getUTCOffset()
     const dateRange = startDate && endDate 
       ? { 
           start: moment(startDate).utcOffset(offsetHours).startOf('day').format(), 
           end: moment(endDate).utcOffset(offsetHours).endOf('day').format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Get stores list to determine app names
     const dbAdmin = req.app.db['shoofi'];
@@ -543,14 +551,14 @@ router.post("/api/payments/admin/overview", async (req, res) => {
 // Get admin partner payments
 router.post("/api/payments/admin/partners", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, storeId } = req.body;
+    const { period = 'month', startDate, endDate, month, storeId } = req.body;
     
     const dateRange = startDate && endDate 
       ? { 
           start: moment(startDate).startOf('day').format(), 
           end: moment(endDate).endOf('day').format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Get stores list to find order apps
     const dbAdmin = req.app.db['shoofi'];
@@ -700,14 +708,14 @@ router.post("/api/payments/delivery-company-drivers", async (req, res) => {
 // Get admin driver payments
 router.post("/api/payments/admin/drivers", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, deliveryCompanyId, driverId } = req.body;
+    const { period = 'month', startDate, endDate, month, deliveryCompanyId, driverId } = req.body;
     
     const dateRange = startDate && endDate 
       ? { 
           start: moment(startDate).startOf('day').format(), 
           end: moment(endDate).endOf('day').format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Use delivery-company database directly
     const db = req.app.db['delivery-company'];
@@ -853,14 +861,14 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
 // Get payment analytics for charts
 router.post("/api/payments/admin/analytics", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, groupBy = 'day', deliveryCompanyId, driverId } = req.body;
+    const { period = 'month', startDate, endDate, month, groupBy = 'day', deliveryCompanyId, driverId } = req.body;
     
     const dateRange = startDate && endDate 
       ? { 
           start: moment(startDate).startOf('day').format(), 
           end: moment(endDate).endOf('day').format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     const format = groupBy === 'day' ? '%Y-%m-%d' : '%Y-%m';
     const dateField = groupBy === 'day' ? 'created' : 'created';
@@ -995,14 +1003,14 @@ router.post("/api/payments/admin/analytics", async (req, res) => {
 // Get store-wise payment data for Excel export
 router.post("/api/payments/admin/stores-export", async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate } = req.body;
+    const { period = 'month', startDate, endDate, month } = req.body;
     const offsetHours = utcTimeService.getUTCOffset()
     const dateRange = startDate && endDate 
       ? { 
           start: moment(startDate).utcOffset(offsetHours).startOf('day').format(), 
           end: moment(endDate).utcOffset(offsetHours).endOf('day').format() 
         }
-      : getDateRange(period);
+      : getDateRange(period, month);
     
     // Get stores list to determine app names
     const dbAdmin = req.app.db['shoofi'];

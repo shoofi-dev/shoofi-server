@@ -131,14 +131,7 @@ router.get("/api/menu", async (req, res, next) => {
       return acc.concat(category.products || []);
     }, []);
 
-    // Create products images list
-    const productsImagesList = allProducts
-      .filter(product => product.img && product.img.length > 0)
-      .map(product => product.img[0]?.uri)
-      .filter(Boolean);
 
-    // Group products by category for categoryImages
-    const grouped = _.groupBy(allProducts, 'categoryId');
 
     // Check if generalCategories collection exists and fetch data
     let generalCategories = null;
@@ -173,8 +166,6 @@ router.get("/api/menu", async (req, res, next) => {
 
     const menuData = {
       menu: processedMenu,
-      productsImagesList,
-      categoryImages: grouped,
       ...(generalCategories && { generalCategories })
     };
 
@@ -328,10 +319,6 @@ router.post("/api/menu/refresh", async (req, res, next) => {
       return acc.concat(category.products || []);
     }, []);
 
-    const productsImagesList = allProducts
-      .filter(product => product.img && product.img.length > 0)
-      .map(product => product.img[0]?.uri)
-      .filter(Boolean);
 
     const grouped = _.groupBy(allProducts, 'categoryId');
 
@@ -368,8 +355,6 @@ router.post("/api/menu/refresh", async (req, res, next) => {
 
     const menuData = {
       menu: processedMenu,
-      productsImagesList,
-      categoryImages: grouped,
       ...(generalCategories && { generalCategories })
     };
 
@@ -428,8 +413,6 @@ router.get("/api/menu/mock", async (req, res, next) => {
       console.log(`No mock store configured for store: ${storeId}`);
       return res.status(200).json({
         menu: [],
-        productsImagesList: [],
-        categoryImages: {},
         generalCategories: []
       });
     }
@@ -565,15 +548,6 @@ router.get("/api/menu/mock", async (req, res, next) => {
       return acc.concat(category.products || []);
     }, []);
 
-    // Create products images list
-    const productsImagesList = allProducts
-      .filter(product => product.img && product.img.length > 0)
-      .map(product => product.img[0]?.uri)
-      .filter(Boolean);
-
-    // Group products by category for categoryImages
-    const grouped = _.groupBy(allProducts, 'categoryId');
-
     // Check if generalCategories collection exists and fetch data from mock store
     let generalCategories = null;
     try {
@@ -607,8 +581,6 @@ router.get("/api/menu/mock", async (req, res, next) => {
 
     const menuData = {
       menu: filteredMockMenu,
-      productsImagesList,
-      categoryImages: grouped,
       ...(generalCategories && { generalCategories })
     };
 
