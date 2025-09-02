@@ -1148,9 +1148,37 @@ router.post(
       );
     }
     const offsetHours = getUTCOffset();
-    const orderStatus = isCreditCardPay ? "0" : "6"; // Start with pending for credit card
-    if(paymentProvider === 'applePay') {
-      orderStatus = parsedBodey.order.status; // Start with pending in case apple pay was failed
+    let orderStatus = isCreditCardPay ? "0" : "6"; // Start with pending for credit card
+    if(paymentProvider === 'APPLEPAY') {
+      orderStatus = parsedBodey.order?.status; // Start with pending in case apple pay was failed
+      
+      // If Apple Pay was successful (status === "6"), check session status
+      if (parsedBodey.order?.status === "6" && parsedBodey.order?.sessionId) {
+        // Use setImmediate to run session check in background without blocking order creation
+        setImmediate(async () => {
+          try {
+            const sessionStatusResponse = await axios.post(
+              "https://pci.zcredit.co.il/webcheckout/api/WebCheckout/GetSessionStatus",
+              {
+                "Key": "952ad5fd3a963d4fec9d2e13dacb148144c04bfd5729cdbf5b6bee31a3468d6a",
+                "SessionId": parsedBodey.order.sessionId
+              }
+            );
+            
+            // Store the session status response in paymentData
+            if (!parsedBodey.paymentData) {
+              parsedBodey.paymentData = {};
+            }
+            parsedBodey.paymentData = sessionStatusResponse?.data?.CallBackJSON;
+            
+            console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
+          } catch (sessionError) {
+            console.error("Failed to check Apple Pay session status:", sessionError.message);
+            // Session check failure doesn't affect order creation
+            // Just log the error and continue
+          }
+        });
+      }
     }
     const orderDoc = {
       ...parsedBodey,
@@ -1229,7 +1257,7 @@ router.post(
         { multi: false, returnOriginal: false }
       );
 
-      if (!isCreditCardPay || (isCreditCardPay && paymentProvider === 'applePay' &&  parsedBodey.order.status === "6")) {
+      if (!isCreditCardPay || (isCreditCardPay && paymentProvider === 'APPLEPAY' &&  parsedBodey.order.status === "6")) {
         // Send notification to store owners
         await sendStoreOwnerNotifications(orderDoc, req, appName);
       }
@@ -1254,7 +1282,7 @@ router.post(
         }
       });
             // Handle credit card payment server-side
-            if (isCreditCardPay && paymentProvider !== 'applePay' && parsedBodey.paymentData) {
+            if (isCreditCardPay && paymentProvider !== 'APPLEPAY' && parsedBodey.paymentData) {
               try {
                 const paymentResult = await processCreditCardPayment(
                   parsedBodey.paymentData,
