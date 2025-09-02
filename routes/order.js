@@ -1149,52 +1149,36 @@ router.post(
     }
     const offsetHours = getUTCOffset();
     let orderStatus = isCreditCardPay ? "0" : "6"; // Start with pending for credit card
+    let ccPaymentRefDataDigitalPayment = undefined;
     if(paymentProvider === 'APPLEPAY') {
       orderStatus = parsedBodey.order?.status; // Start with pending in case apple pay was failed
-      
+      if (parsedBodey.order?.status === "0" && parsedBodey.order?.error_message) {
+        ccPaymentRefDataDigitalPayment = {
+          success: false,
+          error: parsedBodey.order?.error_message,
+        }
+      }
       // If Apple Pay was successful (status === "6"), check session status
       if (parsedBodey.order?.status === "6" && parsedBodey.order?.sessionId) {
-        // Use setImmediate to run session check in background without blocking order creation
-        setImmediate(async () => {
-          try {
-            const sessionStatusResponse = await axios.post(
-              "https://pci.zcredit.co.il/webcheckout/api/WebCheckout/GetSessionStatus",
-              {
-                "Key": "952ad5fd3a963d4fec9d2e13dacb148144c04bfd5729cdbf5b6bee31a3468d6a",
-                "SessionId": parsedBodey.order.sessionId
-              }
-            );
-            
-            // Store the session status response in paymentData
-            const sessionData = sessionStatusResponse?.data?.CallBackJSON;
-            
-            if (sessionData) {
-              // Update the order in database with session data
-              try {
-                await db.orders.updateOne(
-                  { _id: getId(parsedBodey.orderId || newOrderId) },
-                  { 
-                    $set: { 
-                      paymentData: sessionData,
-                      applePaySessionChecked: true,
-                      sessionCheckedAt: new Date()
-                    } 
-                  }
-                );
-                
-                console.log(`Apple Pay session status updated in database for order: ${parsedBodey.orderId || newOrderId}`);
-              } catch (dbError) {
-                console.error("Failed to update order with session data:", dbError.message);
-              }
+        try {
+          const sessionStatusResponse = await axios.post(
+            "https://pci.zcredit.co.il/webcheckout/api/WebCheckout/GetSessionStatus",
+            {
+              "Key": "952ad5fd3a963d4fec9d2e13dacb148144c04bfd5729cdbf5b6bee31a3468d6a",
+              "SessionId": parsedBodey.order.sessionId
             }
-            
-            console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
-          } catch (sessionError) {
-            console.error("Failed to check Apple Pay session status:", sessionError.message);
-            // Session check failure doesn't affect order creation
-            // Just log the error and continue
-          }
-        });
+          );
+          
+          // Store the session status response in paymentData
+          const sessionData = sessionStatusResponse?.data?.CallBackJSON;
+          ccPaymentRefDataDigitalPayment = sessionData && JSON.parse(sessionData);
+          
+          console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
+        } catch (sessionError) {
+          console.error("Failed to check Apple Pay session status:", sessionError.message);
+          // If session check fails, set to undefined so order can still be created
+          ccPaymentRefDataDigitalPayment = undefined;
+        }
       }
     }
     const orderDoc = {
@@ -1222,6 +1206,7 @@ router.post(
       appName: appName,
       // Add coupon data if present
       appliedCoupon: parsedBodey.appliedCoupon || null,
+      ccPaymentRefData: ccPaymentRefDataDigitalPayment
     };
 
     // Debug log for coupon data
