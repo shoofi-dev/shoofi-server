@@ -1044,6 +1044,7 @@ router.post(
     const config = req.app.config;
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
+    const paymentProvider = parsedBodey.order.payment_provider;
 
 
     // Prevent order duplication using Redis lock or in-memory fallback
@@ -1147,7 +1148,10 @@ router.post(
       );
     }
     const offsetHours = getUTCOffset();
-
+    const orderStatus = isCreditCardPay ? "0" : "6"; // Start with pending for credit card
+    if(paymentProvider === 'applePay') {
+      orderStatus = parsedBodey.order.status; // Start with pending in case apple pay was failed
+    }
     const orderDoc = {
       ...parsedBodey,
       order: {
@@ -1165,7 +1169,7 @@ router.post(
       customerId,
       orderId: newOrderId,
       originalOrderId: generatedOrderId,
-      status: isCreditCardPay ? "0" : "6", // Start with pending for credit card
+      status: orderStatus,
       isPrinted: false,
       isViewd: false,
       isViewdAdminAll: false,
@@ -1225,7 +1229,7 @@ router.post(
         { multi: false, returnOriginal: false }
       );
 
-      if (!isCreditCardPay) {
+      if (!isCreditCardPay || (isCreditCardPay && paymentProvider === 'applePay' &&  parsedBodey.order.status === "6")) {
         // Send notification to store owners
         await sendStoreOwnerNotifications(orderDoc, req, appName);
       }
@@ -1245,11 +1249,12 @@ router.post(
           total: orderDoc.total,
           itemsCount: orderDoc.order.items?.length || 0,
           paymentMethod: orderDoc.order.payment_method,
-          isCreditCardPay
+          isCreditCardPay,
+          paymentProvider,
         }
       });
             // Handle credit card payment server-side
-            if (isCreditCardPay && parsedBodey.paymentData) {
+            if (isCreditCardPay && paymentProvider !== 'applePay' && parsedBodey.paymentData) {
               try {
                 const paymentResult = await processCreditCardPayment(
                   parsedBodey.paymentData,
