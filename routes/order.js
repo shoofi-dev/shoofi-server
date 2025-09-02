@@ -1166,10 +1166,27 @@ router.post(
             );
             
             // Store the session status response in paymentData
-            if (!parsedBodey.paymentData) {
-              parsedBodey.paymentData = {};
+            const sessionData = sessionStatusResponse?.data?.CallBackJSON;
+            
+            if (sessionData) {
+              // Update the order in database with session data
+              try {
+                await db.orders.updateOne(
+                  { _id: getId(parsedBodey.orderId || newOrderId) },
+                  { 
+                    $set: { 
+                      paymentData: sessionData,
+                      applePaySessionChecked: true,
+                      sessionCheckedAt: new Date()
+                    } 
+                  }
+                );
+                
+                console.log(`Apple Pay session status updated in database for order: ${parsedBodey.orderId || newOrderId}`);
+              } catch (dbError) {
+                console.error("Failed to update order with session data:", dbError.message);
+              }
             }
-            parsedBodey.paymentData = sessionStatusResponse?.data?.CallBackJSON;
             
             console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
           } catch (sessionError) {
