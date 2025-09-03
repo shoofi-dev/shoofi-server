@@ -1164,7 +1164,7 @@ router.post(
           const sessionStatusResponse = await axios.post(
             "https://pci.zcredit.co.il/webcheckout/api/WebCheckout/GetSessionStatus",
             {
-              "Key": "952ad5fd3a963d4fec9d2e13dacb148144c04bfd5729cdbf5b6bee31a3468d6a",
+              "Key": zdCreditCredentials.zcredit_api_key,
               "SessionId": parsedBodey.order.sessionId
             }
           );
