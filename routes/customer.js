@@ -183,7 +183,8 @@ router.post("/api/customer/create", async (req, res) => {
 
   if(appType === 'shoofi-shoofir' || appType === 'shoofi-partner'){
     res.status(400).json({
-      message: "الرجاء التواصل مع الدعم الفني للحصول على المساعدة",
+      message: "maybe-wrong-app-type",
+      error_code: -7,
     });
     return;
   }
