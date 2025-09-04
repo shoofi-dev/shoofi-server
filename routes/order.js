@@ -1035,12 +1035,14 @@ router.post(
   upload.array("img"),
   auth.required,
   async (req, res, next) => {
-    //const appName = req.headers["app-name"];
+
     const appNameReq = req.headers["app-name"];
     const parsedBodey = JSON.parse(req.body.body);
     const appName = await verifiedAppName(req,appNameReq, parsedBodey?.storeData);
-
+    const shoofiDB = req.app.db["shoofi"];
     const db = req.app.db[appName || appNameReq];
+    const shoofiStoreData = await shoofiDB.store.findOne({ id: 1 });
+    const zdCreditCredentials = shoofiStoreData.credentials;
     const config = req.app.config;
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
