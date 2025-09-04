@@ -373,7 +373,7 @@ router.post("/api/payments/driver/details", async (req, res) => {
       // Calculate actual driver payment considering coupons and payment method
       const actualDriverPayment = (() => {
         if (delivery.order.appliedCoupon && 
-            delivery.order.appliedCoupon.coupon.type === "free_delivery" &&
+            delivery.order.appliedCoupon.coupon.discountType === "delivery" &&
             delivery.order.order.payment_method === "CASH") {
           // For cash payments with free_delivery coupon: driver gets discountAmount from us
           return delivery.order.appliedCoupon.discountAmount || 0;
