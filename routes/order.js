@@ -1047,6 +1047,7 @@ router.post(
     const customerId = parsedBodey.customerId || req.auth.id;
     const isCreditCardPay = parsedBodey.order.payment_method == "CREDITCARD";
     const paymentProvider = parsedBodey.order.payment_provider;
+    let orderId =0 ;
 
 
     // Prevent order duplication using Redis lock or in-memory fallback
@@ -1174,7 +1175,68 @@ router.post(
           // Store the session status response in paymentData
           const sessionData = sessionStatusResponse?.data?.CallBackJSON;
           ccPaymentRefDataDigitalPayment = sessionData && JSON.parse(sessionData);
-          
+          // Invoice mail handling - completely non-blocking for better UX
+          const docId = ccPaymentRefDataDigitalPayment?.InvoiceRecieptNumber;
+          if (docId) {
+            // Queue invoice processing in background without blocking response
+            setImmediate(async () => {
+              try {
+                console.log(`Processing invoice for docId: ${docId} in background`);
+                const invoiceResult = await invoiceMailService.saveInvoice(docId, req);
+
+                if (invoiceResult) {
+                  // Invoice was processed successfully, update order with URL
+                  try {
+                    const shortenedUrl = await turl.shorten(
+                        `https://shoofi-spaces.fra1.cdn.digitaloceanspaces.com/invoices/doc-${docId}.pdf`
+                    );
+
+                    await db.orders.updateOne(
+                        { _id: getId(orderId) },
+                        {
+                          $set: {
+                            "ccPaymentRefData.url": shortenedUrl,
+                            "ccPaymentRefData.invoiceStatus": "completed",
+                            "ccPaymentRefData.processedAt": new Date()
+                          },
+                        },
+                        { multi: false }
+                    );
+
+                    console.log(`Successfully updated order ${orderId} with invoice URL`);
+                  } catch (urlError) {
+                    console.error("Failed to process invoice URL for order:", urlError);
+                  }
+                } else {
+                  // Invoice not found, queue for background processing
+                  console.log(`Invoice not found for docId: ${docId}, queuing for background processing`);
+                  invoiceMailService.queueInvoiceForProcessing(docId, req);
+
+                  // Update order to indicate invoice is pending
+                  try {
+                    await db.orders.updateOne(
+                        { _id: getId(orderId) },
+                        {
+                          $set: {
+                            "ccPaymentRefData.invoiceStatus": "pending",
+                            "ccPaymentRefData.docId": docId
+                          },
+                        },
+                        { multi: false }
+                    );
+                  } catch (updateError) {
+                    console.error("Failed to update order with invoice status:", updateError);
+                  }
+                }
+              } catch (error) {
+                console.error("Background invoice processing error:", error);
+                // Queue for background processing as fallback
+                invoiceMailService.queueInvoiceForProcessing(docId, req);
+              }
+            });
+          } else {
+            console.error("No document ID in invoice response:", response.data.ZCreditInvoiceReceiptResponse);
+          }
           console.log(`Apple Pay session status checked for sessionId: ${parsedBodey.order.sessionId}`);
         } catch (sessionError) {
           console.error("Failed to check Apple Pay session status:", sessionError.message);
@@ -1223,7 +1285,7 @@ router.post(
 
     try {
       const newDoc = await db.orders.insertOne(orderDoc);
-      const orderId = newDoc.insertedId;
+      orderId = newDoc.insertedId;
 
       const customerDB = getCustomerAppName(req, appName);
       const customer = await customerDB.customers.findOne({
