@@ -753,7 +753,7 @@ router.post("/api/payments/admin/drivers", async (req, res) => {
               {
                 $and: [
                   { $ifNull: ["$order.appliedCoupon", false] },
-                  { $eq: ["$order.appliedCoupon.coupon.type", "free_delivery"] },
+                  { $eq: ["$order.appliedCoupon.coupon.discountType", "delivery"] },
                   { $eq: ["$order.order.payment_method", "CASH"] }
                 ]
               },
