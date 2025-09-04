@@ -1121,17 +1121,17 @@ router.post(
     const paymentProvider = parsedBodey.order.payment_provider;
 
     // Validate order items against database to prevent price manipulation
-    const validationResult = await validateOrderItems(parsedBodey.order.items, db);
-    if (!validationResult.isValid) {
-      console.log("Order validation failed:", validationResult);
-      smsService.sendSMS("0542454362", "validateOrderItems-error", req);
-      return res.status(400).json({
-        err: validationResult.error,
-        details: validationResult.details || [],
-        code: "ORDER_VALIDATION_FAILED"
-      });
+    // const validationResult = await validateOrderItems(parsedBodey.order.items, db);
+    // if (!validationResult.isValid) {
+    //   console.log("Order validation failed:", validationResult);
+    //   smsService.sendSMS("0542454362", "validateOrderItems-error", req);
+    //   return res.status(400).json({
+    //     err: validationResult.error,
+    //     details: validationResult.details || [],
+    //     code: "ORDER_VALIDATION_FAILED"
+    //   });
 
-    }
+    // }
 
     // Prevent order duplication using Redis lock or in-memory fallback
     const orderLockKey = `order_lock:${appName}:${customerId}`;
