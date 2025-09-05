@@ -17,6 +17,80 @@ const axios = require("axios");
 const momentTZ = require("moment-timezone");
 const { getCustomerAppName } = require("../utils/app-name-helper");
 
+// Function to validate order items against database
+const validateOrderItems = async (items, db) => {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return { isValid: false, error: "No items provided" };
+  }
+
+  try {
+    // Extract all item IDs from the order
+    const itemIds = items.map(item => item.item_id).filter(id => id);
+    
+    if (itemIds.length === 0) {
+      return { isValid: false, error: "No valid item IDs found" };
+    }
+
+    // Fetch products from database
+    const products = await db.products.find({
+      _id: { $in: itemIds.map(id => require('mongodb').ObjectId(id)) }
+    }).toArray();
+
+    // Create a map of product ID to product data for quick lookup
+    const productMap = new Map();
+    products.forEach(product => {
+      productMap.set(product._id.toString(), product);
+    });
+
+    // Validate each item
+    const validationErrors = [];
+    
+    for (const item of items) {
+      if (!item.item_id) {
+        validationErrors.push(`Item missing item_id: ${JSON.stringify(item)}`);
+        continue;
+      }
+
+      const product = productMap.get(item.item_id);
+      
+      if (!product) {
+        validationErrors.push(`Product not found for item_id: ${item.item_id}`);
+        continue;
+      }
+
+      // Check if the price matches (allowing for small floating point differences)
+      const itemPrice = parseFloat(item.price);
+      const productPrice = parseFloat(product.price);
+      
+      if (isNaN(itemPrice) || isNaN(productPrice)) {
+        validationErrors.push(`Invalid price format for item ${item.item_id}: item price=${item.price}, product price=${product.price}`);
+        continue;
+      }
+
+      // Allow for small floating point differences (0.02 to account for rounding)
+      if (Math.abs(itemPrice - productPrice) > 0.02) {
+        validationErrors.push(`Price mismatch for item ${item.item_id}: expected ${productPrice}, got ${itemPrice}`);
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      return { 
+        isValid: false, 
+        error: "Order validation failed", 
+        details: validationErrors 
+      };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    console.error("Error validating order items:", error);
+    return { 
+      isValid: false, 
+      error: "Database error during validation" 
+    };
+  }
+};
+
 // Redis utility for order duplication prevention
 let redisClient = null;
 // In-memory fallback for order duplication prevention
@@ -1049,6 +1123,18 @@ router.post(
     const paymentProvider = parsedBodey.order.payment_provider;
     let orderId =0 ;
 
+    // Validate order items against database to prevent price manipulation
+    // const validationResult = await validateOrderItems(parsedBodey.order.items, db);
+    // if (!validationResult.isValid) {
+    //   console.log("Order validation failed:", validationResult);
+    //   smsService.sendSMS("0542454362", "validateOrderItems-error", req);
+    //   return res.status(400).json({
+    //     err: validationResult.error,
+    //     details: validationResult.details || [],
+    //     code: "ORDER_VALIDATION_FAILED"
+    //   });
+
+    // }
 
     // Prevent order duplication using Redis lock or in-memory fallback
     const orderLockKey = `order_lock:${appName}:${customerId}`;
